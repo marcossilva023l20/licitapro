@@ -298,6 +298,7 @@ npm run usuarios   # lista usuários / troca senha</code></pre>
       if (!alvos.length) return;
       var sonda = new Image();
       sonda.onload = function () {
+        if (!sonda.naturalWidth) return; // não é uma imagem de verdade
         for (var i = 0; i < alvos.length; i++) {
           var imagem = alvos[i].querySelector('.marca-logo');
           if (imagem) imagem.src = sonda.src;

@@ -228,6 +228,8 @@
     const url = CAMINHO_BASE + 'marca/logo.png';
     const sonda = new Image();
     sonda.onload = () => {
+      // naturalWidth = 0 significa que o servidor devolveu outra coisa (não uma imagem)
+      if (!sonda.naturalWidth) return;
       alvos.forEach((alvo) => {
         const imagem = $('.marca-logo', alvo);
         if (imagem) imagem.src = url;
