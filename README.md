@@ -13,7 +13,9 @@ preenchimento.
 > com login e senha, publique com servidor — veja
 > **[6. Publicando na internet](#6-publicando-na-internet-hospedagem)** (Render, Railway, Docker ou VPS).
 
-O PDF segue a estrutura do modelo enviado pelo usuário:
+O PDF usa a fonte **Times New Roman** (a família Times, uma das fontes padrão do PDF — o
+arquivo não precisa embutir a fonte e abre igual em qualquer leitor). A estrutura segue o
+modelo enviado pelo usuário:
 
 ```
 Cabeçalho (logo, empresa, número e data)
@@ -290,6 +292,13 @@ npm run paginas              # grava o index.html da raiz
 npm run paginas -- --verificar   # confere se está atualizado (roda nos testes)
 ```
 
+As métricas da fonte Times (usadas pelo pdfmake no navegador) são geradas uma vez e ficam em
+`public/vendor/times-afm.js`:
+
+```bash
+npm run fontes               # regenera public/vendor/times-afm.js
+```
+
 A página de apresentação do projeto fica em `apresentacao.html`
 (<https://marcossilva023l20.github.io/licitapro/apresentacao.html>) e o servidor a expõe em
 `/apresentacao`.
@@ -349,7 +358,7 @@ public/
   js/api.js, ui.js, editar.js, app.js
   js/modo-estatico.js   → modo local: atende /api/* no navegador (GitHub Pages)
   js/navegador-imagens.js → fotos enviadas/enviadas do computador no navegador
-  vendor/               → pdfmake, fontes e xlsx usados no modo local
+  vendor/               → pdfmake, métricas da Times e xlsx usados no modo local
 shared/                 → mesmo código usado no servidor e no navegador
   format.js             → formatações em pt-BR
   colunas.js            → colunas da planilha (fonte única de verdade)

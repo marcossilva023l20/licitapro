@@ -252,6 +252,26 @@ function documentoExemplo(tipo) {
   };
 }
 
+teste('PDF: usa a fonte Times (Times New Roman) no arquivo', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const documento = {
+    tipo: 'proposta',
+    numero: { sequencial: 1, ano: 2026, grupo: '' },
+    data: '2026-04-30',
+    orgao: { nome: 'UASG 787010' },
+    itens: [{ descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, precoVenda: 1490 }],
+    condicoes: { validadeDias: 60, local: 'Fortaleza - CE' },
+    proponente: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', cnpj: '65.180.352/0001-11' },
+    layout: {},
+  };
+  const buffer = await Pdf.gerarPdf(documento, documento.proponente);
+  const conteudo = Buffer.from(buffer).toString('latin1');
+  const fontes = Array.from(new Set(conteudo.match(/\/BaseFont\s*\/([A-Za-z0-9+#-]+)/g) || []));
+  assert.ok(fontes.includes('/BaseFont /Times-Roman'), 'fonte Times no PDF: ' + fontes.join(', '));
+  assert.ok(fontes.includes('/BaseFont /Times-Bold'), 'negrito da Times');
+  assert.ok(!/Roboto/.test(conteudo), 'sem Roboto no arquivo');
+});
+
 teste('PDF: calcula subtotal, desconto, acréscimo, custo e lucro', () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const totais = Pdf.calcularTotais(documentoExemplo('proposta'));
@@ -974,6 +994,13 @@ teste('Modo local: gera o PDF no navegador (sem servidor)', async () => {
   const inicio = new Uint8Array(await blob.arrayBuffer()).slice(0, 5);
   assert.strictEqual(String.fromCharCode.apply(null, inicio), '%PDF-', 'arquivo é um PDF válido');
   assert.ok(window.pdfMake, 'o pdfmake foi baixado sob demanda');
+
+  // a mesma fonte do servidor: Times (Times New Roman)
+  const texto = Buffer.from(new Uint8Array(await blob.arrayBuffer())).toString('latin1');
+  const fontes = Array.from(new Set(texto.match(/\/BaseFont\s*\/([A-Za-z0-9+#-]+)/g) || []));
+  assert.ok(fontes.includes('/BaseFont /Times-Roman'), 'Times no PDF do navegador: ' + fontes.join(', '));
+  assert.ok(fontes.includes('/BaseFont /Times-Bold'), 'negrito da Times no navegador');
+  assert.ok(!/Roboto/.test(texto), 'sem Roboto no PDF do navegador');
 
   // o botão "gerar PDF" da tela precisa existir e estar clicável
   const botaoPdf = doc_botao($, 'baixar');

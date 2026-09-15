@@ -94,11 +94,11 @@ async function carregarImagem(urlOuArquivo) {
 /** Converte a foto do item em nó de imagem do pdfmake. */
 async function noFoto(foto, largura) {
   const imagem = await carregarImagem(foto);
-  if (!imagem) return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 7 };
+  if (!imagem) return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 8.5 };
   try {
     return { image: imagem, fit: [largura || 105, 85], alignment: 'center' };
   } catch (_) {
-    return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 7 };
+    return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 8.5 };
   }
 }
 
@@ -118,7 +118,7 @@ function caixa(titulo, larguras, linhas, corBase) {
     .map((linha) => {
       if (linha.unica) {
         return [
-          { text: linha.unica, colSpan: 2, fontSize: 8.2, alignment: 'justify' },
+          { text: linha.unica, colSpan: 2, fontSize: 10.0, alignment: 'justify' },
           {},
         ];
       }
@@ -160,7 +160,7 @@ function cabecalhoTabela(corBase, colunas) {
     text: c.titulo,
     bold: true,
     color: '#FFFFFF',
-    fontSize: 7.8,
+    fontSize: 9.5,
     alignment: c.alinhamento || 'left',
     fillColor: corBase,
   }));
@@ -227,16 +227,16 @@ async function montarDefinicao(doc, empresa) {
   colunasCabecalho.push({
     width: '*',
     stack: [
-      { text: nomeEmpresa || titulo, bold: true, fontSize: 11, color: corBase },
-      { text: [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  '), fontSize: 7.4, color: '#5B6670' },
+      { text: nomeEmpresa || titulo, bold: true, fontSize: 13.4, color: corBase },
+      { text: [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  '), fontSize: 9.0, color: '#5B6670' },
     ],
   });
   colunasCabecalho.push({
     width: 'auto',
     stack: [
-      { text: titulo, bold: true, fontSize: 9, alignment: 'right' },
-      { text: 'Nº ' + numero, fontSize: 8, alignment: 'right', color: corBase, bold: true },
-      { text: Formato.dataBR(dataDoc), fontSize: 7.4, alignment: 'right', color: '#5B6670' },
+      { text: titulo, bold: true, fontSize: 11.0, alignment: 'right' },
+      { text: 'Nº ' + numero, fontSize: 9.8, alignment: 'right', color: corBase, bold: true },
+      { text: Formato.dataBR(dataDoc), fontSize: 9.0, alignment: 'right', color: '#5B6670' },
     ],
   });
 
@@ -260,13 +260,13 @@ async function montarDefinicao(doc, empresa) {
           {
             width: '*',
             text: [nomeEmpresa, documentoEmpresa].filter(Boolean).join('  •  '),
-            fontSize: 6.8,
+            fontSize: 8.3,
             color: '#7A848D',
           },
           {
             width: 'auto',
             text: `${titulo} nº ${numero}  •  Página ${paginaAtual} de ${totalPaginas}`,
-            fontSize: 6.8,
+            fontSize: 8.3,
             color: '#7A848D',
             alignment: 'right',
           },
@@ -317,7 +317,7 @@ async function montarDefinicao(doc, empresa) {
                   doc.tipo === 'orcamento'
                     ? 'Proposta comercial de fornecimento de materiais e/ou serviços'
                     : 'Resposta ao instrumento convocatório — ' + (doc.orgao && doc.orgao.processo ? 'Processo nº ' + doc.orgao.processo : 'conforme edital'),
-                fontSize: 8,
+                fontSize: 9.8,
                 color: '#5B6670',
                 margin: [0, 2, 0, 0],
               },
@@ -333,7 +333,7 @@ async function montarDefinicao(doc, empresa) {
   });
 
   conteudo.push(
-    ...caixa(doc.tipo === 'orcamento' ? 'IDENTIFICAÇÃO' : 'DADOS DO ÓRGÃO', [110, '*'], identificacao, corBase)
+    ...caixa(doc.tipo === 'orcamento' ? 'IDENTIFICAÇÃO' : 'DADOS DO ÓRGÃO', [118, '*'], identificacao, corBase)
   );
 
   // 2. Dados do proponente
@@ -358,7 +358,7 @@ async function montarDefinicao(doc, empresa) {
     if (proponente.conta) dadosProponente.push(['Conta Corrente', proponente.conta]);
     if (proponente.chavePix) dadosProponente.push(['Chave PIX', proponente.chavePix]);
   }
-  conteudo.push(...caixa('DADOS DO PROPONENTE', [130, '*'], dadosProponente, corBase));
+  conteudo.push(...caixa('DADOS DO PROPONENTE', [150, '*'], dadosProponente, corBase));
 
   // 3. Tabela de preços
   conteudo.push({ text: 'TABELA DE PREÇOS', style: 'tituloSecao', color: corBase });
@@ -380,7 +380,7 @@ async function montarDefinicao(doc, empresa) {
     corpoPrecos.push([
       { text: String(item.numeroItem || indice + 1), alignment: 'center' },
       { text: String(item.descricao || '').trim(), alignment: 'justify' },
-      { text: item.marcaModelo || '—', alignment: 'center', fontSize: 7.4 },
+      { text: item.marcaModelo || '—', alignment: 'center', fontSize: 9.0 },
       { text: item.unidade || 'UND', alignment: 'center' },
       { text: Formato.quantidade(quantidade), alignment: 'center' },
       { text: Formato.moeda(unitario), alignment: 'right', noWrap: true },
@@ -406,9 +406,9 @@ async function montarDefinicao(doc, empresa) {
     ]);
   }
   corpoPrecos.push([
-    { text: rotuloTotal, colSpan: 6, alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 9 },
+    { text: rotuloTotal, colSpan: 6, alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 11.0 },
     {}, {}, {}, {}, {},
-    { text: Formato.moeda(totais.total), alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 9, noWrap: true },
+    { text: Formato.moeda(totais.total), alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 11.0, noWrap: true },
   ]);
 
   conteudo.push({
@@ -422,7 +422,7 @@ async function montarDefinicao(doc, empresa) {
         { text: 'Valor total em letras: ', bold: true },
         Formato.moedaPorExtenso(totais.total) + '.',
       ],
-      fontSize: 8,
+      fontSize: 9.8,
       margin: [0, 6, 0, 0],
     });
   }
@@ -444,7 +444,7 @@ async function montarDefinicao(doc, empresa) {
       unbreakable: true,
       stack: [
         { text: 'CONDIÇÕES', style: 'tituloSecao', color: corBase, margin: [0, 12, 0, 0] },
-        ...caixa('', [130, '*'], linhasCondicoes, corBase),
+        ...caixa('', [172, '*'], linhasCondicoes, corBase),
       ],
     });
   }
@@ -452,7 +452,7 @@ async function montarDefinicao(doc, empresa) {
   if (opcoes.mostrarDeclaracao) {
     conteudo.push({
       text: textoDeclaracao(doc),
-      fontSize: 7.8,
+      fontSize: 9.5,
       alignment: 'justify',
       color: '#3C4650',
       margin: [0, 4, 0, 0],
@@ -465,7 +465,7 @@ async function montarDefinicao(doc, empresa) {
     conteudo.push({ text: 'CATÁLOGO', style: 'tituloSecao', color: corBase, margin: [0, 14, 0, 6] });
     conteudo.push({
       text: 'Especificações e imagens dos produtos ofertados.',
-      fontSize: 7.6,
+      fontSize: 9.3,
       color: '#5B6670',
       margin: [0, 0, 0, 6],
     });
@@ -485,10 +485,10 @@ async function montarDefinicao(doc, empresa) {
         { text: String(item.numeroItem || i + 1), alignment: 'center', bold: true },
         {
           stack: [
-            item.marcaModelo ? { text: item.marcaModelo, bold: true, fontSize: 8, margin: [0, 0, 0, 2] } : null,
-            { text: texto, alignment: 'justify', fontSize: 8 },
+            item.marcaModelo ? { text: item.marcaModelo, bold: true, fontSize: 9.8, margin: [0, 0, 0, 2] } : null,
+            { text: texto, alignment: 'justify', fontSize: 9.8 },
             opcoes.mostrarLinkCompra && item.linkCompra
-              ? { text: 'Referência: ' + item.linkCompra, fontSize: 6.6, color: '#7A848D', margin: [0, 3, 0, 0] }
+              ? { text: 'Referência: ' + item.linkCompra, fontSize: 8.1, color: '#7A848D', margin: [0, 3, 0, 0] }
               : null,
           ].filter(Boolean),
         },
@@ -521,7 +521,7 @@ async function montarDefinicao(doc, empresa) {
     {
       text: `${local ? local + ', ' : ''}${Formato.dataLonga(dataDoc)}`,
       alignment: 'right',
-      fontSize: 9,
+      fontSize: 11.0,
       margin: [0, 22, 0, 0],
     },
   ];
@@ -541,13 +541,13 @@ async function montarDefinicao(doc, empresa) {
               canvas: [{ type: 'line', x1: 0, y1: 0, x2: 260, y2: 0, lineWidth: 0.7, lineColor: '#5B6670' }],
               margin: [0, 2, 0, 4],
             },
-            { text: proponente.representante || proponente.razaoSocial || '', alignment: 'center', bold: true, fontSize: 8.6 },
+            { text: proponente.representante || proponente.razaoSocial || '', alignment: 'center', bold: true, fontSize: 10.5 },
             proponente.cpfRepresentante
-              ? { text: 'CPF: ' + Formato.cpf(proponente.cpfRepresentante), alignment: 'center', fontSize: 7.8 }
+              ? { text: 'CPF: ' + Formato.cpf(proponente.cpfRepresentante), alignment: 'center', fontSize: 9.5 }
               : null,
             {
               text: '(' + (proponente.cargoRepresentante || 'REPRESENTANTE LEGAL DA EMPRESA').replace(/^\(|\)$/g, '') + ')',
-              alignment: 'center', fontSize: 7.4, color: '#5B6670',
+              alignment: 'center', fontSize: 9.0, color: '#5B6670',
             },
           ].filter(Boolean),
         },
@@ -564,10 +564,10 @@ async function montarDefinicao(doc, empresa) {
     pageMargins: [42, 88, 42, 52],
     header: () => cabecalho,
     footer: (paginaAtual, totalPaginas) => rodape(paginaAtual, totalPaginas),
-    defaultStyle: { font: 'Roboto', fontSize: 8.4, color: '#26303A', lineHeight: 1.15 },
+    defaultStyle: { font: 'Times New Roman', fontSize: 12.4, color: '#26303A', lineHeight: 1.2 },
     styles: {
-      tituloPrincipal: { fontSize: 13.5, bold: true, characterSpacing: 0.3 },
-      tituloSecao: { fontSize: 9, bold: true, characterSpacing: 0.6, margin: [0, 4, 0, 2] },
+      tituloPrincipal: { fontSize: 16.5, bold: true, characterSpacing: 0.3 },
+      tituloSecao: { fontSize: 11.0, bold: true, characterSpacing: 0.6, margin: [0, 4, 0, 2] },
     },
     content: conteudo,
     info: {

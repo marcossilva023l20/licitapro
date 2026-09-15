@@ -242,7 +242,7 @@
     '../shared/importar.js',
     '../shared/modelo-importacao.js',
     'vendor/pdfmake.min.js',
-    'vendor/vfs_fonts.js',
+    'vendor/times-afm.js', // métricas da Times (Times New Roman)
   ];
 
   function carregarScript(caminho) {

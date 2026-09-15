@@ -1,8 +1,11 @@
 'use strict';
 
 /**
- * PDFs no servidor: registra as fontes Roboto do pdfmake (a partir do disco)
- * e usa o montador compartilhado em shared/documento-pdf.js.
+ * PDFs no servidor: registra a fonte Times (Times New Roman) e usa o montador
+ * compartilhado em shared/documento-pdf.js.
+ *
+ * A família Times é uma das fontes padrão do PDF: o arquivo não precisa ser
+ * embutido (o PDF fica pequeno) e os leitores mostram Times New Roman.
  */
 
 const path = require('path');
@@ -11,19 +14,16 @@ const Formato = require('../shared/format');
 const Imagens = require('./imagens');
 const criarDocumentoPdf = require('../shared/documento-pdf');
 
-const CAMINHO_FONTES = path.join(__dirname, '..', 'node_modules', 'pdfmake', 'build', 'fonts', 'Roboto');
-
 let fontesRegistradas = false;
 
 function registrarFontes() {
   if (fontesRegistradas) return;
-  const arquivo = (nome) => path.join(CAMINHO_FONTES, nome);
   pdfMake.addFonts({
-    Roboto: {
-      normal: arquivo('Roboto-Regular.ttf'),
-      bold: arquivo('Roboto-Medium.ttf'),
-      italics: arquivo('Roboto-Italic.ttf'),
-      bolditalics: arquivo('Roboto-MediumItalic.ttf'),
+    'Times New Roman': {
+      normal: 'Times-Roman',
+      bold: 'Times-Bold',
+      italics: 'Times-Italic',
+      bolditalics: 'Times-BoldItalic',
     },
   });
   // Somente arquivos locais conhecidos e imagens previamente baixadas são permitidos.
