@@ -18,7 +18,7 @@
     }
     // todas as rotas /api respondem JSON; qualquer outra coisa indica site estático
     if (!ehJson) {
-      const erro = new Error('Este endereço não tem a API do LicitaPro.');
+      const erro = new Error('Este endereço não tem a API do sistema.');
       erro.status = resposta.status;
       erro.semServidor = true;
       throw erro;

@@ -1,4 +1,4 @@
-# LicitaPro — imagem de produção
+# DEJ Solutions & Global — imagem de produção
 FROM node:22-alpine
 
 ENV NODE_ENV=production

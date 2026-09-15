@@ -145,7 +145,7 @@ function criarUsuarioInicialSeNecessario() {
     fs.writeFileSync(
       PRIMEIRO_ACESSO_FILE,
       [
-        'LicitaPro — primeiro acesso',
+        'DEJ Solutions & Global — primeiro acesso',
         'Criado em: ' + new Date().toLocaleString('pt-BR'),
         '',
         'E-mail: ' + criado.email,

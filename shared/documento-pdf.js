@@ -722,9 +722,9 @@ async function montarDefinicao(doc, empresa, contexto) {
     content: conteudo,
     info: {
       title: `${titulo} ${numero} - ${nomeEmpresa || ''}`.trim(),
-      author: nomeEmpresa || 'LicitaPro',
+      author: nomeEmpresa || 'DEJ Solutions & Global',
       subject: doc.tipo === 'orcamento' ? 'Orçamento' : 'Proposta de fornecimento',
-      creator: 'LicitaPro — gerador de propostas e orçamentos',
+      creator: 'DEJ Solutions & Global — gerador de propostas e orçamentos',
     },
   };
 }

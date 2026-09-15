@@ -45,7 +45,7 @@ const uploadImagem = multer({
 
 rotas.get('/modelo-planilha', (req, res) => {
   const buffer = Modelo.gerarBuffer();
-  const nome = 'Modelo_Importacao_Itens_LicitaPro.xlsx';
+  const nome = 'Modelo_Importacao_Itens_DEJ.xlsx';
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${nome}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
   res.setHeader('Cache-Control', 'public, max-age=3600');

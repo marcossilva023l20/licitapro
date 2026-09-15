@@ -1,4 +1,4 @@
-/* LicitaPro — inicialização, rotas e telas. */
+/* DEJ Solutions & Global — inicialização, rotas e telas. */
 (function () {
   'use strict';
 

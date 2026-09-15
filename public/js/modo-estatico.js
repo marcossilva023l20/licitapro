@@ -580,7 +580,7 @@
     const dados = window.ModeloImportacao.gerarBuffer();
     baixar(
       new Blob([dados], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      'Modelo_Importacao_Itens_LicitaPro.xlsx'
+      'Modelo_Importacao_Itens_DEJ.xlsx'
     );
   }
 
@@ -595,7 +595,7 @@
       if (blob) imagens[id] = await window.ImagensNavegador.blobParaDataUrl(blob);
     }
     return {
-      aplicativo: 'LicitaPro',
+      aplicativo: 'DEJ Solutions & Global',
       formato: 1,
       exportadoEm: new Date().toISOString(),
       banco: copiar(banco),
@@ -605,7 +605,7 @@
 
   async function exportarBackup() {
     const conteudo = await montarBackup();
-    const nome = 'licitapro-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    const nome = 'dej-solutions-global-backup-' + new Date().toISOString().slice(0, 10) + '.json';
     baixar(new Blob([JSON.stringify(conteudo)], { type: 'application/json' }), nome);
     const total = (conteudo.banco.documentos || []).length;
     window.UI && window.UI.toast('Backup gerado com ' + total + ' documento(s).', 'sucesso');
@@ -617,7 +617,7 @@
     const texto = await arquivo.text();
     const conteudo = JSON.parse(texto);
     if (!conteudo || !conteudo.banco || !Array.isArray(conteudo.banco.documentos)) {
-      throw new Error('Este arquivo não é um backup do LicitaPro.');
+      throw new Error('Este arquivo não é um backup do DEJ Solutions & Global.');
     }
     estado.banco = conteudo.banco;
     estado.banco.usuario = Object.assign(perfilPadrao(), estado.banco.usuario || {});
@@ -660,7 +660,7 @@
       const link = document.createElement('a');
       link.className = 'botao banner-local-sobre';
       link.href = sobre.content;
-      link.textContent = 'Sobre o LicitaPro';
+      link.textContent = 'Sobre o sistema';
       barra.querySelector('.banner-local-acoes').appendChild(link);
     }
     const app = document.getElementById('app');

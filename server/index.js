@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * LicitaPro — servidor web.
+ * DEJ Solutions & Global — servidor web.
  * Serve a interface (SPA) e a API de documentos, importação e geração de PDF.
  */
 
@@ -114,7 +114,7 @@ function iniciar(porta, host) {
   const servidor = app.listen(portaFinal, host || HOST, () => {
     if (silencioso) return;
     console.log('');
-    console.log('  LicitaPro — gerador de propostas e orçamentos');
+    console.log('  DEJ Solutions & Global — gerador de propostas e orçamentos');
     console.log('  ---------------------------------------------------------');
     console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
     console.log(`  Dados em:  ${DATA_DIR}`);

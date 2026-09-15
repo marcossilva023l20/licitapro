@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Testes do LicitaPro.
+ * Testes do DEJ Solutions & Global.
  * Executar com: npm run testes
  *
  * Não usa dependências externas: um runner simples com node:assert.
@@ -23,7 +23,7 @@ function teste(nome, fn) {
 async function executar() {
   let passou = 0;
   const falhas = [];
-  console.log('\nLicitaPro — testes\n' + '='.repeat(60));
+  console.log('\nDEJ Solutions & Global — testes\n' + '='.repeat(60));
   for (const { nome, fn } of testes) {
     try {
       await fn();
@@ -715,7 +715,7 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     // página inicial (SPA)
     const inicio = await requisitar(servidor, '/');
     assert.strictEqual(inicio.status, 200);
-    assert.ok(inicio.texto.includes('LicitaPro'));
+    assert.ok(inicio.texto.includes('DEJ Solutions'));
   } finally {
     servidor.close();
   }
@@ -1244,7 +1244,7 @@ teste('Modo local: backup e restauração dos dados', async () => {
   assert.ok(criado.documento && criado.documento.id, 'documento criado para o backup');
 
   const copia = await window.ModoEstatico.montarBackup();
-  assert.strictEqual(copia.aplicativo, 'LicitaPro', 'backup identificado');
+  assert.strictEqual(copia.aplicativo, 'DEJ Solutions & Global', 'backup identificado');
   assert.strictEqual(copia.banco.documentos.length, 1, 'documento dentro do backup');
   assert.strictEqual(copia.banco.documentos[0].cliente.nome, 'Empresa Cliente', 'conteúdo do backup');
   assert.strictEqual(copia.banco.documentos[0].itens.length, 1, 'itens dentro do backup');
@@ -1404,7 +1404,7 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   assert.ok($('#botao-nova-proposta'), 'botão de nova proposta disponível na raiz');
   assert.ok($('#nome-usuario').textContent.length > 0, 'perfil local no topo');
 
-  // e o "Sobre o LicitaPro" leva à apresentação (arquivo que existe no repositório)
+  // e o "Sobre o sistema" leva à apresentação (arquivo que existe no repositório)
   assert.strictEqual($('.banner-local-sobre').getAttribute('href'), 'apresentacao.html', 'link da apresentação');
   assert.ok(fs.existsSync(path.join(RAIZ, 'apresentacao.html')), 'a apresentação existe no repositório');
 

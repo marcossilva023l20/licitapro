@@ -131,7 +131,7 @@ async function baixarImagem(url, opcoes = {}) {
       redirect: 'follow',
       signal: controle.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatível; LicitaPro)',
+        'User-Agent': 'Mozilla/5.0 (compatível; DEJ Solutions & Global)',
         Accept: 'image/*,*/*;q=0.8',
       },
     });

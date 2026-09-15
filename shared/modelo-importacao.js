@@ -60,7 +60,7 @@
     });
 
     const linhasInstrucoes = [
-      ['COMO PREENCHER ESTA PLANILHA — LICITAPRO'],
+      ['COMO PREENCHER ESTA PLANILHA — DEJ SOLUTIONS & GLOBAL'],
       [''],
       ['1) Preencha somente a aba "Itens", a partir da linha 2 (não altere os títulos da linha 1).'],
       ['2) As colunas "Descricao_Edital" e "Quantidade" são obrigatórias.'],

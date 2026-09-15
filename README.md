@@ -1,4 +1,4 @@
-# LicitaPro — gerador de propostas de licitação e orçamentos
+# DEJ Solutions & Global — gerador de propostas de licitação e orçamentos
 
 Sistema web para montar **propostas de licitação** e **orçamentos comerciais** e gerar o
 **PDF pronto para envio**, importando os itens de uma planilha (Excel/CSV) para agilizar o
@@ -84,7 +84,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    Aproveite e defina os *padrões* (validade, prazo de entrega, garantia, condições de pagamento).
 
 2. **Baixar o modelo de planilha** — botão em *Painel*, *Importar planilha* ou no menu do usuário.
-   O arquivo `Modelo_Importacao_Itens_LicitaPro.xlsx` tem as abas **Itens** (para preencher) e
+   O arquivo `Modelo_Importacao_Itens_DEJ.xlsx` tem as abas **Itens** (para preencher) e
    **Instruções** (legenda das colunas + exemplo).
 
 3. **Importar planilha** — arraste o arquivo preenchido. O sistema mostra os itens encontrados,
@@ -192,7 +192,7 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 ## 6. Publicando na internet (hospedagem)
 
 > **O site precisa de um servidor Node.** O GitHub Pages só publica arquivos estáticos, e o
-> LicitaPro tem backend (login, banco, upload de arquivos e geração de PDF). Então o código
+> O sistema tem backend (login, banco, upload de arquivos e geração de PDF). Então o código
 > fica no **GitHub**, mas a hospedagem roda num serviço que executa Node — Render, Railway,
 > Fly.io ou uma VPS. Este repositório já vem preparado: `render.yaml`, `railway.json`,
 > `Procfile` e `Dockerfile`.
@@ -447,7 +447,7 @@ Basta salvar o arquivo em:
 public/marca/logo.png      (o servidor também aceita logo.jpg / logo.jpeg)
 ```
 
-- **Site:** a logo entra automaticamente no lugar do monograma "LP" na tela de entrada, no
+- **Site:** a logo entra automaticamente no lugar do monograma "DEJ" na tela de entrada, no
   topo do sistema e na página de apresentação. Se o arquivo não existir, nada muda.
 - **PDF:** a imagem cadastrada em **Minha empresa → Logo** tem prioridade. Sem logo
   cadastrada, o PDF usa `public/marca/logo.png` — no cabeçalho e como **marca d'água**

@@ -22,7 +22,7 @@ const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-const NOME_ARQUIVO_MODELO = 'Modelo_Importacao_Itens_LicitaPro.xlsx';
+const NOME_ARQUIVO_MODELO = 'Modelo_Importacao_Itens_DEJ.xlsx';
 
 /** Garante que as pastas de dados existem. */
 function garantirPastas() {

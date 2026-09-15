@@ -220,7 +220,7 @@
 
   /**
    * Identidade do site: quando public/marca/logo.png existe, ele substitui o
-   * monograma "LP" no topo e na tela de entrada. Sem o arquivo, nada muda.
+   * monograma "DEJ" no topo e na tela de entrada. Sem o arquivo, nada muda.
    */
   function mostrarLogoDaMarca() {
     const alvos = $$('.marca');
