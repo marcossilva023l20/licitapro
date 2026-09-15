@@ -97,6 +97,16 @@ function ehAmbienteNode() {
 }
 
 function imagemAceita(valor) {
+  // No servidor a imagem pode vir como Buffer (bytes de uma foto baixada ou de
+  // um arquivo enviado): o pdfmake do Node aceita buffer, e é assim que as
+  // fotos por link entram no PDF.
+  if (valor && typeof valor === 'object') {
+    if (typeof Buffer === 'undefined' || !Buffer.isBuffer(valor)) return false;
+    if (valor.length < 8) return false;
+    const png = valor[0] === 0x89 && valor[1] === 0x50 && valor[2] === 0x4e && valor[3] === 0x47;
+    const jpeg = valor[0] === 0xff && valor[1] === 0xd8 && valor[2] === 0xff;
+    return png || jpeg;
+  }
   const texto = String(valor || '').trim();
   if (!texto) return false;
   if (/^data:image\/(png|jpe?g);/i.test(texto)) return true;
@@ -112,25 +122,63 @@ function imagemAceita(valor) {
   return false;
 }
 
-async function carregarImagem(urlOuArquivo) {
+function origemDaFoto(referencia) {
+  const texto = String(referencia || '');
+  if (/^https?:/i.test(texto)) return 'link';
+  if (/^data:/i.test(texto)) return 'imagem embutida';
+  if (/^idb:/i.test(texto)) return 'foto enviada';
+  if (/^\/api\/uploads\//i.test(texto)) return 'foto enviada';
+  return 'arquivo';
+}
+
+/**
+ * Guarda quais fotos não entraram no PDF.
+ * O relatório é do documento que está sendo gerado (cada chamada tem o seu),
+ * para que a tela possa avisar o usuário em vez de deixar a foto sumir calada.
+ */
+function anotarFotoIgnorada(relatorio, rotulo, referencia, motivo) {
+  if (!relatorio || typeof relatorio.push !== 'function') return;
+  relatorio.push({
+    rotulo: String(rotulo || 'Foto'),
+    origem: origemDaFoto(referencia),
+    referencia: String(referencia || '').slice(0, 200),
+    motivo: String(motivo || 'não foi possível usar esta imagem'),
+  });
+}
+
+/** Texto curto (cabeçalho HTTP / aviso na tela) com as fotos que ficaram de fora. */
+function descreverFotosIgnoradas(relatorio) {
+  const lista = Array.isArray(relatorio) ? relatorio : [];
+  if (!lista.length) return '';
+  const partes = lista.slice(0, 4).map((falha) => `${falha.rotulo} (${falha.origem}): ${falha.motivo}`);
+  if (lista.length > 4) partes.push(`e mais ${lista.length - 4} foto(s)`);
+  return partes.join(' | ').slice(0, 400);
+}
+
+async function carregarImagem(urlOuArquivo, rotulo, relatorio) {
   if (!urlOuArquivo) return null;
   try {
     const preparada = await Imagens.prepararParaPdf(urlOuArquivo);
-    if (!preparada || !preparada.imagem) return null;
+    if (!preparada || !preparada.imagem) {
+      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, 'não consegui carregar a imagem');
+      return null;
+    }
     if (!imagemAceita(preparada.imagem)) {
+      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, 'formato não aceito no PDF (use .jpg ou .png)');
       console.warn('[pdf] imagem ignorada (formato não aceito no PDF):', String(urlOuArquivo).slice(0, 120));
       return null;
     }
     return preparada.imagem;
   } catch (erro) {
+    anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, erro.message);
     console.warn('[pdf] imagem ignorada:', erro.message);
     return null;
   }
 }
 
 /** Converte a foto do item em nó de imagem do pdfmake. */
-async function noFoto(foto, largura) {
-  const imagem = await carregarImagem(foto);
+async function noFoto(foto, largura, rotulo, relatorio) {
+  const imagem = await carregarImagem(foto, rotulo, relatorio);
   if (!imagem) return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 8.5 };
   try {
     return { image: imagem, fit: [largura || 105, 85], alignment: 'center' };
@@ -228,7 +276,8 @@ function textoDeclaracao(doc) {
  * @param {object} doc dados do documento (proposta/orçamento)
  * @param {object} empresa dados cadastrais do usuário (usado quando o documento não traz os dados)
  */
-async function montarDefinicao(doc, empresa) {
+async function montarDefinicao(doc, empresa, contexto) {
+  const relatorio = contexto && Array.isArray(contexto.relatorio) ? contexto.relatorio : [];
   const corBase = cor((doc.opcoes && doc.opcoes.cor) || COR_PADRAO);
   const proponente = Object.assign({}, empresa || {}, doc.proponente || {});
   const opcoes = Object.assign(
@@ -250,7 +299,7 @@ async function montarDefinicao(doc, empresa) {
   const numero = numeroFormatado(doc);
   const titulo = tituloDocumento(doc);
   const dataDoc = Formato.dataISO(doc.data) || Formato.dataISO(new Date());
-  const logo = opcoes.logoNoCabecalho ? await carregarImagem(proponente.logo) : null;
+  const logo = opcoes.logoNoCabecalho ? await carregarImagem(proponente.logo, 'Logo da empresa', relatorio) : null;
 
   // ------------------------------------------------------------- cabeçalho
   const nomeEmpresa = proponente.nomeFantasia || proponente.razaoSocial || '';
@@ -530,7 +579,7 @@ async function montarDefinicao(doc, empresa) {
           ].filter(Boolean),
         },
       ];
-      if (opcoes.mostrarFotos) linha.push(await noFoto(item.foto, 105));
+      if (opcoes.mostrarFotos) linha.push(await noFoto(item.foto, 105, `Item ${item.numeroItem || i + 1}`, relatorio));
       corpoCatalogo.push(linha);
     }
 
@@ -564,7 +613,7 @@ async function montarDefinicao(doc, empresa) {
   ];
 
   if (opcoes.mostrarAssinatura) {
-    const assinatura = await carregarImagem(proponente.assinatura);
+    const assinatura = await carregarImagem(proponente.assinatura, 'Assinatura', relatorio);
     blocoFinal.push({
       columns: [
         { width: '*', text: '' },
@@ -639,8 +688,8 @@ function montarEndereco(proponente) {
 }
 
 /** Gera o PDF e devolve um Buffer. */
-async function gerarPdf(doc, empresa) {
-  const definicao = await montarDefinicao(doc, empresa);
+async function gerarPdf(doc, empresa, contexto) {
+  const definicao = await montarDefinicao(doc, empresa, contexto);
   const pdf = pdfMake.createPdf(definicao);
   return pdf.getBuffer();
 }
@@ -658,6 +707,7 @@ function nomeArquivo(doc, proponente) {
   return {
     gerarPdf,
     montarDefinicao,
+    descreverFotosIgnoradas,
     calcularTotais,
     nomeArquivo,
     numeroFormatado,

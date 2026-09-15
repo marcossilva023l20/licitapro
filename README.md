@@ -392,6 +392,7 @@ data/                   → dados gerados em execução (não versionado)
 | "Erro ao gerar PDF: Invalid image…" | já tratado: foto em formato não aceito, link morto ou arquivo corrompido não interrompe mais o PDF (a foto sai como `—`) |
 | "Envie uma imagem .jpg ou .png" | o PDF só entende JPG e PNG. No GitHub Pages (modo local) o GIF/WebP enviado é convertido automaticamente para JPG |
 | "Esta imagem não pôde ser lida" | o arquivo está corrompido ou truncado; abra e salve de novo (ou exporte em .jpg) e envie outra vez |
+| Uma foto do link não entrou no PDF | o link não é público, está fora do ar ou o site não libera o download; o aviso mostra o item, e você pode usar **Enviar foto do computador** |
 
 ---
 
@@ -415,7 +416,12 @@ do sistema. Por isso:
 - **Na hora de gerar o PDF:** qualquer foto que não possa ser usada (link fora do ar,
   formato desconhecido, arquivo corrompido, referência do navegador) é simplesmente
   ignorada e o lugar da foto sai como `—`. **O PDF nunca deixa de ser gerado por causa de
-  uma foto.**
+  uma foto.** Nesses casos o sistema **avisa** quais itens ficaram sem foto e o motivo
+  (ex.: *Item 3 (link): não consegui carregar a imagem*).
+- **Foto por link:** ao gerar o PDF o sistema lê o link e baixa a imagem — no servidor quem
+  baixa é o próprio sistema; no **modo local** (GitHub Pages) quem baixa é o navegador, e
+  alguns sites bloqueiam esse acesso. Quando isso acontece, a foto sai como `—` e o aviso
+  diz qual item foi afetado: nesse caso use **Enviar foto do computador**.
 
 Para links do Google Drive, o arquivo precisa estar compartilhado como
 "Qualquer pessoa com o link" (o sistema converte o link de visualização em link direto).

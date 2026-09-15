@@ -26,7 +26,31 @@
     return corpo;
   }
 
+  /**
+   * Fotos que não puderam ser usadas no PDF (link fora do ar, formato não aceito,
+   * arquivo corrompido). O servidor e o modo local avisam por cabeçalho, e a tela
+   * mostra o aviso em vez de deixar a foto sumir sem explicação.
+   */
+  function lerFotosIgnoradas(resposta) {
+    const cabecalho = (nome) => {
+      try {
+        return resposta.headers.get(nome);
+      } catch (_) {
+        return null;
+      }
+    };
+    const quantidade = Number(cabecalho('x-fotos-ignoradas') || 0) || 0;
+    let detalhe = cabecalho('x-fotos-ignoradas-detalhe') || '';
+    if (detalhe) {
+      try {
+        detalhe = decodeURIComponent(detalhe);
+      } catch (_) { /* mantém o texto como veio */ }
+    }
+    return { fotosIgnoradas: quantidade, detalheFotosIgnoradas: detalhe };
+  }
+
   const API = {
+    ultimasFotosIgnoradas: { fotosIgnoradas: 0, detalheFotosIgnoradas: '' },
     async pedir(caminho, opcoes) {
       const config = Object.assign({ credentials: 'same-origin', headers: {} }, opcoes || {});
       if (config.corpo !== undefined) {
@@ -74,7 +98,9 @@
       const simples = disposicao.match(/filename="([^"]+)"/i);
       if (utf8) nomeArquivo = decodeURIComponent(utf8[1]);
       else if (simples) nomeArquivo = simples[1];
-      return { blob, nomeArquivo };
+      const fotos = lerFotosIgnoradas(resposta);
+      API.ultimasFotosIgnoradas = fotos;
+      return Object.assign({ blob, nomeArquivo }, fotos);
     },
     /** Gera o PDF a partir dos dados em tela (sem salvar). */
     async previaPdf(documento) {
@@ -92,6 +118,7 @@
         } catch (_) { /* ignora */ }
         throw new Error(mensagem);
       }
+      API.ultimasFotosIgnoradas = lerFotosIgnoradas(resposta);
       return resposta.blob();
     },
     /** Dispara o download de um blob com o nome de arquivo informado. */

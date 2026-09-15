@@ -312,11 +312,22 @@
     return window.Formato.slug(nome.replace(/\.pdf$/i, '')) + '.pdf';
   }
 
+  /**
+   * Gera o PDF e devolve também as fotos que não puderam ser usadas, para a
+   * tela avisar o usuário (link sem permissão, formato não aceito, arquivo
+   * corrompido) em vez de a foto sair como "—" sem explicação.
+   */
   async function gerarBlobPdf(documento) {
     await carregarPesadas();
     const banco = lerBanco();
-    const buffer = await motorPdf().gerarPdf(documento, banco.usuario.empresa || {});
-    return new Blob([buffer], { type: 'application/pdf' });
+    const motor = motorPdf();
+    const fotosIgnoradas = [];
+    const buffer = await motor.gerarPdf(documento, banco.usuario.empresa || {}, { relatorio: fotosIgnoradas });
+    return {
+      blob: new Blob([buffer], { type: 'application/pdf' }),
+      fotosIgnoradas: fotosIgnoradas.length,
+      detalhe: motor.descreverFotosIgnoradas(fotosIgnoradas),
+    };
   }
 
   function blobPlanilha(livro) {
@@ -432,7 +443,13 @@
 
     if (rota === '/api/documentos/previa-pdf' && metodo === 'POST') {
       const saneado = sanear(corpo || {}, (corpo && corpo.tipo) || 'proposta');
-      return { __blob: await gerarBlobPdf(saneado), __nome: nomeArquivoPdf(saneado) };
+      const gerado = await gerarBlobPdf(saneado);
+      return {
+        __blob: gerado.blob,
+        __nome: nomeArquivoPdf(saneado),
+        __fotosIgnoradas: gerado.fotosIgnoradas,
+        __fotosDetalhe: gerado.detalhe,
+      };
     }
 
     const casamento = rota.match(/^\/api\/documentos\/([^/]+)(\/[a-z-]+)?$/);
@@ -491,7 +508,13 @@
       }
 
       if (acao === '/pdf' && metodo === 'GET') {
-        return { __blob: await gerarBlobPdf(documento), __nome: nomeArquivoPdf(documento) };
+        const gerado = await gerarBlobPdf(documento);
+        return {
+          __blob: gerado.blob,
+          __nome: nomeArquivoPdf(documento),
+          __fotosIgnoradas: gerado.fotosIgnoradas,
+          __fotosDetalhe: gerado.detalhe,
+        };
       }
 
       if (acao === '/planilha' && metodo === 'GET') {
@@ -766,29 +789,45 @@
       }
     };
 
+    /** Guarda o aviso das fotos que não entraram no PDF (usado por editar.js). */
+    function anotarFotos(resposta) {
+      return {
+        fotosIgnoradas: Number(resposta.__fotosIgnoradas || 0),
+        detalheFotosIgnoradas: resposta.__fotosDetalhe || '',
+      };
+    }
+
     API.baixar = async function (caminho) {
       if (estado.ativo) {
         const resposta = await respostaLocal('GET', caminho);
-        return { blob: resposta.__blob, nomeArquivo: resposta.__nome };
+        const fotos = anotarFotos(resposta);
+        API.ultimasFotosIgnoradas = fotos;
+        return Object.assign({ blob: resposta.__blob, nomeArquivo: resposta.__nome }, fotos);
       }
       try {
         return await baixarServidor(caminho);
       } catch (erro) {
         if (!precisaModoLocal(erro)) throw erro;
         const resposta = await respostaLocal('GET', caminho);
-        return { blob: resposta.__blob, nomeArquivo: resposta.__nome };
+        const fotos = anotarFotos(resposta);
+        API.ultimasFotosIgnoradas = fotos;
+        return Object.assign({ blob: resposta.__blob, nomeArquivo: resposta.__nome }, fotos);
       }
     };
 
     API.previaPdf = async function (documento) {
       if (estado.ativo) {
-        return (await respostaLocal('POST', '/api/documentos/previa-pdf', documento)).__blob;
+        const resposta = await respostaLocal('POST', '/api/documentos/previa-pdf', documento);
+        API.ultimasFotosIgnoradas = anotarFotos(resposta);
+        return resposta.__blob;
       }
       try {
         return await previaServidor(documento);
       } catch (erro) {
         if (!precisaModoLocal(erro)) throw erro;
-        return (await respostaLocal('POST', '/api/documentos/previa-pdf', documento)).__blob;
+        const resposta = await respostaLocal('POST', '/api/documentos/previa-pdf', documento);
+        API.ultimasFotosIgnoradas = anotarFotos(resposta);
+        return resposta.__blob;
       }
     };
 

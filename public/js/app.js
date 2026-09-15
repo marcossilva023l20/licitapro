@@ -292,6 +292,7 @@
           const arquivo = await API.baixar('/api/documentos/' + id + '/pdf?download=1');
           API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
           UI.toast('PDF gerado: ' + arquivo.nomeArquivo, 'sucesso');
+          UI.avisarFotosIgnoradas(arquivo);
         } catch (erro) {
           UI.toast('Erro ao gerar PDF: ' + erro.message, 'erro');
         } finally {

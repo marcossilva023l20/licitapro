@@ -456,6 +456,7 @@
       $('#previa-iframe').src = estado.urlPrevia;
       $('#previa-iframe').classList.remove('oculto');
       aviso.classList.add('oculto');
+      UI.avisarFotosIgnoradas(window.API.ultimasFotosIgnoradas);
     } catch (erro) {
       if (!silencioso) {
         aviso.textContent = 'Não foi possível gerar a pré-visualização: ' + erro.message;
@@ -505,6 +506,7 @@
       const arquivo = await window.API.baixar('/api/documentos/' + salvo.id + '/pdf?download=1');
       window.API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
       UI.toast('PDF gerado: ' + arquivo.nomeArquivo, 'sucesso');
+      UI.avisarFotosIgnoradas(arquivo);
     } catch (erro) {
       UI.toast('Erro ao gerar PDF: ' + erro.message, 'erro');
     } finally {

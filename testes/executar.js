@@ -323,10 +323,84 @@ teste('PDF: gera mesmo com fotos corrompidas ou em formato não aceito', async (
     layout: { logoCabecalho: true },
   };
 
-  const buffer = await Pdf.gerarPdf(documento, documento.proponente);
+  const relatorio = [];
+  const buffer = await Pdf.gerarPdf(documento, documento.proponente, { relatorio });
   assert.ok(buffer.length > 2000, 'PDF gerado (' + buffer.length + ' bytes)');
   const texto = Buffer.from(buffer).toString('latin1');
   assert.ok(/\/Subtype\s*\/Image/.test(texto), 'a foto boa entrou no PDF');
+
+  // a tela precisa saber quais fotos ficaram de fora (senão a foto some calada)
+  assert.ok(relatorio.length >= 4, 'fotos problemáticas relatadas: ' + relatorio.length);
+  const rotulos = relatorio.map((f) => f.rotulo).join(' | ');
+  assert.ok(/Item 2/.test(rotulos), 'PNG corrompido relatado no item 2: ' + rotulos);
+  assert.ok(/Item 4/.test(rotulos), 'link morto relatado no item 4: ' + rotulos);
+  assert.ok(
+    relatorio.every((f) => f.origem && f.motivo),
+    'cada foto relatada diz de onde veio e por quê: ' + JSON.stringify(relatorio[0])
+  );
+  assert.ok(!rotulos.includes('Item 1 '), 'a foto boa não entra no relatório: ' + rotulos);
+});
+
+teste('PDF: foto enviada por link entra no PDF e o link ruim é avisado', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
+  const dns = require('dns');
+
+  // simula a internet: DNS público e um servidor servindo uma foto e uma página web
+  const lookupOriginal = dns.promises.lookup;
+  const fetchOriginal = global.fetch;
+  const imagem = ModoLocal.pngValido(24, 24);
+  dns.promises.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  global.fetch = async (url) => {
+    if (String(url).includes('pagina.html')) {
+      return {
+        ok: true,
+        headers: new Map([['content-type', 'text/html']]),
+        arrayBuffer: async () => Buffer.from('<html></html>'),
+      };
+    }
+    return {
+      ok: true,
+      headers: new Map([['content-type', 'image/png'], ['content-length', String(imagem.length)]]),
+      arrayBuffer: async () => imagem,
+    };
+  };
+
+  try {
+    const documento = {
+      tipo: 'proposta',
+      numero: { sequencial: 1, ano: 2026 },
+      data: '2026-04-30',
+      orgao: { nome: 'UASG 787010' },
+      itens: [
+        { descricao: 'FOTO POR LINK', unidade: 'UND', quantidade: 1, precoVenda: 10, foto: 'https://exemplo.com/foto.png' },
+        { descricao: 'LINK DE PÁGINA', unidade: 'UND', quantidade: 1, precoVenda: 10, foto: 'https://exemplo.com/pagina.html' },
+      ],
+      condicoes: { validadeDias: 60, local: 'Fortaleza - CE' },
+    };
+    const relatorio = [];
+    const buffer = await Pdf.gerarPdf(documento, {}, { relatorio });
+    const texto = Buffer.from(buffer).toString('latin1');
+    assert.ok(/\/Subtype\s*\/Image/.test(texto), 'a foto baixada do link entrou no PDF');
+    assert.strictEqual(relatorio.length, 1, 'só o link ruim é avisado: ' + JSON.stringify(relatorio));
+    assert.strictEqual(relatorio[0].rotulo, 'Item 2', 'o aviso diz qual item ficou sem foto');
+    assert.strictEqual(relatorio[0].origem, 'link', 'o aviso diz que a foto veio de link');
+  } finally {
+    dns.promises.lookup = lookupOriginal;
+    global.fetch = fetchOriginal;
+  }
+});
+
+teste('Fotos: o aviso mostra quais não entraram no PDF', () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const texto = Pdf.descreverFotosIgnoradas([
+    { rotulo: 'Item 3', origem: 'link', motivo: 'não consegui carregar a imagem' },
+    { rotulo: 'Item 7', origem: 'foto enviada', motivo: 'formato não aceito no PDF (use .jpg ou .png)' },
+  ]);
+  assert.ok(/Item 3 \(link\)/.test(texto), 'diz o item e a origem: ' + texto);
+  assert.ok(/Item 7/.test(texto), 'diz o segundo item: ' + texto);
+  assert.ok(texto.length <= 400, 'aviso curto para caber no cabeçalho/tela');
+  assert.strictEqual(Pdf.descreverFotosIgnoradas([]), '', 'sem foto ignorada, sem aviso');
 });
 
 teste('PDF: calcula subtotal, desconto, acréscimo, custo e lucro', () => {
@@ -1199,6 +1273,11 @@ teste('Modo local: PDF sai mesmo com foto corrompida ou em formato não aceito',
   assert.ok(blob && blob.size > 2000, 'PDF gerado com as fotos problemáticas (' + (blob ? blob.size : 0) + ' bytes)');
   const inicio = new Uint8Array(await blob.arrayBuffer()).slice(0, 5);
   assert.strictEqual(String.fromCharCode.apply(null, inicio), '%PDF-', 'arquivo é um PDF válido');
+
+  // a tela é avisada das fotos que ficaram de fora (3 das 4 fotos são inutilizáveis)
+  const aviso = window.API.ultimasFotosIgnoradas;
+  assert.ok(aviso && aviso.fotosIgnoradas >= 3, 'aviso das fotos: ' + JSON.stringify(aviso));
+  assert.ok(/Item 2/.test(aviso.detalheFotosIgnoradas), 'diz qual item ficou sem foto: ' + aviso.detalheFotosIgnoradas);
   window.close();
 });
 

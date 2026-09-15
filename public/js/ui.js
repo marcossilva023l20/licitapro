@@ -22,6 +22,28 @@
     }, duracaoMs || (tipo === 'erro' ? 6500 : 3800));
   }
 
+  /**
+   * Avisa quais fotos não entraram no PDF (link sem permissão pública, formato
+   * não aceito, arquivo corrompido). Sem isso a foto sairia como "—" no
+   * documento e o usuário não saberia o motivo.
+   */
+  function avisarFotosIgnoradas(info) {
+    const quantidade = Number((info && info.fotosIgnoradas) || 0);
+    if (!quantidade) return false;
+    const detalhe = String((info && info.detalheFotosIgnoradas) || '').trim();
+    const resumo = quantidade === 1
+      ? '1 foto não entrou no PDF e saiu como "—".'
+      : quantidade + ' fotos não entraram no PDF e saíram como "—".';
+    const dica = 'Se a foto for necessária, use "Enviar foto do computador" (o link pode não estar público).';
+    toast(resumo + (detalhe ? ' ' + detalhe.slice(0, 140) + (detalhe.length > 140 ? '…' : '') : ''), 'aviso', 10000);
+    const aviso = $('#previa-aviso');
+    if (aviso) {
+      aviso.textContent = (resumo + ' ' + detalhe + ' ' + dica).replace(/\s+/g, ' ').trim();
+      aviso.classList.remove('oculto');
+    }
+    return true;
+  }
+
   // -------------------------------------------------------------- modal
 
   function abrirModal(opcoes) {
@@ -181,6 +203,7 @@
   window.UI = {
     $, $$,
     toast,
+    avisarFotosIgnoradas,
     abrirModal,
     fecharModal,
     confirmar,

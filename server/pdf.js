@@ -42,12 +42,13 @@ module.exports = {
   numeroFormatado: motor.numeroFormatado,
   tituloDocumento: motor.tituloDocumento,
   nomeArquivo: motor.nomeArquivo,
-  async montarDefinicao(doc, empresa) {
+  descreverFotosIgnoradas: motor.descreverFotosIgnoradas,
+  async montarDefinicao(doc, empresa, contexto) {
     registrarFontes();
-    return motor.montarDefinicao(doc, empresa);
+    return motor.montarDefinicao(doc, empresa, contexto);
   },
-  async gerarPdf(doc, empresa) {
+  async gerarPdf(doc, empresa, contexto) {
     registrarFontes();
-    return motor.gerarPdf(doc, empresa);
+    return motor.gerarPdf(doc, empresa, contexto);
   },
 };

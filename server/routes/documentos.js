@@ -151,7 +151,9 @@ function nomeArquivoSeguro(nome) {
 
 async function responderPdf(res, doc, paraDownload) {
   const empresa = (Usuario.porId(doc.usuarioId) || {}).empresa || {};
-  const buffer = await Pdf.gerarPdf(doc, empresa);
+  // Relatório das fotos que não entraram no PDF: a tela usa para avisar o usuário.
+  const fotosIgnoradas = [];
+  const buffer = await Pdf.gerarPdf(doc, empresa, { relatorio: fotosIgnoradas });
   const nome = Pdf.nomeArquivo(doc, empresa);
   const { simples, completo } = nomeArquivoSeguro(nome);
   res.setHeader('Content-Type', 'application/pdf');
@@ -161,6 +163,10 @@ async function responderPdf(res, doc, paraDownload) {
     `${paraDownload ? 'attachment' : 'inline'}; filename="${simples}"; filename*=UTF-8''${encodeURIComponent(completo)}`
   );
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Fotos-Ignoradas', String(fotosIgnoradas.length));
+  if (fotosIgnoradas.length) {
+    res.setHeader('X-Fotos-Ignoradas-Detalhe', encodeURIComponent(Pdf.descreverFotosIgnoradas(fotosIgnoradas)));
+  }
   res.end(buffer);
 }
 
