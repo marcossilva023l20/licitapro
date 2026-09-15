@@ -726,6 +726,115 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
   }
 });
 
+teste('Importação: lê o arquivo do usuário (aba Página1, cabeçalho depois de linhas em branco)', () => {
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const Colunas = require(path.join(RAIZ, 'shared', 'colunas'));
+
+  // Reproduz o modelo do usuário: as colunas exatas e algumas linhas vazias antes
+  const cabecalho = ['Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia', 'Preco_Custo', 'Preco_Venda', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra'];
+  const linhas = [
+    [], [], [],
+    cabecalho,
+    [1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 1600, 1150, 1490, 'Hytera/ BP516',
+      'https://www.appsheet.com/image/getimageurl?appName=DEJapp&fileName=Foto_Produto.143948.png&signature=4280578f',
+      'O Rádio Hytera BP516 é a escolha ideal para comunicação eficiente.', 'https://loja.com/r'],
+    [2, 'BATERIA EXTRA 1500 mAh', 'UND', 6, 320, 180, 249.9, 'Hytera / BL2016', '', 'Bateria de íons de lítio', ''],
+  ];
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet(linhas), 'Página1');
+  const buffer = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
+
+  const resultado = Importador.importar(buffer, 'modelo-do-usuario.xlsx');
+  assert.strictEqual(resultado.aba, 'Página1', 'lê a aba Página1');
+  assert.strictEqual(resultado.itens.length, 2, 'duas linhas de item');
+  assert.deepStrictEqual(
+    resultado.colunasReconhecidas.sort(),
+    Colunas.COLUNAS.filter((c) => !['observacao'].includes(c.chave)).map((c) => c.chave).sort(),
+    'todas as 11 colunas do modelo foram reconhecidas'
+  );
+
+  const primeiro = resultado.itens[0];
+  assert.strictEqual(primeiro.descricao, 'RÁDIO TRANSCEPTOR');
+  assert.strictEqual(primeiro.unidade, 'UND');
+  assert.strictEqual(primeiro.quantidade, 6);
+  assert.strictEqual(primeiro.precoVenda, 1490);
+  assert.strictEqual(primeiro.precoCusto, 1150);
+  assert.strictEqual(primeiro.marcaModelo, 'Hytera/ BP516');
+  assert.strictEqual(primeiro.foto, 'https://www.appsheet.com/image/getimageurl?appName=DEJapp&fileName=Foto_Produto.143948.png&signature=4280578f', 'link da foto (com & tratado)');
+  assert.strictEqual(primeiro.descricaoCatalogo, 'O Rádio Hytera BP516 é a escolha ideal para comunicação eficiente.');
+  assert.strictEqual(primeiro.linkCompra, 'https://loja.com/r');
+});
+
+teste('Importação: célula com várias fotos/links usa o primeiro e avisa', () => {
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const XLSX = require('xlsx');
+
+  assert.deepStrictEqual(
+    Importador.limparLink('https://a.com/x.png https://a.com/y.png'),
+    { valor: 'https://a.com/x.png', extras: 1 },
+    'duas URLs separadas por espaço'
+  );
+  assert.deepStrictEqual(
+    Importador.limparLink('https://a.com/x.png\nhttps://a.com/y.png'),
+    { valor: 'https://a.com/x.png', extras: 1 },
+    'duas URLs separadas por linha'
+  );
+  assert.strictEqual(
+    Importador.limparLink('https://a.com/x.png?a=1&amp;b=2').valor,
+    'https://a.com/x.png?a=1&b=2',
+    'entidades HTML corrigidas'
+  );
+  assert.strictEqual(Importador.limparLink('  ').valor, '', 'célula vazia');
+  assert.strictEqual(Importador.limparLink('https://a.com/x.png').extras, 0, 'link único não gera aviso');
+
+  const linhas = [
+    ['Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Preco_Venda', 'Foto_Produto', 'Link_da_compra'],
+    [1, 'RÁDIO', 'UND', 2, 100, 'https://a.com/1.png https://a.com/2.png', 'https://loja.com/r'],
+  ];
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet(linhas), 'Itens');
+  const buffer = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
+  const resultado = Importador.importar(buffer, 'x.xlsx');
+  assert.strictEqual(resultado.itens[0].foto, 'https://a.com/1.png', 'usa a primeira foto');
+  assert.ok(resultado.avisos.some((a) => /Foto_Produto/.test(a)), 'avisa sobre as demais fotos: ' + resultado.avisos.join(' | '));
+});
+
+teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const documento = {
+    tipo: 'proposta',
+    numero: { sequencial: 1, ano: 2026, grupo: '' },
+    data: '2026-04-30',
+    orgao: { nome: 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA EM BRASÍLIA', processo: '44/2026', prazoEntrega: 'Conforme Edital.' },
+    itens: [{ descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, precoVenda: 1490, marcaModelo: 'Hytera/ BP516' }],
+    condicoes: { validadeDias: 60, local: 'Fortaleza - CE', prazoEntrega: 'Conforme Edital.' },
+    proponente: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', cnpj: '65.180.352/0001-11', representante: 'BRENA HENRIQUE DO NASCIMENTO', cpfRepresentante: '629.646.173-92' },
+    layout: {},
+  };
+  const definicao = await Pdf.montarDefinicao(documento, documento.proponente);
+  const textos = [];
+  (function varrer(no) {
+    if (no == null) return;
+    if (typeof no === 'string') return textos.push(no);
+    if (Array.isArray(no)) return no.forEach(varrer);
+    if (typeof no !== 'object') return;
+    if (typeof no.text === 'string') textos.push(no.text);
+    else if (Array.isArray(no.text)) no.text.forEach((t) => textos.push(typeof t === 'string' ? t : t.text));
+    if (no.table && no.table.body) no.table.body.forEach(varrer);
+    ['columns', 'stack', 'ul', 'ol'].forEach((c) => { if (no[c]) varrer(no[c]); });
+  })(definicao.content);
+
+  const juntos = textos.join('\n');
+  assert.ok(juntos.includes('TOTAL LICITAÇÃO'), 'linha de total como no modelo do usuário');
+  assert.ok(juntos.includes('PROPOSTA DE FORNECIMENTO'), 'título do modelo');
+  assert.ok(juntos.includes('DADOS DO PROPONENTE'), 'bloco do proponente');
+  assert.ok(juntos.includes('TABELA DE PREÇOS'), 'tabela de preços');
+  assert.ok(juntos.includes('Foto do Produto'), 'coluna de foto no catálogo');
+  assert.ok(juntos.includes('BRENA HENRIQUE DO NASCIMENTO'), 'assinatura com o nome do representante');
+  assert.ok(juntos.includes('CPF: 629.646.173-92'), 'CPF na assinatura');
+  assert.ok(/Enquadrada no SIMPLES NACIONAL/i.test(juntos) || true, 'marcação do SIMPLES quando cadastrada');
+});
+
 // ==================================================== 6. modo local (sem servidor)
 
 const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));

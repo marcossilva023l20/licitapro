@@ -66,6 +66,29 @@
    * Converte o arquivo enviado em itens.
    * @returns {{itens: Array, avisos: string[], aba: string, colunasReconhecidas: string[]}}
    */
+  /**
+   * Limpa um link digitado na planilha: corrige entidades (&amp;), tira aspas e,
+   * quando a célula tem mais de um link, devolve o primeiro.
+   * @returns {{valor: string, extras: number}}
+   */
+  function limparLink(bruto) {
+    let texto = String(bruto == null ? '' : bruto)
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#3[49];/g, "'")
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .trim()
+      .replace(/^["'<>]+|["'>]+$/g, '')
+      .trim();
+
+    // várias URLs na mesma célula (linha nova, espaço, vírgula ou ponto-e-vírgula)
+    const partes = texto.split(/[\s,;]+/).filter(Boolean);
+    const urls = partes.filter((parte) => /^(https?:\/\/|data:image\/)/i.test(parte));
+    if (urls.length > 1) return { valor: urls[0], extras: urls.length - 1 };
+    return { valor: texto, extras: 0 };
+  }
+
   function importar(dados, nomeArquivo) {
     let livro;
     try {
@@ -118,11 +141,23 @@
         precoCusto: 0,
         precoVenda: 0,
         marcaModelo: String(registro.marcaModelo || '').trim(),
-        foto: String(registro.foto || '').trim(),
+        foto: '',
         descricaoCatalogo: String(registro.descricaoCatalogo || '').trim() || descricao,
-        linkCompra: String(registro.linkCompra || '').trim(),
+        linkCompra: '',
         observacao: '',
       };
+
+      const foto = limparLink(registro.foto);
+      item.foto = foto.valor;
+      if (foto.extras) {
+        avisos.push(`Linha ${i + 1}: a célula Foto_Produto tem ${foto.extras + 1} imagens; usei a primeira (as outras podem ser enviadas uma a uma na tela de edição).`);
+      }
+
+      const compra = limparLink(registro.linkCompra);
+      item.linkCompra = compra.valor;
+      if (compra.extras) {
+        avisos.push(`Linha ${i + 1}: a célula Link_da_compra tem ${compra.extras + 1} links; usei o primeiro.`);
+      }
 
       CAMPOS_NUMERICOS.forEach((campo) => {
         const bruto = registro[campo];
@@ -177,5 +212,5 @@
     return XLSX.write(livro, { bookType: 'xlsx', type: temBuffer() ? 'buffer' : 'array', compression: true });
   }
 
-  return { importar, lerBuffer, itensParaPlanilha, escreverXlsx };
+  return { importar, lerBuffer, itensParaPlanilha, escreverXlsx, limparLink };
 });

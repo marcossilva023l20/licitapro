@@ -388,7 +388,7 @@ async function montarDefinicao(doc, empresa) {
     ]);
   });
 
-  const rotuloTotal = doc.tipo === 'orcamento' ? 'TOTAL DO ORÇAMENTO' : 'TOTAL DA PROPOSTA';
+  const rotuloTotal = doc.tipo === 'orcamento' ? 'TOTAL DO ORÇAMENTO' : 'TOTAL LICITAÇÃO';
   const largurasPrecos = colunasPrecos.map((c) => c.largura);
 
   if (totais.desconto > 0) {
@@ -545,7 +545,10 @@ async function montarDefinicao(doc, empresa) {
             proponente.cpfRepresentante
               ? { text: 'CPF: ' + Formato.cpf(proponente.cpfRepresentante), alignment: 'center', fontSize: 7.8 }
               : null,
-            { text: proponente.cargoRepresentante || 'REPRESENTANTE LEGAL DA EMPRESA', alignment: 'center', fontSize: 7.4, color: '#5B6670' },
+            {
+              text: '(' + (proponente.cargoRepresentante || 'REPRESENTANTE LEGAL DA EMPRESA').replace(/^\(|\)$/g, '') + ')',
+              alignment: 'center', fontSize: 7.4, color: '#5B6670',
+            },
           ].filter(Boolean),
         },
         { width: '*', text: '' },
