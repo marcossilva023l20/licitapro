@@ -3,10 +3,8 @@
 # o arquivo em pedaços pelo canal de anotações do job — este ambiente não
 # alcança log nem artefato, mas lê anotações pela API do GitHub.
 #
-# Limites do canal: 4096 caracteres por anotação e 10 anotações por passo,
-# por isso o arquivo é dividido em linhas de 3900 caracteres.
-#
-# Roda quando este arquivo muda (ou manualmente, em "Actions").
+# Limites do canal: 4096 caracteres por anotação, 10 anotações por check-run,
+# por isso o trabalho é dividido em três jobs.
 name: Buscar logo da marca
 
 on:
@@ -19,109 +17,77 @@ permissions:
   contents: read
 
 jobs:
-  baixar:
+  preparar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Baixar a logo e preparar a versão leve
         env:
           LOGO_URL: https://drive.google.com/file/d/1aTPegfG2Vv1SNmGTrG2TvluNctSLMSIp/view?usp=sharing
         run: |
           python3 -m pip install --quiet --disable-pip-version-check Pillow
           python3 .github/buscar-logo.py
+          sha256sum public/marca/logo.png | cut -c1-16 > /tmp/hash.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logo-dados
+          path: |
+            /tmp/b64.txt
+            /tmp/previa.txt
+            /tmp/pedacos.txt
+            /tmp/hash.txt
+            public/marca/logo.png
 
-      - name: Informar o tamanho
+  pedacos-a:
+    needs: preparar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: logo-dados
+          path: /tmp/dados
+      - name: Resumo e pedaços 1 a 9
         run: |
-          echo "::notice title=logo-resumo::pedacos=$(cat /tmp/pedacos.txt) | $(sha256sum public/marca/logo.png | cut -c1-16)"
-      - name: Pedaços 1 a 10
-        run: |
+          echo "::notice title=logo-resumo::pedacos=$(cat /tmp/dados/pedacos.txt) | sha256-16=$(cat /tmp/dados/hash.txt)"
           i=0
           while read -r linha; do
             i=$((i + 1))
             echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '1,10p' /tmp/b64.txt)
-      - name: Pedaços 11 a 20
+          done < <(sed -n '1,9p' /tmp/dados/b64.txt)
+
+  pedacos-b:
+    needs: preparar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: logo-dados
+          path: /tmp/dados
+      - name: Pedaços 10 a 19
         run: |
-          i=10
+          i=9
           while read -r linha; do
             i=$((i + 1))
             echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '11,20p' /tmp/b64.txt)
-      - name: Pedaços 21 a 30
+          done < <(sed -n '10,19p' /tmp/dados/b64.txt)
+
+  pedacos-c:
+    needs: preparar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: logo-dados
+          path: /tmp/dados
+      - name: Pedaços 20 a 29 e miniatura
         run: |
-          i=20
+          i=19
           while read -r linha; do
             i=$((i + 1))
             echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '21,30p' /tmp/b64.txt)
-      - name: Pedaços 31 a 40
-        run: |
-          i=30
+          done < <(sed -n '20,29p' /tmp/dados/b64.txt)
+          j=0
           while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '31,40p' /tmp/b64.txt)
-      - name: Pedaços 41 a 50
-        run: |
-          i=40
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '41,50p' /tmp/b64.txt)
-      - name: Pedaços 51 a 60
-        run: |
-          i=50
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '51,60p' /tmp/b64.txt)
-      - name: Pedaços 61 a 70
-        run: |
-          i=60
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '61,70p' /tmp/b64.txt)
-      - name: Pedaços 71 a 80
-        run: |
-          i=70
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '71,80p' /tmp/b64.txt)
-      - name: Pedaços 81 a 90
-        run: |
-          i=80
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '81,90p' /tmp/b64.txt)
-      - name: Pedaços 91 a 100
-        run: |
-          i=90
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '91,100p' /tmp/b64.txt)
-      - name: Pedaços 101 a 110
-        run: |
-          i=100
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '101,110p' /tmp/b64.txt)
-      - name: Pedaços 111 a 120
-        run: |
-          i=110
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::${linha}"
-          done < <(sed -n '111,120p' /tmp/b64.txt)
-      - name: Miniatura para conferência
-        run: |
-          i=0
-          while read -r linha; do
-            i=$((i + 1))
-            echo "::notice title=logo-preview-$(printf '%02d' $i)::${linha}"
-          done < /tmp/previa.txt
+            j=$((j + 1))
+            echo "::notice title=logo-preview-$(printf '%02d' $j)::${linha}"
+          done < /tmp/dados/previa.txt
