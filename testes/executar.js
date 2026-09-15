@@ -272,6 +272,63 @@ teste('PDF: usa a fonte Times (Times New Roman) no arquivo', async () => {
   assert.ok(!/Roboto/.test(conteudo), 'sem Roboto no arquivo');
 });
 
+teste('Imagens: só JPEG/PNG íntegros entram no PDF', () => {
+  const Imagens = require(path.join(RAIZ, 'server', 'imagens'));
+  const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
+
+  assert.strictEqual(Imagens.imagemIntegra(ModoLocal.pngValido(10, 10)), true, 'PNG montado é aceito');
+  assert.strictEqual(Imagens.imagemIntegra(ModoLocal.pngCorrompido()), false, 'PNG corrompido é recusado');
+  assert.strictEqual(
+    Imagens.imagemIntegra(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')),
+    false,
+    'GIF é recusado (o PDF não aceita)'
+  );
+  assert.strictEqual(
+    Imagens.imagemIntegra(Buffer.from('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a', 'base64')),
+    false,
+    'JPEG truncado é recusado'
+  );
+  assert.strictEqual(Imagens.imagemIntegra(Buffer.from('nada')), false, 'arquivo qualquer é recusado');
+
+  // o data URL corrompido é reconhecido antes de chegar ao pdfmake
+  const corrompido = ModoLocal.dataUrlPng(ModoLocal.pngCorrompido());
+  assert.strictEqual(Imagens.bytesDoDataUrl(corrompido).length > 0, true, 'lê os bytes do data URL');
+  assert.strictEqual(Imagens.bytesDoDataUrl('data:image/gif,R0lGOD'), null, 'data URL sem base64 é ignorado');
+  assert.strictEqual(Imagens.bytesDoDataUrl('https://exemplo.com/x.png'), null, 'link comum não é data URL');
+});
+
+teste('PDF: gera mesmo com fotos corrompidas ou em formato não aceito', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
+
+  const documento = {
+    tipo: 'proposta',
+    numero: { sequencial: 1, ano: 2026 },
+    data: '2026-04-30',
+    orgao: { nome: 'UASG 787010' },
+    itens: [
+      { descricao: 'FOTO BOA', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: ModoLocal.dataUrlPng(ModoLocal.pngValido(8, 6)), descricaoCatalogo: 'ok' },
+      { descricao: 'PNG CORROMPIDO', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: ModoLocal.dataUrlPng(ModoLocal.pngCorrompido()), descricaoCatalogo: 'ruim' },
+      { descricao: 'GIF', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', descricaoCatalogo: 'gif' },
+      { descricao: 'LINK QUEBRADO', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: 'https://exemplo.invalido/x.jpg', descricaoCatalogo: 'link' },
+      { descricao: 'REFERÊNCIA DO NAVEGADOR', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: 'idb:abc', descricaoCatalogo: 'idb' },
+      { descricao: 'ARQUIVO QUE NÃO EXISTE', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: '/tmp/nao-existe-licitapro.jpg', descricaoCatalogo: 'caminho' },
+    ],
+    condicoes: { validadeDias: 60, local: 'Fortaleza - CE' },
+    proponente: {
+      razaoSocial: 'D.E.J SOLUTIONS & GLOBAL',
+      logo: ModoLocal.dataUrlPng(ModoLocal.pngCorrompido()),
+      assinatura: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    },
+    layout: { logoCabecalho: true },
+  };
+
+  const buffer = await Pdf.gerarPdf(documento, documento.proponente);
+  assert.ok(buffer.length > 2000, 'PDF gerado (' + buffer.length + ' bytes)');
+  const texto = Buffer.from(buffer).toString('latin1');
+  assert.ok(/\/Subtype\s*\/Image/.test(texto), 'a foto boa entrou no PDF');
+});
+
 teste('PDF: calcula subtotal, desconto, acréscimo, custo e lucro', () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const totais = Pdf.calcularTotais(documentoExemplo('proposta'));
@@ -1054,33 +1111,94 @@ teste('Modo local: backup e restauração dos dados', async () => {
   window.close();
 });
 
-teste('Modo local: fotos dos produtos (envio do computador e links)', async () => {
-  const { window, $ } = await abrirNoModoLocal();
+teste('Modo local: fotos — envio do computador, conversão e recusas', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
   await entrarNoModoLocal(window, $);
 
-  // 1. envio de imagem do computador: sem IndexedDB e sem canvas (jsdom), a
-  //    imagem é guardada dentro do documento como data URL.
-  const gif = new window.File(['GIF89a\u0001\u0000\u0001\u0000'], 'foto.gif', { type: 'image/gif' });
-  const envio = await window.API.enviarArquivo('/api/uploads', gif);
-  assert.ok(String(envio.caminho).startsWith('data:image/'), 'imagem guardada no documento: ' + String(envio.caminho).slice(0, 20));
-  assert.strictEqual(envio.nome, 'foto.gif', 'nome do arquivo preservado');
+  const quebrada = new window.File([ModoLocal.pngCorrompido()], 'foto.png', { type: 'image/png' });
+  // o jsdom não decodifica imagens: aqui ele passa a abrir PNG de verdade e a
+  // recusar exatamente o arquivo corrompido
+  ModoLocal.simularImagens(window, {
+    blobs: aberto.blobsFalsos,
+    ruins: [quebrada],
+    falhar: (endereco) => String(endereco).includes('AAAADUlEQVR42mP8z8Dw'),
+  });
 
-  // 2. o mesmo vale para o logo/assinatura da empresa
-  await window.API.pedir('/api/auth/empresa', { method: 'PUT', corpo: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', logo: envio.caminho } });
+  // 1. PNG de verdade: guardado como está (o PDF aceita PNG)
+  const png = new window.File([ModoLocal.pngValido(8, 6)], 'foto.png', { type: 'image/png' });
+  const envio = await window.API.enviarArquivo('/api/uploads', png);
+  assert.ok(String(envio.caminho).startsWith('data:image/png'), 'PNG guardado como data URL: ' + String(envio.caminho).slice(0, 24));
+  assert.strictEqual(envio.nome, 'foto.png', 'nome do arquivo preservado');
+
+  // 2. arquivo que não é imagem: recusado com mensagem clara
+  const texto = new window.File(['olá'], 'notas.txt', { type: 'text/plain' });
+  await assert.rejects(
+    () => window.API.enviarArquivo('/api/uploads', texto),
+    (erro) => /não é uma imagem/i.test(erro.message),
+    'arquivo que não é imagem é recusado'
+  );
+
+  // 3. imagem corrompida: recusada em vez de quebrar o PDF depois
+  await assert.rejects(
+    () => window.API.enviarArquivo('/api/uploads', quebrada),
+    (erro) => /corromp/i.test(erro.message),
+    'imagem corrompida é recusada: ' + 'ok'
+  );
+
+  // 4. o logo da empresa passa pelo mesmo caminho
+  await window.API.pedir('/api/auth/empresa', {
+    method: 'PUT',
+    corpo: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', logo: envio.caminho },
+  });
   const perfil = await window.API.pedir('/api/auth/eu');
   assert.strictEqual(perfil.usuario.empresa.logo, envio.caminho, 'logo guardada no perfil');
 
-  // 3. dentro do PDF, data URL e links são convertidos para o formato do pdfmake
+  // 5. no gerador de PDF: PNG é entregue como está...
   const pronto = await window.ImagensNavegador.prepararParaPdf(envio.caminho);
-  assert.ok(pronto && pronto.imagem === envio.caminho, 'data URL repassada ao pdfmake');
+  assert.ok(pronto && pronto.imagem === envio.caminho, 'PNG repassado ao pdfmake');
 
-  const doDrive = await window.ImagensNavegador.prepararParaPdf('https://drive.google.com/file/d/1AbC/view');
-  assert.ok(doDrive && /^https:\/\//.test(doDrive.imagem), 'link do Drive convertido para link direto');
+  // ...e o que não pode ser usado vira traço no PDF, sem derrubar a geração
+  for (const ruim of [ModoLocal.dataUrlPng(ModoLocal.pngCorrompido()), 'https://exemplo.invalido/x.jpg', 'idb:nao-existe']) {
+    const resultado = await window.ImagensNavegador.prepararParaPdf(ruim);
+    assert.strictEqual(resultado, null, 'imagem inutilizável ignorada: ' + String(ruim).slice(0, 30));
+  }
 
-  // 4. endereço de exibição das imagens na tela
+  // 6. endereço de exibição das imagens na tela
   assert.strictEqual(window.UI.urlImagem(''), '', 'sem imagem não há endereço');
-  assert.ok(window.UI.urlImagem('data:image/png;base64,AAA').startsWith('data:'), 'data URL exibida direto');
-  assert.strictEqual(window.UI.urlImagem(envio.caminho), envio.caminho, 'foto local exibida direto');
+  assert.ok(window.UI.urlImagem(envio.caminho).startsWith('data:'), 'data URL exibida direto');
+  window.close();
+});
+
+teste('Modo local: PDF sai mesmo com foto corrompida ou em formato não aceito', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  await entrarNoModoLocal(window, $);
+  // o PNG corrompido começa com este trecho em base64 (o navegador não abre)
+  ModoLocal.simularImagens(window, { falhar: (endereco) => String(endereco).includes('AAAADUlEQVR42mP8z8Dw') });
+
+  const boa = ModoLocal.dataUrlPng(ModoLocal.pngValido(8, 6));
+  const criado = await window.API.pedir('/api/documentos', {
+    method: 'POST',
+    corpo: {
+      tipo: 'proposta',
+      numero: { sequencial: 1, ano: 2026 },
+      orgao: { nome: 'UASG 787010' },
+      itens: [
+        { descricao: 'COM FOTO BOA', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: boa, descricaoCatalogo: 'ok' },
+        { descricao: 'COM PNG CORROMPIDO', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: ModoLocal.dataUrlPng(ModoLocal.pngCorrompido()), descricaoCatalogo: 'ruim' },
+        { descricao: 'COM GIF', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', descricaoCatalogo: 'gif' },
+        { descricao: 'COM LINK QUEBRADO', unidade: 'UND', quantidade: 1, precoVenda: 100, foto: 'https://exemplo.invalido/x.jpg', descricaoCatalogo: 'link' },
+      ],
+      condicoes: { validadeDias: 60, local: 'Fortaleza - CE' },
+      proponente: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL' },
+      layout: {},
+    },
+  });
+
+  const blob = await window.API.previaPdf(criado.documento);
+  assert.ok(blob && blob.size > 2000, 'PDF gerado com as fotos problemáticas (' + (blob ? blob.size : 0) + ' bytes)');
+  const inicio = new Uint8Array(await blob.arrayBuffer()).slice(0, 5);
+  assert.strictEqual(String.fromCharCode.apply(null, inicio), '%PDF-', 'arquivo é um PDF válido');
   window.close();
 });
 
@@ -1137,7 +1255,10 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
       tipo: 'proposta',
       numero: { sequencial: 1, ano: 2026, grupo: '' },
       orgao: { nome: 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA' },
-      itens: [{ descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL', unidade: 'UND', quantidade: 6, precoVenda: 1490 }],
+      itens: [{
+        descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL', unidade: 'UND', quantidade: 6, precoVenda: 1490,
+        foto: ModoLocal.dataUrlPng(ModoLocal.pngValido(8, 6)),
+      }],
     },
   });
   const blob = await aberto.window.API.previaPdf(criado.documento);

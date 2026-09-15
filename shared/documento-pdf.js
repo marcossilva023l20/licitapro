@@ -81,12 +81,49 @@ function tituloDocumento(doc) {
 
 // ------------------------------------------------------------------- imagens
 
+/**
+ * O pdfmake só aceita data URL de PNG/JPEG (navegador) ou caminho de arquivo
+ * (Node). Qualquer outra coisa — link http, blob:, GIF, WebP, HEIC — faz a
+ * geração do PDF falhar inteira ("Unknown image format"). Aqui a imagem é
+ * conferida antes de entrar no documento: quando não serve, o PDF sai com um
+ * traço no lugar da foto em vez de dar erro.
+ */
+function ehAmbienteNode() {
+  return (
+    typeof process !== 'undefined' &&
+    Boolean(process.versions && process.versions.node) &&
+    typeof require === 'function'
+  );
+}
+
+function imagemAceita(valor) {
+  const texto = String(valor || '').trim();
+  if (!texto) return false;
+  if (/^data:image\/(png|jpe?g);/i.test(texto)) return true;
+  if (/^data:/i.test(texto)) return false; // gif, webp, heic, pdf...
+  if (/^(https?:|blob:|idb:|\/\/)/i.test(texto)) return false; // precisa virar data URL antes
+  if (ehAmbienteNode()) {
+    try {
+      return require('fs').existsSync(texto); // caminho de arquivo local
+    } catch (_) {
+      return false;
+    }
+  }
+  return false;
+}
+
 async function carregarImagem(urlOuArquivo) {
   if (!urlOuArquivo) return null;
   try {
     const preparada = await Imagens.prepararParaPdf(urlOuArquivo);
-    return preparada ? preparada.imagem : null;
-  } catch (_) {
+    if (!preparada || !preparada.imagem) return null;
+    if (!imagemAceita(preparada.imagem)) {
+      console.warn('[pdf] imagem ignorada (formato não aceito no PDF):', String(urlOuArquivo).slice(0, 120));
+      return null;
+    }
+    return preparada.imagem;
+  } catch (erro) {
+    console.warn('[pdf] imagem ignorada:', erro.message);
     return null;
   }
 }

@@ -143,7 +143,15 @@ async function abrirSemServidor(opcoes = {}) {
     window.eval(codigo);
   }
 
-  window.URL.createObjectURL = () => 'blob:modo-local';
+  // cada object URL fica associado ao blob, para os testes poderem dizer
+  // exatamente qual imagem deve falhar ao abrir
+  const blobsFalsos = new Map();
+  let contadorBlobs = 0;
+  window.URL.createObjectURL = (blob) => {
+    const url = 'blob:falso-' + (contadorBlobs += 1);
+    blobsFalsos.set(url, blob);
+    return url;
+  };
   window.URL.revokeObjectURL = () => {};
   window.Element.prototype.scrollIntoView = function () {};
   window.HTMLElement.prototype.scrollTo = function () {};
@@ -153,7 +161,7 @@ async function abrirSemServidor(opcoes = {}) {
   }
 
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
-  return { dom, window, erros, base };
+  return { dom, window, erros, base, blobsFalsos };
 }
 
 /**
@@ -184,9 +192,120 @@ function planilhaDeTeste(window) {
   };
 }
 
+// ------------------------------------------------------------ imagens de teste
+
+/** CRC32 usado nos blocos do PNG (mesma conta do servidor). */
+function crc32(buffer) {
+  const tabela = (() => {
+    const t = new Int32Array(256);
+    for (let n = 0; n < 256; n += 1) {
+      let c = n;
+      for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c;
+    }
+    return t;
+  })();
+  let c = 0xffffffff;
+  for (let i = 0; i < buffer.length; i += 1) c = tabela[(c ^ buffer[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function blocoPng(tipo, dados) {
+  const tamanho = Buffer.alloc(4);
+  tamanho.writeUInt32BE(dados.length, 0);
+  const corpo = Buffer.concat([Buffer.from(tipo, 'latin1'), dados]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(corpo), 0);
+  return Buffer.concat([tamanho, corpo, crc]);
+}
+
+/**
+ * Monta um PNG válido de verdade (assinatura, blocos com CRC e dados
+ * comprimidos), sem depender de nenhum arquivo binário no repositório.
+ */
+function pngValido(largura = 4, altura = 4) {
+  const zlib = require('zlib');
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(largura, 0);
+  ihdr.writeUInt32BE(altura, 4);
+  ihdr[8] = 8;  // 8 bits por canal
+  ihdr[9] = 2;  // RGB
+  const linhas = [];
+  for (let y = 0; y < altura; y += 1) {
+    const linha = Buffer.alloc(1 + largura * 3);
+    for (let x = 0; x < largura; x += 1) {
+      linha[1 + x * 3] = 15;
+      linha[2 + x * 3] = 118;
+      linha[3 + x * 3] = 110;
+    }
+    linhas.push(linha);
+  }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    blocoPng('IHDR', ihdr),
+    blocoPng('IDAT', zlib.deflateSync(Buffer.concat(linhas))),
+    blocoPng('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** PNG com a estrutura certa mas dados corrompidos (era o que derrubava o servidor). */
+function pngCorrompido() {
+  return Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+    'base64'
+  );
+}
+
+function dataUrlPng(dados) {
+  return 'data:image/png;base64,' + Buffer.from(dados).toString('base64');
+}
+
+/**
+ * Faz o jsdom "saber" abrir imagens (ele não decodifica nada por conta própria).
+ * Permite testar o caminho feliz num ambiente onde a imagem realmente carrega.
+ */
+function simularImagens(window, opcoes = {}) {
+  // aceita true/false ou uma função que decide por imagem (cuidado: Boolean(fn) é true)
+  const porEndereco = opcoes.falhar === undefined ? false : opcoes.falhar;
+  const blobs = opcoes.blobs || null;   // mapa endereço -> blob (de abrirSemServidor)
+  const ruins = opcoes.ruins || [];     // blobs que devem falhar ao abrir
+
+  class ImagemFalsa {
+    constructor() {
+      this.onload = null;
+      this.onerror = null;
+      this.width = 60;
+      this.height = 40;
+    }
+
+    set src(valor) {
+      this._src = valor;
+      setTimeout(() => {
+        let deveFalhar;
+        if (blobs && blobs.has(valor)) deveFalhar = ruins.includes(blobs.get(valor));
+        else deveFalhar = typeof porEndereco === 'function' ? porEndereco(valor) : porEndereco;
+        if (deveFalhar) {
+          if (this.onerror) this.onerror(new window.Event('error'));
+        } else if (this.onload) {
+          this.onload(new window.Event('load'));
+        }
+      }, 0);
+    }
+
+    get src() {
+      return this._src;
+    }
+  }
+  window.Image = ImagemFalsa;
+  return window;
+}
+
 /** Simula um arquivo de backup escolhido pelo usuário. */
 function arquivoDeBackup(conteudo) {
   return { name: 'licitapro-backup.json', text: async () => JSON.stringify(conteudo) };
 }
 
-module.exports = { abrirSemServidor, esperar, planilhaDeTeste, arquivoDeBackup, lerRecurso };
+module.exports = {
+  abrirSemServidor, esperar, planilhaDeTeste, arquivoDeBackup, lerRecurso,
+  pngValido, pngCorrompido, dataUrlPng, simularImagens, crc32,
+};

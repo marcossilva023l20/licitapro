@@ -143,50 +143,6 @@
     }
   }
 
-  /** Reduz a imagem antes de guardar (evita encher o armazenamento). */
-  function reduzirImagem(arquivo, larguraMaxima) {
-    return new Promise((resolver) => {
-      if (/gif/i.test(arquivo.type)) return resolver(arquivo); // animação: mantém como está
-      const url = URL.createObjectURL(arquivo);
-      const imagem = new Image();
-      // rede de segurança: se a imagem não carregar nem avisar erro, segue com o
-      // arquivo original em vez de travar o envio.
-      const prazo = setTimeout(() => {
-        console.warn('[modo local] imagem demorou para carregar; usando o arquivo original.');
-        URL.revokeObjectURL(url);
-        resolver(arquivo);
-      }, 5000);
-      imagem.onload = () => {
-        const limite = larguraMaxima || 1200;
-        const escala = Math.min(1, limite / (imagem.width || limite));
-        const largura = Math.max(1, Math.round((imagem.width || limite) * escala));
-        const altura = Math.max(1, Math.round((imagem.height || limite) * escala));
-        const tela = document.createElement('canvas');
-        tela.width = largura;
-        tela.height = altura;
-        const contexto = tela.getContext('2d');
-        contexto.fillStyle = '#ffffff';
-        contexto.fillRect(0, 0, largura, altura);
-        contexto.drawImage(imagem, 0, 0, largura, altura);
-        tela.toBlob(
-          (blob) => {
-            clearTimeout(prazo);
-            URL.revokeObjectURL(url);
-            resolver(blob && blob.size < arquivo.size ? blob : arquivo);
-          },
-          'image/jpeg',
-          0.86
-        );
-      };
-      imagem.onerror = () => {
-        clearTimeout(prazo);
-        URL.revokeObjectURL(url);
-        resolver(arquivo);
-      };
-      imagem.src = url;
-    });
-  }
-
   // -------------------------------------------------- imagens na interface
 
   /** Registra a imagem para que as pré-visualizações (<img src>) funcionem. */
@@ -562,7 +518,11 @@
     }
 
     if (rota === '/api/uploads') {
-      const reduzida = await reduzirImagem(arquivo);
+      await carregarBibliotecas();
+      // A imagem precisa virar JPEG/PNG: o gerador de PDF não aceita GIF, WebP
+      // nem HEIC. O que não puder ser convertido é recusado com uma mensagem
+      // explicando o que enviar.
+      const reduzida = await window.ImagensNavegador.prepararParaEnvio(arquivo);
       const id = novoId();
       try {
         await salvarImagemBlob(id, reduzida);

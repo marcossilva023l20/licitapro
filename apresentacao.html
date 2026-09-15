@@ -94,7 +94,9 @@
         <article class="cartao">
           <h3>Catálogo com fotos</h3>
           <p>Uma página de catálogo com a descrição comercial e a foto de cada produto — por link
-          (inclusive Google Drive) ou enviando a imagem do computador.</p>
+          (inclusive Google Drive) ou enviando a imagem do computador (.jpg ou .png; no modo local
+          GIF e WebP entram convertidos). Foto que não puder ser lida sai como <code>—</code> e
+          nunca impede a geração do PDF.</p>
         </article>
         <article class="cartao">
           <h3>Cálculos e margem</h3>
@@ -162,7 +164,7 @@
             <tr><td><code>Preco_Custo</code></td><td>não</td><td>quanto você paga no fornecedor (uso interno)</td></tr>
             <tr><td><code>Preco_Venda</code></td><td>não</td><td>valor unitário ofertado</td></tr>
             <tr><td><code>Marca_Modelo</code></td><td>não</td><td>marca e modelo ofertados</td></tr>
-            <tr><td><code>Foto_Produto</code></td><td>não</td><td>link da imagem ou upload no site</td></tr>
+            <tr><td><code>Foto_Produto</code></td><td>não</td><td>link da imagem ou upload (.jpg/.png) no site</td></tr>
             <tr><td><code>Descricao_Catalogo</code></td><td>não</td><td>texto comercial do catálogo</td></tr>
             <tr><td><code>Link_da_compra</code></td><td>não</td><td>link onde você compra (não sai no PDF)</td></tr>
           </tbody>
@@ -232,7 +234,7 @@ cd licitapro
 npm install
 npm start          # abre em http://localhost:3000
 
-npm run testes     # 34 testes automatizados
+npm run testes     # 37 testes automatizados
 npm run paginas    # regenera o index.html do GitHub Pages
 npm run fontes     # regenera as métricas da fonte Times
 npm run modelo     # gera a planilha-modelo (.xlsx)

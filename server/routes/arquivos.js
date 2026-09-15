@@ -31,9 +31,11 @@ const uploadImagem = multer({
   storage: armazenamento,
   limits: { fileSize: 6 * 1024 * 1024, files: 1 },
   fileFilter: (req, arquivo, cb) => {
+    // O gerador de PDF aceita apenas JPEG e PNG. GIF e WebP são recusados aqui
+    // (converta para .jpg antes de enviar) para o PDF não sair sem a foto.
     const ext = path.extname(arquivo.originalname || '').toLowerCase();
-    if (!['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {
-      return cb(new Error('Envie uma imagem .jpg, .png, .gif ou .webp.'));
+    if (!['.jpg', '.jpeg', '.png'].includes(ext)) {
+      return cb(new Error('Envie uma imagem .jpg ou .png (GIF e WebP não entram no PDF).'));
     }
     cb(null, true);
   },
@@ -71,6 +73,13 @@ rotas.post('/uploads', Auth.exigirLogin, (req, res) => {
   uploadImagem(req, res, (erro) => {
     if (erro) return res.status(400).json({ erro: erro.message });
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo recebido.' });
+    // A imagem precisa ser um JPEG/PNG de verdade: um arquivo corrompido não
+    // gera erro no PDF, derruba o servidor na hora de montar o documento.
+    if (!Imagens.imagemIntegra(req.file.buffer)) {
+      return res.status(400).json({
+        erro: 'Esta imagem não pôde ser lida (arquivo corrompido ou em formato não aceito). Envie um .jpg ou .png válido.',
+      });
+    }
     garantirPastas();
     const ext = path.extname(req.file.originalname || '').toLowerCase() || '.png';
     const nome = `${crypto.randomUUID()}${ext}`;
@@ -81,7 +90,7 @@ rotas.post('/uploads', Auth.exigirLogin, (req, res) => {
 
 rotas.get('/uploads/:arquivo', Auth.exigirLogin, (req, res) => {
   const nome = path.basename(req.params.arquivo);
-  if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png|gif|webp)$/i.test(nome)) {
+  if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png)$/i.test(nome)) {
     return res.status(400).json({ erro: 'Arquivo inválido.' });
   }
   const caminho = path.join(UPLOADS_DIR, nome);

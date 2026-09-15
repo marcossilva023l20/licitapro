@@ -136,7 +136,7 @@ você participa de vários pregões ao mesmo tempo.
 | `Preco_Custo` | não | quanto você paga no fornecedor (controle interno) |
 | `Preco_Venda` | não | valor unitário ofertado (entra no PDF) |
 | `Marca_Modelo` | não | marca e modelo ofertados |
-| `Foto_Produto` | não | link da imagem (Drive, site do fabricante) ou envie o arquivo no site |
+| `Foto_Produto` | não | link da imagem (Drive, site do fabricante) ou envie um arquivo **.jpg/.png** no site |
 | `Descricao_Catalogo` | não | texto comercial que aparece no catálogo |
 | `Link_da_compra` | não | link onde você compra (não sai no PDF por padrão) |
 
@@ -389,6 +389,9 @@ data/                   → dados gerados em execução (não versionado)
 | A logo não aparece no cabeçalho | envie a imagem em *Minha empresa* e marque "Usar logo no cabeçalho" |
 | (GitHub Pages) os documentos sumiram | eles ficam no navegador usado; restaure pelo **Restaurar backup** |
 | (GitHub Pages) quero usar em outro computador | baixe o backup em um e restaure no outro |
+| "Erro ao gerar PDF: Invalid image…" | já tratado: foto em formato não aceito, link morto ou arquivo corrompido não interrompe mais o PDF (a foto sai como `—`) |
+| "Envie uma imagem .jpg ou .png" | o PDF só entende JPG e PNG. No GitHub Pages (modo local) o GIF/WebP enviado é convertido automaticamente para JPG |
+| "Esta imagem não pôde ser lida" | o arquivo está corrompido ou truncado; abra e salve de novo (ou exporte em .jpg) e envie outra vez |
 
 ---
 
@@ -398,6 +401,21 @@ Links de imagem (Google Drive, site do fabricante) são baixados no momento do u
 em cache. Em ambientes **sem acesso à internet** (por exemplo, um servidor isolado), esses
 downloads falham e o PDF mostra `—` no lugar da foto — nesse caso, envie a imagem do
 computador pelo próprio site (o arquivo fica salvo em `data/uploads/`).
+
+### Formatos de imagem aceitos no PDF
+
+O gerador de PDF só entende **JPG/JPEG e PNG** — é uma limitação da biblioteca de PDF, não
+do sistema. Por isso:
+
+- **Envio pelo servidor:** o upload aceita apenas `.jpg`, `.jpeg` e `.png` íntegros. GIF,
+  WebP e arquivos corrompidos são recusados já no envio, com uma mensagem explicando o que
+  fazer (o arquivo não chega a ser salvo).
+- **Modo local (GitHub Pages):** o navegador aceita GIF, WebP e PNG grande, converte para
+  JPG/PNG e só então guarda a foto.
+- **Na hora de gerar o PDF:** qualquer foto que não possa ser usada (link fora do ar,
+  formato desconhecido, arquivo corrompido, referência do navegador) é simplesmente
+  ignorada e o lugar da foto sai como `—`. **O PDF nunca deixa de ser gerado por causa de
+  uma foto.**
 
 Para links do Google Drive, o arquivo precisa estar compartilhado como
 "Qualquer pessoa com o link" (o sistema converte o link de visualização em link direto).
