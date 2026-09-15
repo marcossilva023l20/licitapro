@@ -25,6 +25,8 @@
   const COR_DOURADA = '#8A6A31'; // dourado da marca em tom de texto (contraste no branco)
   const COR_FILETE = '#C6A15B'; // dourado da marca — filetes e detalhes
   const COR_CINZA = '#E8ECEF'; // cinza claro da marca — fundos de linha e faixas
+  const COR_DOURADA_CLARA = '#D8B873'; // dourado claro da marca — leitura sobre o azul
+  const COR_APOIO_ESCURO = '#C3D2E2'; // texto de apoio sobre a faixa azul-marinho
 
 function cor(hex, padrao) {
   const texto = String(hex || '').trim();
@@ -79,6 +81,17 @@ function numeroFormatado(doc) {
   const numero = doc.numero || {};
   const base = Formato.numeroDocumento(numero.sequencial || 1, numero.ano || new Date().getFullYear());
   return numero.grupo ? `${numero.grupo}-${base}` : base;
+}
+
+/** Luminância relativa (0 = preto, 1 = branco) — decide o texto sobre a faixa. */
+function luminancia(hex) {
+  const limpo = String(hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(limpo)) return 0;
+  const canais = [0, 2, 4].map((i) => {
+    const v = parseInt(limpo.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * canais[0] + 0.7152 * canais[1] + 0.0722 * canais[2];
 }
 
 function tituloDocumento(doc) {
@@ -277,10 +290,12 @@ function layoutTabela(corBase) {
 }
 
 function cabecalhoTabela(corBase, colunas) {
+  // sobre uma cor clara escolhida pelo usuário, o texto da faixa fica escuro
+  const tinta = luminancia(corBase) > 0.55 ? '#1C2B3A' : '#FFFFFF';
   return colunas.map((c) => ({
     text: c.titulo,
     bold: true,
-    color: '#FFFFFF',
+    color: tinta,
     fontSize: 9.5,
     alignment: c.alinhamento || 'left',
     fillColor: corBase,
@@ -355,46 +370,64 @@ async function montarDefinicao(doc, empresa, contexto) {
     : null;
 
   // ------------------------------------------------------------- cabeçalho
+  // Faixa azul-marinho com a logo em um selo branco: a mesma identidade do
+  // site (topo escuro, destaques dourados). O corpo do documento continua
+  // claro, porque é papel — e vai ser impresso.
   const nomeEmpresa = proponente.nomeFantasia || proponente.razaoSocial || '';
   const documentoEmpresa = proponente.cnpj ? 'CNPJ: ' + Formato.cnpj(proponente.cnpj) : '';
   const telefoneEmpresa = proponente.telefone ? Formato.telefone(proponente.telefone) : '';
+  const contatoEmpresa = [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  ');
 
-  const colunasCabecalho = [];
+  // Quando o usuário escolhe uma cor muito clara, a faixa recebe texto escuro
+  // para continuar legível (o dourado da marca só vale sobre fundo escuro).
+  const faixaClara = luminancia(corBase) > 0.55;
+  const tintaFaixa = faixaClara ? '#1C2B3A' : '#FFFFFF';
+  const apoioFaixa = faixaClara ? '#4A5A6B' : COR_APOIO_ESCURO;
+  const douradoFaixa = faixaClara ? COR_DOURADA : COR_DOURADA_CLARA;
+
+  const largurasCabecalho = [];
+  const celulasCabecalho = [];
   if (logo) {
-    colunasCabecalho.push({ width: 74, stack: [{ image: logo, fit: [66, 46], alignment: 'left' }] });
+    largurasCabecalho.push(84);
+    celulasCabecalho.push({
+      image: logo,
+      fit: [62, 44],
+      alignment: 'center',
+      fillColor: '#FFFFFF',
+      margin: [10, 10, 10, 10],
+    });
   }
-  colunasCabecalho.push({
-    width: '*',
+  largurasCabecalho.push('*');
+  celulasCabecalho.push({
+    fillColor: corBase,
+    margin: [logo ? 14 : 16, 12, 10, 12],
     stack: [
       // sem empresa cadastrada o título não se repete aqui: o nome da empresa
       // é o dado deste espaço, e o título já aparece à direita.
-      ...(nomeEmpresa ? [{ text: nomeEmpresa, bold: true, fontSize: 13.4, color: corBase }] : []),
-      {
-        text: [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  '),
-        fontSize: 9.0,
-        color: '#5B6670',
-      },
+      ...(nomeEmpresa ? [{ text: nomeEmpresa, bold: true, fontSize: 13.4, color: tintaFaixa }] : []),
+      ...(contatoEmpresa
+        ? [{ text: contatoEmpresa, fontSize: 8.8, color: apoioFaixa, margin: [0, nomeEmpresa ? 3 : 0, 0, 0] }]
+        : []),
     ],
   });
-  colunasCabecalho.push({
-    width: 'auto',
+  largurasCabecalho.push('auto');
+  celulasCabecalho.push({
+    fillColor: corBase,
+    margin: [10, 12, 16, 12],
     stack: [
-      { text: titulo, bold: true, fontSize: 11.0, alignment: 'right' },
-      { text: 'Nº ' + numero, fontSize: 9.8, alignment: 'right', color: corBase, bold: true },
-      { text: Formato.dataBR(dataDoc), fontSize: 9.0, alignment: 'right', color: '#5B6670' },
+      { text: titulo, bold: true, fontSize: 10.6, alignment: 'right', color: tintaFaixa },
+      { text: 'Nº ' + numero, bold: true, fontSize: 9.8, alignment: 'right', color: douradoFaixa, margin: [0, 2, 0, 0] },
+      { text: Formato.dataBR(dataDoc), fontSize: 8.8, alignment: 'right', color: apoioFaixa, margin: [0, 2, 0, 0] },
     ],
   });
 
   const cabecalho = {
     margin: [42, 22, 42, 0],
     stack: [
-      { columns: colunasCabecalho, columnGap: 10 },
+      { table: { widths: largurasCabecalho, body: [celulasCabecalho] }, layout: 'noBorders' },
       {
-        canvas: [
-          { type: 'line', x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 1.1, lineColor: corBase },
-          { type: 'line', x1: 0, y1: 0, x2: 190, y2: 0, lineWidth: 2.6, lineColor: corFilete },
-        ],
-        margin: [0, 6, 0, 0],
+        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 190, y2: 0, lineWidth: 2.6, lineColor: corFilete }],
+        margin: [0, 4, 0, 0],
       },
     ],
   };
@@ -554,9 +587,9 @@ async function montarDefinicao(doc, empresa, contexto) {
     ]);
   }
   corpoPrecos.push([
-    { text: rotuloTotal, colSpan: 6, alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 11.0 },
+    { text: rotuloTotal, colSpan: 6, alignment: 'right', bold: true, color: tintaFaixa, fillColor: corBase, fontSize: 11.0 },
     {}, {}, {}, {}, {},
-    { text: Formato.moeda(totais.total), alignment: 'right', bold: true, color: '#FFFFFF', fillColor: corBase, fontSize: 11.0, noWrap: true },
+    { text: Formato.moeda(totais.total), alignment: 'right', bold: true, color: tintaFaixa, fillColor: corBase, fontSize: 11.0, noWrap: true },
   ]);
 
   conteudo.push({

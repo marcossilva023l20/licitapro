@@ -440,6 +440,9 @@ teste('PDF: paleta da marca (azul-marinho e dourado nos títulos)', async () => 
   assert.ok(/#C6A15B/i.test(desenho), 'fio dourado da paleta no cabeçalho');
   assert.ok(/#8A6A31/i.test(desenho), 'títulos das seções em dourado (tom de texto)');
   assert.ok(/#E8ECEF/i.test(desenho), 'cinza claro da paleta nas faixas de desconto/frete');
+  assert.ok(/fillColor/.test(desenho) && /#FFFFFF/.test(desenho), 'faixa do cabeçalho no azul com texto branco');
+  assert.ok(/#D8B873/i.test(desenho), 'número do documento em dourado claro sobre a faixa');
+  assert.ok(/#C3D2E2/i.test(desenho), 'dados de contato em azul de apoio sobre a faixa');
 
   // quem escolhe uma cor própria continua com o documento monocromático
   const comCorPropria = await Pdf.montarDefinicao(
@@ -450,6 +453,15 @@ teste('PDF: paleta da marca (azul-marinho e dourado nos títulos)', async () => 
   assert.ok(proprio.includes('#7C3AED'), 'cor escolhida pelo usuário é respeitada');
   assert.ok(/#8A6A31/i.test(proprio) === false, 'sem dourado da marca quando o usuário define a cor');
   assert.ok(/#C6A15B/i.test(proprio) === false, 'sem filete dourado quando o usuário define a cor');
+
+  // com uma cor clara, a faixa do cabeçalho e a linha do total usam texto escuro
+  const clara = await Pdf.montarDefinicao(
+    Object.assign({}, documento, { opcoes: Object.assign({}, documento.opcoes, { cor: '#F3D9A4' }) }),
+    documento.proponente
+  );
+  const desenhoClaro = JSON.stringify(clara.content) + JSON.stringify(clara.header());
+  assert.ok(desenhoClaro.includes('#F3D9A4'), 'cor clara escolhida pelo usuário é respeitada');
+  assert.ok(desenhoClaro.includes('#1C2B3A'), 'sobre cor clara o texto da faixa fica escuro (legível)');
 });
 
 teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as páginas", async () => {
