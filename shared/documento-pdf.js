@@ -366,8 +366,14 @@ async function montarDefinicao(doc, empresa, contexto) {
   colunasCabecalho.push({
     width: '*',
     stack: [
-      { text: nomeEmpresa || titulo, bold: true, fontSize: 13.4, color: corBase },
-      { text: [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  '), fontSize: 9.0, color: '#5B6670' },
+      // sem empresa cadastrada o título não se repete aqui: o nome da empresa
+      // é o dado deste espaço, e o título já aparece à direita.
+      ...(nomeEmpresa ? [{ text: nomeEmpresa, bold: true, fontSize: 13.4, color: corBase }] : []),
+      {
+        text: [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  '),
+        fontSize: 9.0,
+        color: '#5B6670',
+      },
     ],
   });
   colunasCabecalho.push({
