@@ -1,9 +1,8 @@
 # Utilitário: baixa a logo da marca do Google Drive, converte para PNG e
-# publica o resultado no log do job (base64) + como artefato.
+# grava o arquivo em public/marca/logo.png, commitando no branch atual.
 #
-# Serve para este ambiente sem acesso à internet: o runner do GitHub baixa o
-# arquivo e o conteúdo é trazido de volta pelo log (leitura via API).
-# Roda quando este arquivo muda (ou manualmente, em "Actions").
+# Serve para ambientes sem acesso à internet: quem baixa o arquivo é o runner
+# do GitHub. Roda quando este arquivo muda (ou manualmente, em "Actions").
 name: Buscar logo da marca
 
 on:
@@ -13,7 +12,7 @@ on:
       - '.github/workflows/buscar-logo.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   baixar:
@@ -88,11 +87,8 @@ jobs:
               arquivo.write(png)
           print("PNG gerado: %d bytes, %s" % (len(png), imagem.size))
 
-          b64 = base64.b64encode(png).decode()
-          print("LOGO_B64_INICIO")
-          for i in range(0, len(b64), 4000):
-              print(b64[i:i + 4000])
-          print("LOGO_B64_FIM")
+          import hashlib
+          print("sha256 do PNG:", hashlib.sha256(png).hexdigest())
           PY
 
       - name: Guardar como artefato (cópia de segurança)
@@ -101,3 +97,17 @@ jobs:
           name: logo-marca
           path: public/marca/logo.png
           if-no-files-found: error
+
+      - name: Commitar a logo no branch atual
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/marca/logo.png
+          if git diff --cached --quiet; then
+            echo "A logo já estava no repositório — nada a fazer."
+            exit 0
+          fi
+          git commit -m "Adiciona a logo da marca (importada do Google Drive)"
+          git push origin "HEAD:${{ github.ref_name }}"
+          echo "Logo commitada em ${{ github.ref_name }}."
+
