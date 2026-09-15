@@ -22,6 +22,8 @@ jobs:
   baixar:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Baixar a logo e preparar a versão leve
         env:
           LOGO_URL: https://drive.google.com/file/d/1aTPegfG2Vv1SNmGTrG2TvluNctSLMSIp/view?usp=sharing
