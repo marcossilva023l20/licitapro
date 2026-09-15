@@ -1,8 +1,8 @@
-# Utilitário: baixa a logo da marca do Google Drive, converte para PNG e
-# grava o arquivo em public/marca/logo.png, commitando no branch atual.
+# Utilitário temporário: baixa a logo da marca do Google Drive, converte para
+# PNG e devolve o arquivo em pedaços pelo canal de anotações do job
+# (leitura via API do GitHub — este ambiente não tem acesso ao log/artefato).
 #
-# Serve para ambientes sem acesso à internet: quem baixa o arquivo é o runner
-# do GitHub. Roda quando este arquivo muda (ou manualmente, em "Actions").
+# Roda quando este arquivo muda (ou manualmente, em "Actions").
 name: Buscar logo da marca
 
 on:
@@ -12,7 +12,7 @@ on:
       - '.github/workflows/buscar-logo.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   baixar:
@@ -24,7 +24,7 @@ jobs:
         run: |
           python3 -m pip install --quiet --disable-pip-version-check Pillow
           python3 - <<'PY'
-          import base64, io, os, re, sys, urllib.request
+          import io, os, re, sys, urllib.request
           from PIL import Image
 
           url = os.environ["LOGO_URL"]
@@ -75,8 +75,8 @@ jobs:
           print("origem: %s %s %s" % (imagem.format, imagem.size, imagem.mode))
           if imagem.mode not in ("RGBA", "RGB"):
               imagem = imagem.convert("RGBA")
-          if max(imagem.size) > 1000:
-              fator = 1000 / max(imagem.size)
+          if max(imagem.size) > 900:
+              fator = 900 / max(imagem.size)
               imagem = imagem.resize((max(1, round(imagem.width * fator)), max(1, round(imagem.height * fator))), Image.LANCZOS)
 
           saida = io.BytesIO()
@@ -85,44 +85,35 @@ jobs:
           os.makedirs("public/marca", exist_ok=True)
           with open("public/marca/logo.png", "wb") as arquivo:
               arquivo.write(png)
-          print("PNG gerado: %d bytes, %s" % (len(png), imagem.size))
 
-          import base64, hashlib
-          resumo = os.environ.get("GITHUB_STEP_SUMMARY")
-          digest = hashlib.sha256(png).hexdigest()
-          print("sha256 do PNG:", digest)
-          if resumo:
-              b64 = base64.b64encode(png).decode()
-              with open(resumo, "a", encoding="utf-8") as arquivo:
-                  arquivo.write("PNG %d bytes | sha256 %s | %dx%d\n\n" % (len(png), digest, imagem.width, imagem.height))
-                  for i in range(0, len(b64), 300):
-                      arquivo.write(b64[i:i + 300] + "\n")
+          import hashlib
+          print("PNG: %d bytes, %s, sha256 %s" % (len(png), imagem.size, hashlib.sha256(png).hexdigest()))
           PY
 
-      - name: Teste do canal de anotações (temporário)
+      - name: Dividir a imagem em pedaços
         run: |
-          for i in $(seq 1 15); do
-            echo "::notice title=canal$i::teste-de-anotacao-numero-$i-com-um-texto-um-pouco-maior-para-medir-o-limite"
-          done
+          mkdir -p /tmp/pedacos
+          base64 -w 0 public/marca/logo.png > /tmp/logo.b64
+          split -b 40000 -d --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt /tmp/logo.b64 /tmp/pedacos/pedaco
+          TOTAL=$(ls /tmp/pedacos | wc -l)
+          echo "pedacos: $TOTAL"
+          echo "TOTAL_PEDACOS=$TOTAL" >> "$GITHUB_ENV"
+          sha256sum public/marca/logo.png
+          echo "::notice title=logo-marca-resumo::PNG $(stat -c%s public/marca/logo.png) bytes em $TOTAL pedacos | sha256 $(sha256sum public/marca/logo.png | cut -c1-64)"
+
+      - name: Anotações dos pedaços (1)
+        run: bash .github/enviar-pedacos.sh 1 10
+      - name: Anotações dos pedaços (2)
+        run: bash .github/enviar-pedacos.sh 11 20
+      - name: Anotações dos pedaços (3)
+        run: bash .github/enviar-pedacos.sh 21 30
+      - name: Anotações dos pedaços (4)
+        run: bash .github/enviar-pedacos.sh 31 40
 
       - name: Guardar como artefato (cópia de segurança)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: logo-marca
           path: public/marca/logo.png
-          if-no-files-found: error
-
-      - name: Commitar a logo no branch atual
-        continue-on-error: true
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/marca/logo.png
-          if git diff --cached --quiet; then
-            echo "A logo já estava no repositório — nada a fazer."
-            exit 0
-          fi
-          git commit -m "Adiciona a logo da marca (importada do Google Drive)"
-          git push origin "HEAD:${{ github.ref_name }}"
-          echo "Logo commitada em ${{ github.ref_name }}."
-
+          if-no-files-found: warn
