@@ -516,24 +516,16 @@
     CAMPOS_PADROES.forEach(([chave, sel]) => {
       $(sel).value = estado.padroes[chave] == null ? '' : estado.padroes[chave];
     });
-    ['#emp-previa-logo', '#emp-previa-assinatura'].forEach((sel) => $(sel).classList.add('oculto'));
-    if (estado.empresa.logo) {
-      $('#emp-previa-logo').src = imagemUrl(estado.empresa.logo);
-      $('#emp-previa-logo').classList.remove('oculto');
-    }
-    if (estado.empresa.assinatura) {
-      $('#emp-previa-assinatura').src = imagemUrl(estado.empresa.assinatura);
-      $('#emp-previa-assinatura').classList.remove('oculto');
-    }
+    ['#emp-previa-logo', '#emp-previa-assinatura'].forEach((sel) => {
+      $(sel).classList.add('oculto');
+      $(sel).dataset.referencia = '';
+    });
+    if (estado.empresa.logo) UI.aplicarImagem($('#emp-previa-logo'), estado.empresa.logo);
+    if (estado.empresa.assinatura) UI.aplicarImagem($('#emp-previa-assinatura'), estado.empresa.assinatura);
     $('#perfil-nome').value = estado.usuario.nome || '';
     $('#perfil-email').value = estado.usuario.email || '';
   }
 
-  function imagemUrl(caminho) {
-    if (!caminho) return '';
-    if (/^(data:|blob:)/.test(caminho) || caminho.startsWith('/api/uploads/')) return caminho;
-    return '/api/imagem?url=' + encodeURIComponent(caminho);
-  }
 
   function ligarEmpresa() {
     $('#emp-salvar').addEventListener('click', async () => {
@@ -602,9 +594,7 @@
           botao.textContent = 'Enviando...';
           const resposta = await API.enviarArquivo('/api/uploads', escolhido, 'arquivo');
           estado.empresa[campo] = resposta.caminho;
-          const previa = $('#emp-previa-' + campo);
-          previa.src = imagemUrl(resposta.caminho);
-          previa.classList.remove('oculto');
+          UI.aplicarImagem($('#emp-previa-' + campo), resposta.caminho);
           UI.toast('Imagem enviada. Clique em "Salvar dados da empresa" para gravar.', 'aviso');
         } catch (erro) {
           UI.toast(erro.message, 'erro');
@@ -620,7 +610,10 @@
       botao.addEventListener('click', () => {
         const campo = botao.dataset.removerEmp;
         estado.empresa[campo] = '';
-        $('#emp-previa-' + campo).classList.add('oculto');
+        const previa = $('#emp-previa-' + campo);
+        previa.removeAttribute('src');
+        previa.dataset.referencia = '';
+        previa.classList.add('oculto');
         UI.toast('Imagem removida. Clique em "Salvar dados da empresa" para gravar.', 'aviso');
       });
     });

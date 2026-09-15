@@ -4,14 +4,23 @@
 
   async function tratar(resposta) {
     const tipo = resposta.headers.get('content-type') || '';
+    const ehJson = tipo.includes('application/json');
     let corpo = null;
-    if (tipo.includes('application/json')) {
-      corpo = await resposta.json().catch(() => null);
-    }
+    if (ehJson) corpo = await resposta.json().catch(() => null);
+
     if (!resposta.ok) {
       const erro = new Error((corpo && (corpo.erro || corpo.message)) || `Erro ${resposta.status}`);
       erro.status = resposta.status;
       erro.corpo = corpo;
+      // resposta sem JSON significa que não há API neste endereço (site estático)
+      if (!ehJson) erro.semServidor = true;
+      throw erro;
+    }
+    // todas as rotas /api respondem JSON; qualquer outra coisa indica site estático
+    if (!ehJson) {
+      const erro = new Error('Este endereço não tem a API do LicitaPro.');
+      erro.status = resposta.status;
+      erro.semServidor = true;
       throw erro;
     }
     return corpo;

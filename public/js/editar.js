@@ -222,12 +222,6 @@
     });
   }
 
-  function urlImagem(caminho) {
-    if (!caminho) return '';
-    if (/^(data:|blob:)/.test(caminho)) return caminho;
-    if (caminho.startsWith('/api/uploads/')) return caminho;
-    return '/api/imagem?url=' + encodeURIComponent(caminho);
-  }
 
   function criarCampoItem(rotulo, valor, atributo, opcoes) {
     const config = opcoes || {};
@@ -335,7 +329,7 @@
     const imagem = document.createElement('img');
     imagem.className = 'previa-foto';
     imagem.alt = 'Foto do item';
-    if (item.foto) imagem.src = urlImagem(item.foto);
+    if (item.foto) UI.aplicarImagem(imagem, item.foto);
     else {
       imagem.classList.add('vazia');
       imagem.alt = 'sem foto';
@@ -390,7 +384,7 @@
         const resposta = await window.API.enviarArquivo('/api/uploads', escolhido, 'arquivo');
         estado.doc.itens[indice].foto = resposta.caminho;
         inputFoto.value = resposta.caminho;
-        imagem.src = urlImagem(resposta.caminho);
+        UI.aplicarImagem(imagem, resposta.caminho);
         imagem.classList.remove('vazia');
         marcarSujo();
         UI.toast('Foto enviada.', 'sucesso');
@@ -638,11 +632,10 @@
     [['#previa-logo', proponente.logo], ['#previa-assinatura', proponente.assinatura]].forEach(([sel, caminho]) => {
       const elemento = $(sel);
       if (!elemento) return;
-      if (caminho) {
-        elemento.src = urlImagem(caminho);
-        elemento.classList.remove('oculto');
-      } else {
+      if (caminho) UI.aplicarImagem(elemento, caminho);
+      else {
         elemento.removeAttribute('src');
+        elemento.dataset.referencia = '';
         elemento.classList.add('oculto');
       }
     });
@@ -723,10 +716,11 @@
       if (campo === 'foto') {
         const imagem = $('.previa-foto', bloco);
         if (valor) {
-          imagem.src = urlImagem(valor);
+          UI.aplicarImagem(imagem, valor);
           imagem.classList.remove('vazia');
         } else {
           imagem.removeAttribute('src');
+          imagem.dataset.referencia = '';
           imagem.classList.add('vazia');
         }
       }

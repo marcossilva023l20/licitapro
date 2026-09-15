@@ -131,6 +131,53 @@
     return tipo === 'orcamento' ? 'Orçamento' : 'Proposta';
   }
 
+  /**
+   * Endereço de uma imagem para exibição.
+   * Com servidor, links externos passam pelo proxy /api/imagem.
+   * No modo local (sem servidor), links vão direto e imagens enviadas do
+   * computador vêm do armazenamento do navegador.
+   */
+  function urlImagem(caminho) {
+    if (!caminho) return '';
+    const texto = String(caminho);
+    if (/^(data:|blob:)/.test(texto)) return texto;
+    if (texto.startsWith('idb:')) {
+      return window.ModoEstatico ? window.ModoEstatico.urlDaImagem(texto) : '';
+    }
+    if (window.ModoEstatico && window.ModoEstatico.ativo()) {
+      return window.ModoEstatico.urlDaImagem(texto);
+    }
+    if (texto.startsWith('/api/uploads/')) return texto;
+    return '/api/imagem?url=' + encodeURIComponent(texto);
+  }
+
+  /** Aplica a imagem num <img>, guardando a referência para atualização posterior. */
+  function aplicarImagem(elemento, caminho) {
+    if (!elemento) return;
+    elemento.dataset.referencia = caminho || '';
+    const url = urlImagem(caminho);
+    if (url) {
+      elemento.src = url;
+      elemento.classList.remove('oculto');
+      elemento.classList.remove('vazia');
+      elemento.alt = elemento.alt || 'Imagem';
+    } else {
+      elemento.removeAttribute('src');
+      elemento.classList.add('oculto');
+    }
+  }
+
+  /** Atualiza as imagens já na tela quando uma foto do navegador fica pronta. */
+  function atualizarImagemLocal(referencia, url) {
+    document.querySelectorAll('img[data-referencia]').forEach((elemento) => {
+      if (elemento.dataset.referencia === referencia) {
+        elemento.src = url;
+        elemento.classList.remove('oculto');
+        elemento.classList.remove('vazia');
+      }
+    });
+  }
+
   window.UI = {
     $, $$,
     toast,
@@ -144,6 +191,9 @@
     escaparHtml,
     rotuloStatus,
     rotuloTipo,
+    urlImagem,
+    aplicarImagem,
+    atualizarImagemLocal,
   };
 
   document.addEventListener('click', (evento) => {

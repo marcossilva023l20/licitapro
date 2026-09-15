@@ -6,7 +6,7 @@
   <title>LicitaPro — Propostas de licitação e orçamentos em PDF</title>
   <meta name="description" content="Monte propostas de licitação e orçamentos importando a planilha de itens e gere o PDF pronto para envio." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230F766E'/%3E%3Cpath d='M18 44V20h6v18h12v6H18z' fill='white'/%3E%3Ccircle cx='45' cy='24' r='5' fill='%235EEAD4'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="/css/estilos.css" />
+  <link rel="stylesheet" href="css/estilos.css" />
 </head>
 <body>
   <!-- ============================== TELA DE ENTRADA ============================== -->
@@ -66,7 +66,8 @@
       </div>
 
       <footer class="login-rodape">
-        <span>Seus dados ficam salvos no servidor da sua empresa.</span>
+        <span data-somente-servidor>Seus dados ficam salvos no servidor da sua empresa.</span>
+        <span data-modo-local-forcar>Modo local: seus documentos ficam salvos neste navegador.</span>
       </footer>
     </div>
   </section>
@@ -97,7 +98,7 @@
           <div class="usuario-lista oculto" id="lista-usuario">
             <a href="#/empresa">Dados da empresa</a>
             <a href="/api/modelo-planilha">Baixar modelo de planilha</a>
-            <button type="button" id="botao-sair">Sair</button>
+            <button type="button" id="botao-sair" data-somente-servidor>Sair</button>
           </div>
         </div>
       </div>
@@ -635,12 +636,12 @@
           </div>
           <button class="botao" id="perfil-salvar" type="button">Salvar meus dados</button>
 
-          <hr class="divisor" />
-          <div class="grade-2">
+          <hr class="divisor" data-somente-servidor />
+          <div class="grade-2" data-somente-servidor>
             <label class="campo">Senha atual<input type="password" id="senha-atual" autocomplete="current-password" /></label>
             <label class="campo">Nova senha<input type="password" id="senha-nova" autocomplete="new-password" /></label>
           </div>
-          <button class="botao" id="senha-salvar" type="button">Alterar senha</button>
+          <button class="botao" id="senha-salvar" type="button" data-somente-servidor>Alterar senha</button>
         </div>
       </section>
     </main>
@@ -661,10 +662,11 @@
     </div>
   </div>
 
-  <script src="/shared/format.js"></script>
-  <script src="/js/api.js"></script>
-  <script src="/js/ui.js"></script>
-  <script src="/js/editar.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="../shared/format.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/editar.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/modo-estatico.js"></script>
 </body>
 </html>
