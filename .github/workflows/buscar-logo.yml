@@ -12,6 +12,7 @@ on:
   push:
     paths:
       - '.github/workflows/buscar-logo.yml'
+      - '.github/buscar-logo.py'
 
 permissions:
   contents: read
