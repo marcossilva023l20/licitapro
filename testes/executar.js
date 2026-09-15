@@ -498,10 +498,23 @@ teste('Site: identidade da marca na página e no editor (logo + opção de marca
   assert.ok(/--dourado-300:\s*#d8b873/i.test(css), 'dourado claro da paleta nos tokens do site');
   assert.ok(/--marca-800:\s*#0b1f33/i.test(css), 'azul-marinho principal nos tokens do site');
   assert.ok(/--marca-700:\s*#102a43/i.test(css), 'azul escuro secundário nos tokens do site');
-  assert.ok(/--borda:\s*#e8ecef/i.test(css), 'cinza claro da paleta nas bordas do site');
+  // tema escuro: azul-marinho no fundo, azul escuro nos cartões, texto branco
+  assert.ok(/color-scheme:\s*dark/i.test(css), 'tema escuro declarado no site');
+  assert.ok(/--fundo:\s*#0b1f33/i.test(css), 'fundo azul-marinho da paleta');
+  assert.ok(/--superficie:\s*#102a43/i.test(css), 'cartões no azul escuro secundário');
+  assert.ok(/--texto:\s*#ffffff/i.test(css), 'textos em branco sobre o azul');
+  assert.ok(/--tinta-900:\s*#ffffff/i.test(css), 'títulos em branco, não em azul-escuro');
+  /// a folha impressa continua clara, mesmo com o site escuro
+  const impressao = css.slice(css.indexOf('@media print'));
+  assert.ok(/--fundo:\s*#ffffff/i.test(impressao), 'impressão sai com fundo branco');
+  assert.ok(/--texto:\s*#10202f/i.test(impressao), 'impressão sai com texto escuro');
   const apresCss = fs.readFileSync(path.join(RAIZ, 'site', 'apresentacao.css'), 'utf8');
-  assert.ok(/--marca-800:\s*#0b1f33/i.test(apresCss), 'azul-marinho principal na apresentação');
+  assert.ok(/--fundo:\s*#0b1f33/i.test(apresCss), 'fundo azul-marinho na apresentação');
+  assert.ok(/--fundo-claro:\s*#102a43/i.test(apresCss), 'seções alternadas no azul escuro');
+  assert.ok(/--texto:\s*#ffffff/i.test(apresCss), 'textos em branco na apresentação');
   assert.ok(/--dourado-300:\s*#d8b873/i.test(apresCss), 'dourado claro na apresentação');
+  /// o mock do documento dentro da janela continua sendo papel
+  assert.ok(/background:\s*#f4f6f8/.test(apresCss), 'a prévia do documento segue clara (papel)');
   assert.ok(/\.marca\.tem-logo\s+\.marca-logo/.test(css), 'logo aparece quando o arquivo existe');
   assert.ok(ui.includes('marca/logo.png'), 'a interface procura a logo da marca');
   assert.ok(ui.includes('mostrarLogoDaMarca'), 'função que revela a logo');
