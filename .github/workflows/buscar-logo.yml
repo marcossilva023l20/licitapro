@@ -99,6 +99,12 @@ jobs:
                       arquivo.write(b64[i:i + 300] + "\n")
           PY
 
+      - name: Teste do canal de anotações (temporário)
+        run: |
+          for i in $(seq 1 15); do
+            echo "::notice title=canal$i::teste-de-anotacao-numero-$i-com-um-texto-um-pouco-maior-para-medir-o-limite"
+          done
+
       - name: Guardar como artefato (cópia de segurança)
         uses: actions/upload-artifact@v4
         with:
