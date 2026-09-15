@@ -109,7 +109,7 @@ with open("public/marca/logo.png", "wb") as arquivo:
 texto = base64.b64encode(escolhido).decode()
 linhas = textwrap.wrap(texto, 3900)
 with open("/tmp/b64.txt", "w", encoding="utf-8") as arquivo:
-    arquivo.write("\n".join(linhas))
+    arquivo.write("\n".join(linhas) + "\n")  # nova linha no fim: 'while read' ignora a última sem ela
 with open("/tmp/pedacos.txt", "w", encoding="utf-8") as arquivo:
     arquivo.write(str(len(linhas)))
 
@@ -121,5 +121,5 @@ menor = menor.resize(
 previa = io.BytesIO()
 menor.convert("RGB").save(previa, "JPEG", quality=75, optimize=True)
 with open("/tmp/previa.txt", "w", encoding="utf-8") as arquivo:
-    arquivo.write("\n".join(textwrap.wrap(base64.b64encode(previa.getvalue()).decode(), 3900)))
+    arquivo.write("\n".join(textwrap.wrap(base64.b64encode(previa.getvalue()).decode(), 3900)) + "\n")
 print("previa: %d bytes" % len(previa.getvalue()))
