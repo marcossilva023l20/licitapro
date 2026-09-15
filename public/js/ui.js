@@ -29,17 +29,21 @@
    */
   function avisarFotosIgnoradas(info) {
     const quantidade = Number((info && info.fotosIgnoradas) || 0);
-    if (!quantidade) return false;
+    const caixa = $('#previa-aviso');
+    if (!quantidade) {
+      if (caixa) caixa.classList.remove('aviso-alerta');
+      return false;
+    }
     const detalhe = String((info && info.detalheFotosIgnoradas) || '').trim();
     const resumo = quantidade === 1
       ? '1 foto não entrou no PDF e saiu como "—".'
       : quantidade + ' fotos não entraram no PDF e saíram como "—".';
     const dica = 'Se a foto for necessária, use "Enviar foto do computador" (o link pode não estar público).';
     toast(resumo + (detalhe ? ' ' + detalhe.slice(0, 140) + (detalhe.length > 140 ? '…' : '') : ''), 'aviso', 10000);
-    const aviso = $('#previa-aviso');
-    if (aviso) {
-      aviso.textContent = (resumo + ' ' + detalhe + ' ' + dica).replace(/\s+/g, ' ').trim();
-      aviso.classList.remove('oculto');
+    if (caixa) {
+      caixa.textContent = (resumo + ' ' + detalhe + ' ' + dica).replace(/\s+/g, ' ').trim();
+      caixa.classList.remove('oculto');
+      caixa.classList.add('aviso-alerta');
     }
     return true;
   }

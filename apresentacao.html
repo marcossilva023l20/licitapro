@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LicitaPro — propostas de licitação e orçamentos em PDF</title>
   <meta name="description" content="Sistema web que importa a planilha de itens do edital e gera a proposta de licitação e o orçamento em PDF, prontos para envio." />
+  <meta name="theme-color" content="#0b1524" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230F766E'/%3E%3Cpath d='M18 44V20h6v18h12v6H18z' fill='white'/%3E%3Ccircle cx='45' cy='24' r='5' fill='%235EEAD4'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="site/apresentacao.css" />
 </head>
@@ -28,8 +29,8 @@
   <section class="capa">
     <div class="envelope capa-grade">
       <div>
-        <span class="etiqueta">Sistema web — Node.js · PDF · Planilha</span>
-        <h1>Da planilha do edital ao PDF da proposta em poucos minutos.</h1>
+        <span class="olho">Sistema web — Node.js · Planilha · PDF</span>
+        <h1>Da planilha do edital ao <em>PDF da proposta</em> em poucos minutos.</h1>
         <p class="capa-texto">
           O <strong>LicitaPro</strong> importa os itens da planilha, monta a
           <strong>proposta de licitação</strong> e o <strong>orçamento comercial</strong> com a sua marca,
@@ -38,9 +39,16 @@
         </p>
         <div class="capa-botoes">
           <a class="botao botao-primario" href="./">Abrir o sistema</a>
-          <a class="botao" href="#publicar">Publicar com servidor</a>
+          <a class="botao botao-claro" href="#publicar">Publicar com servidor</a>
           <a class="botao botao-fantasma" href="https://github.com/marcossilva023l20/licitapro">Ver no GitHub</a>
         </div>
+
+        <ul class="capa-selos">
+          <li>Importa .xlsx, .xls, .csv e .ods</li>
+          <li>PDF em Times New Roman</li>
+          <li>Funciona direto no navegador</li>
+        </ul>
+
         <p class="aviso">
           <strong>Já dá para usar:</strong> o endereço do GitHub Pages abre o próprio sistema, funcionando
           <strong>direto no navegador</strong> (modo local — sem servidor). Nesse modo os documentos ficam
@@ -72,26 +80,33 @@
 
   <section id="recursos" class="secao">
     <div class="envelope">
-      <h2>O que o sistema faz</h2>
+      <div class="secao-titulo">
+        <span class="olho">Recursos</span>
+        <h2>O que o sistema faz</h2>
+      </div>
       <div class="cartoes">
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9.5h18M9 9.5v10.5M15 9.5v10.5" /></svg></span>
           <h3>Importação da planilha</h3>
           <p>Envie o arquivo <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code> ou <code>.ods</code>. O sistema
           reconhece as colunas do modelo (e variações de nome), avisa sobre linhas com problema e deixa
           você escolher os itens.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /><path d="M9 13h6M9 17h4" /></svg></span>
           <h3>Proposta de licitação</h3>
           <p>Órgão, UASG, processo, pregão, objeto e prazo; dados do proponente com CNPJ, inscrição estadual,
           SIMPLES NACIONAL, banco e PIX; tabela de preços com marca/modelo e unidade — tudo em
           <strong>Times New Roman</strong>.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V6.2l7-3.2v17.5" /><path d="M11 10.5h9v10H4" /><path d="M14 14h3M14 17.5h3" /></svg></span>
           <h3>Orçamento comercial</h3>
           <p>Mesma estrutura, com identificação do cliente, validade da proposta, condições de pagamento,
           prazo de entrega e garantia.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="m4 17.5 5-4.5 3.5 3 3-2.6 4.5 4.1" /></svg></span>
           <h3>Catálogo com fotos</h3>
           <p>Uma página de catálogo com a descrição comercial e a foto de cada produto — por link
           (inclusive Google Drive, baixado na hora de gerar) ou enviando a imagem do computador
@@ -100,21 +115,25 @@
           ser gerado por causa de uma imagem.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2" /><path d="M8 7h8M8 11h3M8 15h3M14.5 11v5.5M12 13.8l2.5-2.8 2.5 2.8" /></svg></span>
           <h3>Cálculos e margem</h3>
           <p>Preço de custo e de venda por item, desconto, frete, lucro estimado e aplicação de margem em
           lote. O total sai em números e por extenso.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3.2 2" /></svg></span>
           <h3>Histórico e numeração</h3>
           <p>Numeração automática (001/2026), status de rascunho a ganha/perdida, busca, filtros,
           duplicar, excluir e exportar os itens de volta para planilha.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 4.5 5.5v6c0 4.4 3.1 8.3 7.5 10 4.4-1.7 7.5-5.6 7.5-10v-6z" /><path d="m9 12 2 2 4-4" /></svg></span>
           <h3>Login por usuário</h3>
           <p>Cada pessoa entra com e-mail e senha (criptografada) e vê apenas as próprias propostas.
           A empresa é cadastrada uma única vez e preenche todos os documentos.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4.5 20.5h15" /></svg></span>
           <h3>Botão Gerar PDF</h3>
           <p>Um clique gera o arquivo com cabeçalho, logo, numeração de páginas e o nome pronto
           (<code>Proposta_001-2026_orgao.pdf</code>), com pré-visualização na tela antes de baixar.</p>
@@ -125,8 +144,11 @@
 
   <section id="exemplos" class="secao secao-clara">
     <div class="envelope">
-      <h2>Como fica o PDF</h2>
-      <p class="subtitulo">Páginas geradas pelo próprio sistema a partir de uma proposta de exemplo.</p>
+      <div class="secao-titulo">
+        <span class="olho">Exemplos</span>
+        <h2>Como fica o PDF</h2>
+        <p class="subtitulo">Páginas geradas pelo próprio sistema a partir de uma proposta de exemplo.</p>
+      </div>
       <div class="galeria">
         <figure>
           <img src="site/imagens/proposta-1.jpg" alt="Primeira página da proposta: dados do órgão, do proponente e tabela de preços" loading="lazy" />
@@ -146,11 +168,14 @@
 
   <section id="planilha" class="secao">
     <div class="envelope">
-      <h2>Modelo da planilha</h2>
-      <p class="subtitulo">
-        O arquivo <code>Modelo_Importacao_Itens_LicitaPro.xlsx</code> é gerado pelo próprio site
-        (aba <em>Painel → Baixar planilha</em>) e traz uma aba com instruções e exemplos.
-      </p>
+      <div class="secao-titulo">
+        <span class="olho">Planilha</span>
+        <h2>Modelo da planilha</h2>
+        <p class="subtitulo">
+          O arquivo <code>Modelo_Importacao_Itens_LicitaPro.xlsx</code> é gerado pelo próprio site
+          (aba <em>Painel → Baixar planilha</em>) e traz uma aba com instruções e exemplos.
+        </p>
+      </div>
       <div class="tabela-rolavel">
         <table class="tabela">
           <thead>
@@ -177,15 +202,18 @@
 
   <section id="publicar" class="secao secao-escura">
     <div class="envelope">
-      <h2>Como colocar no ar</h2>
-      <p class="subtitulo claro">
-        São dois caminhos. <strong>Modo local (GitHub Pages)</strong>: o endereço já abre o sistema e roda
-        tudo no navegador — ótimo para uso individual, sem instalar nada.
-        <strong>Com servidor</strong>: login e senha para várias pessoas, cada uma com os seus documentos,
-        e os dados guardados no servidor. O repositório já vem com
-        <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>
-        para isso.
-      </p>
+      <div class="secao-titulo">
+        <span class="olho">Publicação</span>
+        <h2>Como colocar no ar</h2>
+        <p class="subtitulo claro">
+          São dois caminhos. <strong>Modo local (GitHub Pages)</strong>: o endereço já abre o sistema e roda
+          tudo no navegador — ótimo para uso individual, sem instalar nada.
+          <strong>Com servidor</strong>: login e senha para várias pessoas, cada uma com os seus documentos,
+          e os dados guardados no servidor. O repositório já vem com
+          <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>
+          para isso.
+        </p>
+      </div>
 
       <div class="passos">
         <article class="passo">
@@ -229,7 +257,10 @@
 
   <section class="secao">
     <div class="envelope">
-      <h2>Rodar na sua máquina</h2>
+      <div class="secao-titulo">
+        <span class="olho">Uso local</span>
+        <h2>Rodar na sua máquina</h2>
+      </div>
       <pre class="codigo"><code>git clone https://github.com/marcossilva023l20/licitapro.git
 cd licitapro
 npm install
