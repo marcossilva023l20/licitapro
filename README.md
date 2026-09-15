@@ -417,7 +417,7 @@ do sistema. Por isso:
   formato desconhecido, arquivo corrompido, referência do navegador) é simplesmente
   ignorada e o lugar da foto sai como `—`. **O PDF nunca deixa de ser gerado por causa de
   uma foto.** Nesses casos o sistema **avisa** quais itens ficaram sem foto e o motivo
-  (ex.: *Item 3 (link): não consegui carregar a imagem*).
+  (ex.: *Item 3 (link): não consegui baixar a imagem do link — pode não estar pública ou o site bloqueia o acesso*).
 - **Foto por link:** ao gerar o PDF o sistema lê o link e baixa a imagem — no servidor quem
   baixa é o próprio sistema; no **modo local** (GitHub Pages) quem baixa é o navegador, e
   alguns sites bloqueiam esse acesso. Quando isso acontece, a foto sai como `—` e o aviso

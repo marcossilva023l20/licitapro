@@ -146,6 +146,14 @@ function anotarFotoIgnorada(relatorio, rotulo, referencia, motivo) {
   });
 }
 
+/** Motivo da falha em português — com a dica certa quando a foto veio de um link. */
+function motivoDeFalha(referencia) {
+  if (/^https?:/i.test(String(referencia || ''))) {
+    return 'não consegui baixar a imagem do link (pode não estar pública ou o site bloqueia o acesso)';
+  }
+  return 'não consegui carregar a imagem';
+}
+
 /** Texto curto (cabeçalho HTTP / aviso na tela) com as fotos que ficaram de fora. */
 function descreverFotosIgnoradas(relatorio) {
   const lista = Array.isArray(relatorio) ? relatorio : [];
@@ -160,7 +168,7 @@ async function carregarImagem(urlOuArquivo, rotulo, relatorio) {
   try {
     const preparada = await Imagens.prepararParaPdf(urlOuArquivo);
     if (!preparada || !preparada.imagem) {
-      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, 'não consegui carregar a imagem');
+      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, motivoDeFalha(urlOuArquivo));
       return null;
     }
     if (!imagemAceita(preparada.imagem)) {
