@@ -247,7 +247,7 @@ function documentoExemplo(tipo) {
     opcoes: {
       mostrarCatalogo: true, mostrarFotos: true, mostrarDadosBancarios: true, mostrarPorExtenso: true,
       mostrarAssinatura: true, mostrarDeclaracao: true, quebrarPaginaCatalogo: true, logoNoCabecalho: true,
-      mostrarLinkCompra: false, cor: '#1B4B7F', marcaDagua: true,
+      mostrarLinkCompra: false, cor: '#0B1F33', marcaDagua: true,
     },
   };
 }
@@ -429,16 +429,17 @@ teste('PDF: gera orçamento comercial válido', async () => {
   assert.ok(buffer.length > 10000);
 });
 
-teste('PDF: paleta da marca (azul do logotipo e dourado nos títulos)', async () => {
+teste('PDF: paleta da marca (azul-marinho e dourado nos títulos)', async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const documento = documentoExemplo();
   const definicao = await Pdf.montarDefinicao(documento, documento.proponente);
   const desenho = JSON.stringify(definicao.content) + JSON.stringify(definicao.header());
 
-  assert.strictEqual(Pdf.COR_PADRAO, '#1B4B7F', 'azul do logotipo é a cor padrão');
-  assert.ok(desenho.toUpperCase().includes('#1B4B7F'), 'azul da marca na estrutura do documento');
-  assert.ok(/#C79A3E/i.test(desenho), 'fio dourado da marca no cabeçalho');
-  assert.ok(/#8A6519/i.test(desenho), 'títulos das seções em dourado');
+  assert.strictEqual(Pdf.COR_PADRAO, '#0B1F33', 'azul-marinho da paleta é a cor padrão');
+  assert.ok(desenho.toUpperCase().includes('#0B1F33'), 'azul-marinho da paleta na estrutura do documento');
+  assert.ok(/#C6A15B/i.test(desenho), 'fio dourado da paleta no cabeçalho');
+  assert.ok(/#8A6A31/i.test(desenho), 'títulos das seções em dourado (tom de texto)');
+  assert.ok(/#E8ECEF/i.test(desenho), 'cinza claro da paleta nas faixas de desconto/frete');
 
   // quem escolhe uma cor própria continua com o documento monocromático
   const comCorPropria = await Pdf.montarDefinicao(
@@ -447,7 +448,8 @@ teste('PDF: paleta da marca (azul do logotipo e dourado nos títulos)', async ()
   );
   const proprio = JSON.stringify(comCorPropria.content) + JSON.stringify(comCorPropria.header());
   assert.ok(proprio.includes('#7C3AED'), 'cor escolhida pelo usuário é respeitada');
-  assert.ok(/#8A6519/i.test(proprio) === false, 'sem dourado da marca quando o usuário define a cor');
+  assert.ok(/#8A6A31/i.test(proprio) === false, 'sem dourado da marca quando o usuário define a cor');
+  assert.ok(/#C6A15B/i.test(proprio) === false, 'sem filete dourado quando o usuário define a cor');
 });
 
 teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as páginas", async () => {
@@ -481,7 +483,7 @@ teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as página
   assert.strictEqual(salvo.opcoes.marcaDagua, false, 'opção da marca d\'água é preservada');
   const padrao = Schema.sanear({ tipo: 'proposta' }, {}, 'proposta');
   assert.strictEqual(padrao.opcoes.marcaDagua, true, 'marca d\'água vem ligada por padrão');
-  assert.strictEqual(padrao.opcoes.cor, '#1B4B7F', 'cor padrão é o azul do logotipo');
+  assert.strictEqual(padrao.opcoes.cor, '#0B1F33', 'cor padrão é o azul-marinho da paleta');
 });
 
 teste('Site: identidade da marca na página e no editor (logo + opção de marca d\'água)', async () => {
@@ -492,8 +494,14 @@ teste('Site: identidade da marca na página e no editor (logo + opção de marca
 
   assert.ok(html.includes('class="marca-logo"'), 'lugar da logo no topo e na tela de entrada');
   assert.ok(html.includes('id="op-marcadagua"'), "opção de marca d'água no editor");
-  assert.ok(/--dourado-500:\s*#c79a3e/i.test(css), 'dourado da marca nos tokens do site');
-  assert.ok(/--marca-600:\s*#1b4b7f/i.test(css), 'azul do logotipo nos tokens do site');
+  assert.ok(/--dourado-500:\s*#c6a15b/i.test(css), 'dourado da paleta nos tokens do site');
+  assert.ok(/--dourado-300:\s*#d8b873/i.test(css), 'dourado claro da paleta nos tokens do site');
+  assert.ok(/--marca-800:\s*#0b1f33/i.test(css), 'azul-marinho principal nos tokens do site');
+  assert.ok(/--marca-700:\s*#102a43/i.test(css), 'azul escuro secundário nos tokens do site');
+  assert.ok(/--borda:\s*#e8ecef/i.test(css), 'cinza claro da paleta nas bordas do site');
+  const apresCss = fs.readFileSync(path.join(RAIZ, 'site', 'apresentacao.css'), 'utf8');
+  assert.ok(/--marca-800:\s*#0b1f33/i.test(apresCss), 'azul-marinho principal na apresentação');
+  assert.ok(/--dourado-300:\s*#d8b873/i.test(apresCss), 'dourado claro na apresentação');
   assert.ok(/\.marca\.tem-logo\s+\.marca-logo/.test(css), 'logo aparece quando o arquivo existe');
   assert.ok(ui.includes('marca/logo.png'), 'a interface procura a logo da marca');
   assert.ok(ui.includes('mostrarLogoDaMarca'), 'função que revela a logo');

@@ -942,7 +942,7 @@
           quebrarPaginaCatalogo: true,
           logoNoCabecalho: true,
           mostrarLinkCompra: false,
-          cor: '#1B4B7F',
+          cor: '#0B1F33',
         },
       };
       estado.novo = true;

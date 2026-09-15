@@ -435,7 +435,7 @@ Para links do Google Drive, o arquivo precisa estar compartilhado como
 
 ## 12. Identidade visual: logo, cores e marca d'água
 
-O sistema já sai com a **paleta da marca** (azul do logotipo `#1B4B7F`, dourado `#C79A3E`,
+O sistema já sai com a **paleta da marca** (azul-marinho `#0B1F33`, dourado `#C6A15B`,
 fundo creme) tanto no site quanto no PDF — títulos das seções em dourado, filetes e o selo
 do total em azul.
 

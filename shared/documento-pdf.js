@@ -19,9 +19,12 @@
   'use strict';
 
   // Paleta da marca (logo DEJ Solutions & Global): azul, dourado e prata.
-  const COR_PADRAO = '#1B4B7F'; // azul da marca — estrutura do documento
-  const COR_DOURADA = '#8A6519'; // dourado escuro — títulos das seções (contraste no branco)
-  const COR_FILETE = '#C79A3E'; // dourado claro — filetes e detalhes
+  // Paleta da marca (DEJ Solutions & Global): azul-marinho #0B1F33, dourado
+  // #C6A15B, dourado claro #D8B873, branco #FFFFFF e cinza claro #E8ECEF.
+  const COR_PADRAO = '#0B1F33'; // azul-marinho principal — estrutura do documento
+  const COR_DOURADA = '#8A6A31'; // dourado da marca em tom de texto (contraste no branco)
+  const COR_FILETE = '#C6A15B'; // dourado da marca — filetes e detalhes
+  const COR_CINZA = '#E8ECEF'; // cinza claro da marca — fundos de linha e faixas
 
 function cor(hex, padrao) {
   const texto = String(hex || '').trim();
@@ -532,16 +535,16 @@ async function montarDefinicao(doc, empresa, contexto) {
 
   if (totais.desconto > 0) {
     corpoPrecos.push([
-      { text: 'Desconto', colSpan: 6, alignment: 'right', bold: true, fillColor: '#F1F5F7' },
+      { text: 'Desconto', colSpan: 6, alignment: 'right', bold: true, fillColor: COR_CINZA },
       {}, {}, {}, {}, {},
-      { text: '- ' + Formato.moeda(totais.desconto), alignment: 'right', bold: true, fillColor: '#F1F5F7', noWrap: true },
+      { text: '- ' + Formato.moeda(totais.desconto), alignment: 'right', bold: true, fillColor: COR_CINZA, noWrap: true },
     ]);
   }
   if (totais.acrescimo > 0) {
     corpoPrecos.push([
-      { text: (doc.acrescimo && doc.acrescimo.descricao) || 'Acréscimo', colSpan: 6, alignment: 'right', bold: true, fillColor: '#F1F5F7' },
+      { text: (doc.acrescimo && doc.acrescimo.descricao) || 'Acréscimo', colSpan: 6, alignment: 'right', bold: true, fillColor: COR_CINZA },
       {}, {}, {}, {}, {},
-      { text: Formato.moeda(totais.acrescimo), alignment: 'right', bold: true, fillColor: '#F1F5F7', noWrap: true },
+      { text: Formato.moeda(totais.acrescimo), alignment: 'right', bold: true, fillColor: COR_CINZA, noWrap: true },
     ]);
   }
   corpoPrecos.push([
