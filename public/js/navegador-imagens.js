@@ -138,6 +138,25 @@
     return convertido;
   }
 
+  /**
+   * Logo padrão do sistema (opcional): marca/logo.png, na mesma pasta dos
+   * arquivos da interface. Vale para o cabeçalho e para a marca d'água
+   * enquanto a empresa não cadastrar a própria logo.
+   */
+  function logoPadrao() {
+    return pastaDaInterface() + 'marca/logo.png';
+  }
+
+  /** Onde estão css/js/vendor — o caminho de js/ui.js é a resposta mais segura. */
+  function pastaDaInterface() {
+    try {
+      const referencia = (window.UI && window.UI.caminhoBase) || '';
+      if (referencia) return referencia;
+    } catch (_) { /* sem UI: usa o <meta> abaixo */ }
+    const meta = typeof document !== 'undefined' && document.querySelector('meta[name="licitapro-base"]');
+    return meta && meta.content ? meta.content : '';
+  }
+
   /** Busca uma imagem (link, blob ou data URL) e devolve um data URL de PNG/JPEG. */
   async function paraDataUrl(url) {
     if (cache.has(url)) return cache.get(url);
@@ -234,6 +253,7 @@
 
   window.ImagensNavegador = {
     prepararParaPdf,
+    logoPadrao,
     paraDataUrl,
     blobParaDataUrl,
     blobParaImagemPdf,

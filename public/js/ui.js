@@ -4,6 +4,20 @@
 
   const F = window.Formato;
 
+  /**
+   * Onde ficam css/js/vendor desta página: o endereço deste próprio arquivo
+   * responde por todos os casos (servidor em "/", GitHub Pages em
+   * "/licitapro/public/", testes em jsdom).
+   */
+  const CAMINHO_BASE = (() => {
+    try {
+      const atual = document.currentScript && document.currentScript.src;
+      if (atual) return atual.replace(/js\/[^/]*$/, '');
+    } catch (_) { /* ambientes sem currentScript */ }
+    const meta = document.querySelector('meta[name="licitapro-base"]');
+    return meta && meta.content ? meta.content : '';
+  })();
+
   const $ = (seletor, raiz) => (raiz || document).querySelector(seletor);
   const $$ = (seletor, raiz) => Array.from((raiz || document).querySelectorAll(seletor));
 
@@ -204,8 +218,30 @@
     });
   }
 
+  /**
+   * Identidade do site: quando public/marca/logo.png existe, ele substitui o
+   * monograma "LP" no topo e na tela de entrada. Sem o arquivo, nada muda.
+   */
+  function mostrarLogoDaMarca() {
+    const alvos = $$('.marca');
+    if (!alvos.length) return;
+    const url = CAMINHO_BASE + 'marca/logo.png';
+    const sonda = new Image();
+    sonda.onload = () => {
+      alvos.forEach((alvo) => {
+        const imagem = $('.marca-logo', alvo);
+        if (imagem) imagem.src = url;
+        alvo.classList.add('tem-logo');
+      });
+    };
+    sonda.onerror = () => {};
+    sonda.src = url;
+  }
+
   window.UI = {
     $, $$,
+    caminhoBase: CAMINHO_BASE,
+    mostrarLogoDaMarca,
     toast,
     avisarFotosIgnoradas,
     abrirModal,
@@ -222,6 +258,12 @@
     aplicarImagem,
     atualizarImagemLocal,
   };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mostrarLogoDaMarca);
+  } else {
+    mostrarLogoDaMarca();
+  }
 
   document.addEventListener('click', (evento) => {
     if (evento.target.closest('[data-fechar-modal]')) fecharModal();

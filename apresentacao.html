@@ -14,6 +14,7 @@
     <div class="envelope topo-conteudo">
       <div class="marca">
         <span class="marca-icone">LP</span>
+        <img class="marca-logo" alt="" />
         <strong>LicitaPro</strong>
       </div>
       <nav class="topo-links">
@@ -266,7 +267,7 @@ cd licitapro
 npm install
 npm start          # abre em http://localhost:3000
 
-npm run testes     # 39 testes automatizados
+npm run testes     # 42 testes automatizados
 npm run paginas    # regenera o index.html do GitHub Pages
 npm run fontes     # regenera as métricas da fonte Times
 npm run modelo     # gera a planilha-modelo (.xlsx)
@@ -290,5 +291,21 @@ npm run usuarios   # lista usuários / troca senha</code></pre>
       </div>
     </div>
   </footer>
+  <script>
+    // Identidade do site: se public/marca/logo.png existir, ele substitui o monograma.
+    (function () {
+      var alvos = document.querySelectorAll('.marca');
+      if (!alvos.length) return;
+      var sonda = new Image();
+      sonda.onload = function () {
+        for (var i = 0; i < alvos.length; i++) {
+          var imagem = alvos[i].querySelector('.marca-logo');
+          if (imagem) imagem.src = sonda.src;
+          alvos[i].className += ' tem-logo';
+        }
+      };
+      sonda.src = 'public/marca/logo.png';
+    })();
+  </script>
 </body>
 </html>

@@ -247,7 +247,7 @@ function documentoExemplo(tipo) {
     opcoes: {
       mostrarCatalogo: true, mostrarFotos: true, mostrarDadosBancarios: true, mostrarPorExtenso: true,
       mostrarAssinatura: true, mostrarDeclaracao: true, quebrarPaginaCatalogo: true, logoNoCabecalho: true,
-      mostrarLinkCompra: false, cor: '#0F766E',
+      mostrarLinkCompra: false, cor: '#1B4B7F', marcaDagua: true,
     },
   };
 }
@@ -427,6 +427,87 @@ teste('PDF: gera orçamento comercial válido', async () => {
   const buffer = await Pdf.gerarPdf(documentoExemplo('orcamento'), {});
   assert.strictEqual(buffer.subarray(0, 5).toString(), '%PDF-');
   assert.ok(buffer.length > 10000);
+});
+
+teste('PDF: paleta da marca (azul do logotipo e dourado nos títulos)', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const documento = documentoExemplo();
+  const definicao = await Pdf.montarDefinicao(documento, documento.proponente);
+  const desenho = JSON.stringify(definicao.content) + JSON.stringify(definicao.header());
+
+  assert.strictEqual(Pdf.COR_PADRAO, '#1B4B7F', 'azul do logotipo é a cor padrão');
+  assert.ok(desenho.toUpperCase().includes('#1B4B7F'), 'azul da marca na estrutura do documento');
+  assert.ok(/#C79A3E/i.test(desenho), 'fio dourado da marca no cabeçalho');
+  assert.ok(/#8A6519/i.test(desenho), 'títulos das seções em dourado');
+
+  // quem escolhe uma cor própria continua com o documento monocromático
+  const comCorPropria = await Pdf.montarDefinicao(
+    Object.assign({}, documento, { opcoes: Object.assign({}, documento.opcoes, { cor: '#7C3AED' }) }),
+    documento.proponente
+  );
+  const proprio = JSON.stringify(comCorPropria.content) + JSON.stringify(comCorPropria.header());
+  assert.ok(proprio.includes('#7C3AED'), 'cor escolhida pelo usuário é respeitada');
+  assert.ok(/#8A6519/i.test(proprio) === false, 'sem dourado da marca quando o usuário define a cor');
+});
+
+teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as páginas", async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
+  const documento = documentoExemplo();
+  documento.proponente.logo = ModoLocal.dataUrlPng(ModoLocal.pngValido(40, 40));
+
+  const definicao = await Pdf.montarDefinicao(documento, documento.proponente);
+  assert.strictEqual(typeof definicao.background, 'function', "marca d'água definida para as páginas");
+  const fundo = definicao.background();
+  assert.ok(fundo.image, "marca d'água usa a imagem da logo");
+  assert.ok(fundo.opacity > 0 && fundo.opacity <= 0.15, 'marca d\'água discreta: opacidade ' + fundo.opacity);
+  assert.ok(fundo.width >= 200, 'marca d\'água grande o suficiente para cobrir a página');
+
+  const desligada = await Pdf.montarDefinicao(
+    Object.assign({}, documento, { opcoes: Object.assign({}, documento.opcoes, { marcaDagua: false }) }),
+    documento.proponente
+  );
+  assert.strictEqual(desligada.background, undefined, 'sem marca d\'água quando o usuário desliga');
+
+  // o PDF sai de verdade, com a marca d'água dentro do arquivo
+  const buffer = await Pdf.gerarPdf(documento, documento.proponente);
+  const conteudo = Buffer.from(buffer).toString('latin1');
+  assert.ok(conteudo.includes('/ca 0.08'), 'marca d\'água com transparência no PDF');
+  assert.ok(conteudo.includes('/Subtype /Image'), 'logo embutida no PDF');
+
+  // o schema guarda a opção (o editor salva e recarrega)
+  const Schema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const salvo = Schema.sanear({ tipo: 'proposta', opcoes: { marcaDagua: false } }, {}, 'proposta');
+  assert.strictEqual(salvo.opcoes.marcaDagua, false, 'opção da marca d\'água é preservada');
+  const padrao = Schema.sanear({ tipo: 'proposta' }, {}, 'proposta');
+  assert.strictEqual(padrao.opcoes.marcaDagua, true, 'marca d\'água vem ligada por padrão');
+  assert.strictEqual(padrao.opcoes.cor, '#1B4B7F', 'cor padrão é o azul do logotipo');
+});
+
+teste('Site: identidade da marca na página e no editor (logo + opção de marca d\'água)', async () => {
+  const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(RAIZ, 'public', 'css', 'estilos.css'), 'utf8');
+  const apres = fs.readFileSync(path.join(RAIZ, 'apresentacao.html'), 'utf8');
+  const ui = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'ui.js'), 'utf8');
+
+  assert.ok(html.includes('class="marca-logo"'), 'lugar da logo no topo e na tela de entrada');
+  assert.ok(html.includes('id="op-marcadagua"'), "opção de marca d'água no editor");
+  assert.ok(/--dourado-500:\s*#c79a3e/i.test(css), 'dourado da marca nos tokens do site');
+  assert.ok(/--marca-600:\s*#1b4b7f/i.test(css), 'azul do logotipo nos tokens do site');
+  assert.ok(/\.marca\.tem-logo\s+\.marca-logo/.test(css), 'logo aparece quando o arquivo existe');
+  assert.ok(ui.includes('marca/logo.png'), 'a interface procura a logo da marca');
+  assert.ok(ui.includes('mostrarLogoDaMarca'), 'função que revela a logo');
+  assert.ok(apres.includes('marca/logo.png'), 'a página de apresentação usa a mesma logo');
+
+  // a logo padrão do sistema fica em public/marca/ e é opcional
+  const Imagens = require(path.join(RAIZ, 'server', 'imagens'));
+  assert.strictEqual(typeof Imagens.logoPadrao, 'function', 'servidor sabe onde procurar a logo padrão');
+  const semLogo = Imagens.logoPadrao();
+  assert.ok(
+    semLogo === null || /^data:image\/(png|jpeg);base64,/.test(semLogo),
+    'logo padrão ausente devolve null; presente, vira data URL: ' + String(semLogo).slice(0, 40)
+  );
+  assert.ok(fs.existsSync(path.join(RAIZ, 'public', 'marca')), 'pasta public/marca existe para receber a logo');
 });
 
 teste('PDF: usa o nome de arquivo com número e destinatário', () => {

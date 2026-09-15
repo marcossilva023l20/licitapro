@@ -1,0 +1,24 @@
+Identidade visual do site (LicitaPro)
+=====================================
+
+Coloque nesta pasta o arquivo da logo da empresa:
+
+  logo.png   <- usado no topo do site e, no PDF, no cabeçalho e como marca d'água
+  logo.jpg   (alternativa; o servidor também aceita logo.jpg / logo.jpeg)
+  logo.jpeg
+
+Como funciona
+--------------
+* Site: ao abrir a página, o arquivo é procurado automaticamente. Se existir,
+  ele entra no lugar do monograma "LP" (tela de entrada, topo do sistema e
+  página de apresentação). Se não existir, nada muda.
+* Documento (PDF): a imagem cadastrada em "Minha empresa" tem prioridade. Sem
+  logo cadastrada, o PDF usa este arquivo — no cabeçalho e como marca d'água
+  (bem apagada, atrás do texto, em todas as páginas).
+* Cada usuário do sistema pode ter a própria logo no PDF; este arquivo é o
+  padrão do site.
+
+Formato ideal
+-------------
+PNG com fundo transparente. JPG também funciona: fundo branco ou bem claro é
+o que menos aparece no documento impresso.

@@ -82,6 +82,7 @@
     { sel: '#op-declaracao', alvo: 'opcoes.mostrarDeclaracao', tipo: 'check' },
     { sel: '#op-quebra', alvo: 'opcoes.quebrarPaginaCatalogo', tipo: 'check' },
     { sel: '#op-logo', alvo: 'opcoes.logoNoCabecalho', tipo: 'check' },
+    { sel: '#op-marcadagua', alvo: 'opcoes.marcaDagua', tipo: 'check' },
     { sel: '#op-link-compra', alvo: 'opcoes.mostrarLinkCompra', tipo: 'check' },
     { sel: '#op-cor', alvo: 'opcoes.cor' },
   ];
@@ -941,7 +942,7 @@
           quebrarPaginaCatalogo: true,
           logoNoCabecalho: true,
           mostrarLinkCompra: false,
-          cor: '#0F766E',
+          cor: '#1B4B7F',
         },
       };
       estado.novo = true;

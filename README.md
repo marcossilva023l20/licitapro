@@ -329,6 +329,10 @@ totais, geração dos PDFs de proposta e orçamento, rotas HTTP (autenticação,
 planilha, isolamento entre usuários) e testes de navegador com **jsdom** que fazem login,
 criam proposta, adicionam itens, conferem os cálculos, salvam e abrem a pré-visualização.
 
+Cobre também a **identidade visual**: paleta da marca no PDF, dourado nos títulos,
+respeito à cor escolhida pelo usuário e a marca d'água (opção ligada/desligada e a
+transparência dentro do arquivo).
+
 Também cobre o **modo local** (GitHub Pages): a página da raiz publicada abre o sistema sem
 servidor, importa uma planilha `.xlsx` de verdade, gera um PDF válido (`%PDF-`) no navegador,
 salva/restaura backup, guarda as fotos dos produtos e — quando existe servidor — o modo local
@@ -355,6 +359,7 @@ server/
 public/
   index.html            → interface (SPA)
   css/estilos.css
+  marca/logo.png        → logo da marca (site, cabeçalho do PDF e marca d'água)
   js/api.js, ui.js, editar.js, app.js
   js/modo-estatico.js   → modo local: atende /api/* no navegador (GitHub Pages)
   js/navegador-imagens.js → fotos enviadas/enviadas do computador no navegador
@@ -425,3 +430,32 @@ do sistema. Por isso:
 
 Para links do Google Drive, o arquivo precisa estar compartilhado como
 "Qualquer pessoa com o link" (o sistema converte o link de visualização em link direto).
+
+---
+
+## 12. Identidade visual: logo, cores e marca d'água
+
+O sistema já sai com a **paleta da marca** (azul do logotipo `#1B4B7F`, dourado `#C79A3E`,
+fundo creme) tanto no site quanto no PDF — títulos das seções em dourado, filetes e o selo
+do total em azul.
+
+### Colocar a logo no site e no PDF
+
+Basta salvar o arquivo em:
+
+```
+public/marca/logo.png      (o servidor também aceita logo.jpg / logo.jpeg)
+```
+
+- **Site:** a logo entra automaticamente no lugar do monograma "LP" na tela de entrada, no
+  topo do sistema e na página de apresentação. Se o arquivo não existir, nada muda.
+- **PDF:** a imagem cadastrada em **Minha empresa → Logo** tem prioridade. Sem logo
+  cadastrada, o PDF usa `public/marca/logo.png` — no cabeçalho e como **marca d'água**
+  (8% de opacidade, atrás do texto, em todas as páginas).
+- **Desligar a marca d'água:** no editor, em *Opções do documento*, desmarque
+  **"Usar a logo da empresa como marca d'água"** (a opção fica salva no documento).
+- **Cada usuário pode ter a própria logo** (Minha empresa → Logo): ela vale para os
+  documentos daquele usuário; o arquivo em `public/marca/` é o padrão do site.
+
+Formato ideal: **PNG com fundo transparente**. JPG também funciona — fundo branco ou bem
+claro é o que menos aparece no documento.

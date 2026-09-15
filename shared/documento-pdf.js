@@ -18,7 +18,10 @@
 })(typeof self !== 'undefined' ? self : this, function (pdfMake, Formato, Imagens) {
   'use strict';
 
-  const COR_PADRAO = '#0F766E';
+  // Paleta da marca (logo DEJ Solutions & Global): azul, dourado e prata.
+  const COR_PADRAO = '#1B4B7F'; // azul da marca — estrutura do documento
+  const COR_DOURADA = '#8A6519'; // dourado escuro — títulos das seções (contraste no branco)
+  const COR_FILETE = '#C79A3E'; // dourado claro — filetes e detalhes
 
 function cor(hex, padrao) {
   const texto = String(hex || '').trim();
@@ -163,22 +166,44 @@ function descreverFotosIgnoradas(relatorio) {
   return partes.join(' | ').slice(0, 400);
 }
 
-async function carregarImagem(urlOuArquivo, rotulo, relatorio) {
+/**
+ * Qual imagem representa a empresa no documento: a logo cadastrada em "Minha
+ * empresa" e, quando não houver, a logo padrão do sistema
+ * (public/marca/logo.png — opcional). A mesma imagem vira cabeçalho e marca
+ * d'água, para o documento combinar com a identidade visual do site.
+ */
+function referenciaLogo(proponente) {
+  const logo = String((proponente && proponente.logo) || '').trim();
+  if (logo) return { referencia: logo, padrao: false };
+  let padrao = '';
+  try {
+    padrao = (Imagens && typeof Imagens.logoPadrao === 'function' && Imagens.logoPadrao()) || '';
+  } catch (_) {
+    padrao = '';
+  }
+  return { referencia: padrao, padrao: true };
+}
+
+async function carregarImagem(urlOuArquivo, rotulo, relatorio, silencioso) {
   if (!urlOuArquivo) return null;
+  const avisar = (motivo) => {
+    if (silencioso) return; // logo padrão do sistema: ausência não é problema do usuário
+    anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, motivo);
+  };
   try {
     const preparada = await Imagens.prepararParaPdf(urlOuArquivo);
     if (!preparada || !preparada.imagem) {
-      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, motivoDeFalha(urlOuArquivo));
+      avisar(motivoDeFalha(urlOuArquivo));
       return null;
     }
     if (!imagemAceita(preparada.imagem)) {
-      anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, 'formato não aceito no PDF (use .jpg ou .png)');
+      avisar('formato não aceito no PDF (use .jpg ou .png)');
       console.warn('[pdf] imagem ignorada (formato não aceito no PDF):', String(urlOuArquivo).slice(0, 120));
       return null;
     }
     return preparada.imagem;
   } catch (erro) {
-    anotarFotoIgnorada(relatorio, rotulo, urlOuArquivo, erro.message);
+    avisar(erro.message);
     console.warn('[pdf] imagem ignorada:', erro.message);
     return null;
   }
@@ -205,7 +230,7 @@ function linhaRotulo(valor) {
  * Bloco "caixa" com título e linhas rótulo/valor.
  * linhas: [[rotulo, valor, larguraRotulo?], ...]
  */
-function caixa(titulo, larguras, linhas, corBase) {
+function caixa(titulo, larguras, linhas, corTitulo) { // 4º parâmetro: cor do título da seção
   const corpo = linhas
     .filter(Boolean)
     .map((linha) => {
@@ -219,7 +244,7 @@ function caixa(titulo, larguras, linhas, corBase) {
     });
 
   return [
-    { text: titulo, style: 'tituloSecao', color: corBase },
+    { text: titulo, style: 'tituloSecao', color: corTitulo },
     {
       table: { widths: larguras || ['auto', '*'], body: corpo },
       layout: {
@@ -286,7 +311,13 @@ function textoDeclaracao(doc) {
  */
 async function montarDefinicao(doc, empresa, contexto) {
   const relatorio = contexto && Array.isArray(contexto.relatorio) ? contexto.relatorio : [];
-  const corBase = cor((doc.opcoes && doc.opcoes.cor) || COR_PADRAO);
+  // Quando o usuário escolhe uma cor própria, o documento fica monocromático
+  // nela; sem escolha, vale a paleta da marca (azul + dourado da logo).
+  const corInformada = String((doc.opcoes && doc.opcoes.cor) || '').trim();
+  const corPropria = /^#[0-9a-fA-F]{6}$/.test(corInformada) && corInformada.toUpperCase() !== COR_PADRAO;
+  const corBase = cor(corInformada || COR_PADRAO);
+  const corTitulo = corPropria ? corBase : COR_DOURADA;
+  const corFilete = corPropria ? corBase : COR_FILETE;
   const proponente = Object.assign({}, empresa || {}, doc.proponente || {});
   const opcoes = Object.assign(
     {
@@ -299,6 +330,7 @@ async function montarDefinicao(doc, empresa, contexto) {
       quebrarPaginaCatalogo: true,
       logoNoCabecalho: true,
       mostrarLinkCompra: false,
+      marcaDagua: true,
     },
     doc.opcoes || {}
   );
@@ -307,7 +339,17 @@ async function montarDefinicao(doc, empresa, contexto) {
   const numero = numeroFormatado(doc);
   const titulo = tituloDocumento(doc);
   const dataDoc = Formato.dataISO(doc.data) || Formato.dataISO(new Date());
-  const logo = opcoes.logoNoCabecalho ? await carregarImagem(proponente.logo, 'Logo da empresa', relatorio) : null;
+  // Logo da empresa (a do cadastro ou a logo padrão do sistema, em public/marca)
+  const referencia = referenciaLogo(proponente);
+  const logo = opcoes.logoNoCabecalho && referencia.referencia
+    ? await carregarImagem(referencia.referencia, 'Logo da empresa', relatorio, referencia.padrao)
+    : null;
+
+  // Marca d'água: a mesma imagem, bem apagada, atrás do conteúdo de todas as
+  // páginas. Se ela não puder ser usada, o PDF sai sem marca d'água (nunca falha).
+  const marcaDagua = opcoes.marcaDagua && referencia.referencia
+    ? await carregarImagem(referencia.referencia, "Marca d'água", relatorio, referencia.padrao)
+    : null;
 
   // ------------------------------------------------------------- cabeçalho
   const nomeEmpresa = proponente.nomeFantasia || proponente.razaoSocial || '';
@@ -339,7 +381,10 @@ async function montarDefinicao(doc, empresa, contexto) {
     stack: [
       { columns: colunasCabecalho, columnGap: 10 },
       {
-        canvas: [{ type: 'line', x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 1.2, lineColor: corBase }],
+        canvas: [
+          { type: 'line', x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 1.1, lineColor: corBase },
+          { type: 'line', x1: 0, y1: 0, x2: 190, y2: 0, lineWidth: 2.6, lineColor: corFilete },
+        ],
         margin: [0, 6, 0, 0],
       },
     ],
@@ -427,7 +472,7 @@ async function montarDefinicao(doc, empresa, contexto) {
   });
 
   conteudo.push(
-    ...caixa(doc.tipo === 'orcamento' ? 'IDENTIFICAÇÃO' : 'DADOS DO ÓRGÃO', [118, '*'], identificacao, corBase)
+    ...caixa(doc.tipo === 'orcamento' ? 'IDENTIFICAÇÃO' : 'DADOS DO ÓRGÃO', [118, '*'], identificacao, corTitulo)
   );
 
   // 2. Dados do proponente
@@ -452,10 +497,10 @@ async function montarDefinicao(doc, empresa, contexto) {
     if (proponente.conta) dadosProponente.push(['Conta Corrente', proponente.conta]);
     if (proponente.chavePix) dadosProponente.push(['Chave PIX', proponente.chavePix]);
   }
-  conteudo.push(...caixa('DADOS DO PROPONENTE', [150, '*'], dadosProponente, corBase));
+  conteudo.push(...caixa('DADOS DO PROPONENTE', [150, '*'], dadosProponente, corTitulo));
 
   // 3. Tabela de preços
-  conteudo.push({ text: 'TABELA DE PREÇOS', style: 'tituloSecao', color: corBase });
+  conteudo.push({ text: 'TABELA DE PREÇOS', style: 'tituloSecao', color: corTitulo });
 
   const colunasPrecos = [
     { titulo: 'Item', largura: 26, alinhamento: 'center' },
@@ -537,8 +582,8 @@ async function montarDefinicao(doc, empresa, contexto) {
     conteudo.push({
       unbreakable: true,
       stack: [
-        { text: 'CONDIÇÕES', style: 'tituloSecao', color: corBase, margin: [0, 12, 0, 0] },
-        ...caixa('', [172, '*'], linhasCondicoes, corBase),
+        { text: 'CONDIÇÕES', style: 'tituloSecao', color: corTitulo, margin: [0, 12, 0, 0] },
+        ...caixa('', [172, '*'], linhasCondicoes, corTitulo),
       ],
     });
   }
@@ -556,7 +601,7 @@ async function montarDefinicao(doc, empresa, contexto) {
   // 5. Catálogo
   if (opcoes.mostrarCatalogo && itens.length) {
     if (opcoes.quebrarPaginaCatalogo) conteudo.push({ text: '', pageBreak: 'before' });
-    conteudo.push({ text: 'CATÁLOGO', style: 'tituloSecao', color: corBase, margin: [0, 14, 0, 6] });
+    conteudo.push({ text: 'CATÁLOGO', style: 'tituloSecao', color: corTitulo, margin: [0, 14, 0, 6] });
     conteudo.push({
       text: 'Especificações e imagens dos produtos ofertados.',
       fontSize: 9.3,
@@ -656,6 +701,17 @@ async function montarDefinicao(doc, empresa, contexto) {
   return {
     pageSize: 'A4',
     pageMargins: [42, 88, 42, 52],
+    ...(marcaDagua
+      ? {
+          background: () => ({
+            image: marcaDagua,
+            width: 330,
+            opacity: 0.08,
+            alignment: 'center',
+            margin: [0, 285, 0, 0],
+          }),
+        }
+      : {}),
     header: () => cabecalho,
     footer: (paginaAtual, totalPaginas) => rodape(paginaAtual, totalPaginas),
     defaultStyle: { font: 'Times New Roman', fontSize: 12.4, color: '#26303A', lineHeight: 1.2 },

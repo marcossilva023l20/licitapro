@@ -21,6 +21,40 @@ const TIPOS_ACEITOS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'ima
 const TAMANHO_MAXIMO = 8 * 1024 * 1024; // 8 MB
 const TIMEOUT_MS = 15000;
 
+/**
+ * Logo padrão do sistema (opcional): public/marca/logo.(png|jpg|jpeg).
+ * É a identidade do site: entra no cabeçalho e vira marca d'água do PDF
+ * quando o usuário ainda não cadastrou a logo da própria empresa.
+ */
+const ARQUIVOS_LOGO = ['logo.png', 'logo.jpg', 'logo.jpeg'];
+let cacheLogo = null; // { caminho, mtimeMs, dataUrl }
+
+function logoPadrao() {
+  const pasta = path.join(__dirname, '..', 'public', 'marca');
+  for (const nome of ARQUIVOS_LOGO) {
+    const caminho = path.join(pasta, nome);
+    let info;
+    try {
+      info = fs.statSync(caminho);
+    } catch (_) {
+      continue;
+    }
+    if (!info.isFile()) continue;
+    if (cacheLogo && cacheLogo.caminho === caminho && cacheLogo.mtimeMs === info.mtimeMs) {
+      return cacheLogo.dataUrl;
+    }
+    const bytes = fs.readFileSync(caminho);
+    if (!imagemIntegra(bytes)) {
+      console.warn('[imagens] logo padrão inválida (use PNG ou JPG):', caminho);
+      continue;
+    }
+    const dataUrl = 'data:' + (bytes[0] === 0x89 ? 'image/png' : 'image/jpeg') + ';base64,' + bytes.toString('base64');
+    cacheLogo = { caminho, mtimeMs: info.mtimeMs, dataUrl };
+    return dataUrl;
+  }
+  return null;
+}
+
 function cabecalhoImagem(arquivo) {
   garantirPastas();
   const caminho = path.join(UPLOADS_DIR, arquivo);
@@ -310,6 +344,6 @@ async function prepararParaPdf(urlOuArquivo) {
 }
 
 module.exports = {
-  idDoDrive, urlDireta, baixarImagem, prepararParaPdf, cabecalhoImagem, tipoPorExtensao,
+  idDoDrive, urlDireta, baixarImagem, prepararParaPdf, cabecalhoImagem, tipoPorExtensao, logoPadrao,
   formatoSuportado, imagemIntegra, bytesDoDataUrl, jpegIntegro, pngIntegro,
 };
