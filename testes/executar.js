@@ -918,6 +918,36 @@ teste('Modo local: backup e restauração dos dados', async () => {
   window.close();
 });
 
+teste('Modo local: fotos dos produtos (envio do computador e links)', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  await entrarNoModoLocal(window, $);
+
+  // 1. envio de imagem do computador: sem IndexedDB e sem canvas (jsdom), a
+  //    imagem é guardada dentro do documento como data URL.
+  const gif = new window.File(['GIF89a\u0001\u0000\u0001\u0000'], 'foto.gif', { type: 'image/gif' });
+  const envio = await window.API.enviarArquivo('/api/uploads', gif);
+  assert.ok(String(envio.caminho).startsWith('data:image/'), 'imagem guardada no documento: ' + String(envio.caminho).slice(0, 20));
+  assert.strictEqual(envio.nome, 'foto.gif', 'nome do arquivo preservado');
+
+  // 2. o mesmo vale para o logo/assinatura da empresa
+  await window.API.pedir('/api/auth/empresa', { method: 'PUT', corpo: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', logo: envio.caminho } });
+  const perfil = await window.API.pedir('/api/auth/eu');
+  assert.strictEqual(perfil.usuario.empresa.logo, envio.caminho, 'logo guardada no perfil');
+
+  // 3. dentro do PDF, data URL e links são convertidos para o formato do pdfmake
+  const pronto = await window.ImagensNavegador.prepararParaPdf(envio.caminho);
+  assert.ok(pronto && pronto.imagem === envio.caminho, 'data URL repassada ao pdfmake');
+
+  const doDrive = await window.ImagensNavegador.prepararParaPdf('https://drive.google.com/file/d/1AbC/view');
+  assert.ok(doDrive && /^https:\/\//.test(doDrive.imagem), 'link do Drive convertido para link direto');
+
+  // 4. endereço de exibição das imagens na tela
+  assert.strictEqual(window.UI.urlImagem(''), '', 'sem imagem não há endereço');
+  assert.ok(window.UI.urlImagem('data:image/png;base64,AAA').startsWith('data:'), 'data URL exibida direto');
+  assert.strictEqual(window.UI.urlImagem(envio.caminho), envio.caminho, 'foto local exibida direto');
+  window.close();
+});
+
 teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de apresentação)', async () => {
   const Paginas = require(path.join(RAIZ, 'scripts', 'paginas.js'));
 

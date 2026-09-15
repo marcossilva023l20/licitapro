@@ -322,7 +322,8 @@ criam proposta, adicionam itens, conferem os cálculos, salvam e abrem a pré-vi
 
 Também cobre o **modo local** (GitHub Pages): a página da raiz publicada abre o sistema sem
 servidor, importa uma planilha `.xlsx` de verdade, gera um PDF válido (`%PDF-`) no navegador,
-salva/restaura backup e — quando existe servidor — o modo local fica desligado.
+salva/restaura backup, guarda as fotos dos produtos e — quando existe servidor — o modo local
+fica desligado.
 
 ---
 

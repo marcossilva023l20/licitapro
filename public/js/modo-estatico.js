@@ -149,6 +149,13 @@
       if (/gif/i.test(arquivo.type)) return resolver(arquivo); // animação: mantém como está
       const url = URL.createObjectURL(arquivo);
       const imagem = new Image();
+      // rede de segurança: se a imagem não carregar nem avisar erro, segue com o
+      // arquivo original em vez de travar o envio.
+      const prazo = setTimeout(() => {
+        console.warn('[modo local] imagem demorou para carregar; usando o arquivo original.');
+        URL.revokeObjectURL(url);
+        resolver(arquivo);
+      }, 5000);
       imagem.onload = () => {
         const limite = larguraMaxima || 1200;
         const escala = Math.min(1, limite / (imagem.width || limite));
@@ -163,6 +170,7 @@
         contexto.drawImage(imagem, 0, 0, largura, altura);
         tela.toBlob(
           (blob) => {
+            clearTimeout(prazo);
             URL.revokeObjectURL(url);
             resolver(blob && blob.size < arquivo.size ? blob : arquivo);
           },
@@ -171,6 +179,7 @@
         );
       };
       imagem.onerror = () => {
+        clearTimeout(prazo);
         URL.revokeObjectURL(url);
         resolver(arquivo);
       };
