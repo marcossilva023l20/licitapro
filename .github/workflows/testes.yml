@@ -1,0 +1,34 @@
+name: Testes
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testes:
+    name: Testes automatizados
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Conferir sintaxe dos arquivos
+        run: |
+          for arquivo in $(find server public/js shared scripts testes -name '*.js'); do
+            node --check "$arquivo"
+          done
+
+      - name: Rodar os testes
+        run: npm run testes

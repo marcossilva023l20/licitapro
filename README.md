@@ -4,6 +4,12 @@ Sistema web para montar **propostas de licitação** e **orçamentos comerciais*
 **PDF pronto para envio**, importando os itens de uma planilha (Excel/CSV) para agilizar o
 preenchimento.
 
+[![Testes](https://github.com/marcossilva023l20/licitapro/actions/workflows/testes.yml/badge.svg)](https://github.com/marcossilva023l20/licitapro/actions/workflows/testes.yml)
+[![Publicar no Render](https://img.shields.io/badge/Render-publicar-0f766e?logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/marcossilva023l20/licitapro)
+
+> Quer colocar no ar? Veja a seção **[6. Publicando na internet](#6-publicando-na-internet-hospedagem)**
+> (Render, Railway, Docker ou VPS). O GitHub Pages não roda este projeto porque ele tem backend.
+
 O PDF segue a estrutura do modelo enviado pelo usuário:
 
 ```
@@ -178,30 +184,74 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 
 ---
 
-## 6. Publicando em um servidor
+## 6. Publicando na internet (hospedagem)
 
-**Docker (recomendado):**
+> **O site precisa de um servidor Node.** O GitHub Pages só publica arquivos estáticos, e o
+> LicitaPro tem backend (login, banco, upload de arquivos e geração de PDF). Então o código
+> fica no **GitHub**, mas a hospedagem roda num serviço que executa Node — Render, Railway,
+> Fly.io ou uma VPS. Este repositório já vem preparado: `render.yaml`, `railway.json`,
+> `Procfile` e `Dockerfile`.
+
+### Opção A — Render (mais simples)
+
+1. Faça o **merge do pull request** para o código ficar na branch `main`.
+2. Crie a conta em <https://render.com> e conecte ao GitHub.
+3. **New +** → **Blueprint** → escolha o repositório `licitapro`.
+   O Render lê o `render.yaml` e configura comando de start, healthcheck e disco.
+4. Informe nas variáveis o seu `LICITAPRO_ADMIN_EMAIL`, `LICITAPRO_ADMIN_SENHA` e
+   `LICITAPRO_ADMIN_NOME` — esse será o seu login no site.
+5. Aguarde o deploy e acesse a URL gerada (`https://licitapro-xxxx.onrender.com`).
+
+> **Sobre os dados:** no plano **gratuito** o disco é apagado a cada reinício, então as
+> propostas salvas se perdem — serve para testar/demonstrar. Para uso real, mantenha o bloco
+> `disk` do `render.yaml` (plano pago: instância ~US$ 7/mês + disco 1 GB ~US$ 0,25/mês);
+> os dados ficam em `/var/data` e o backup é o download dessa pasta.
+
+### Opção B — Railway
+
+1. <https://railway.app> → **New Project** → **Deploy from GitHub repo** → `licitapro`.
+2. O `railway.json` já define o comando de start e o healthcheck.
+3. Em **Variables**: `LICITAPRO_ADMIN_EMAIL`, `LICITAPRO_ADMIN_SENHA` e
+   `LICITAPRO_DATA_DIR=/var/data`.
+4. Em **Volumes**, monte um volume em `/var/data` (sem volume os dados se perdem no deploy).
+5. Em **Settings → Networking → Generate Domain** para gerar a URL pública.
+
+### Opção C — Docker (VPS própria: Hostinger, DigitalOcean, Contabo...)
 
 ```bash
 docker build -t licitapro .
-docker run -d --name licitapro -p 3000:3000 \
+docker run -d --restart unless-stopped --name licitapro -p 80:3000 \
   -v /var/lib/licitapro:/app/data \
   -e LICITAPRO_ADMIN_EMAIL=seu@email.com \
   -e LICITAPRO_ADMIN_SENHA=umaSenhaForte \
   licitapro
 ```
 
-**Sem Docker (VPS Linux):**
+### Opção D — sem Docker (VPS Linux)
 
 ```bash
-git clone <repositório> licitapro && cd licitapro
+git clone https://github.com/marcossilva023l20/licitapro.git && cd licitapro
 npm install --omit=dev
 PORT=3000 pm2 start server/index.js --name licitapro   # ou um serviço systemd
+pm2 save && pm2 startup
 ```
 
-Coloque um proxy reverso (Nginx/Caddy) com **HTTPS** na frente. O sistema detecta o
-cabeçalho `X-Forwarded-Proto` e marca o cookie de sessão como `Secure` automaticamente;
-para Nginx, envie `proxy_set_header X-Forwarded-Proto $scheme;`.
+### Depois de publicar
+
+- **Troque a senha** do primeiro acesso em *Minha empresa → Meu acesso*.
+- Para uso interno, defina `LICITAPRO_REGISTRO_ABERTO=0` e ninguém cria conta sozinho.
+- **HTTPS**: Render e Railway já fornecem. Em VPS, use Nginx/Caddy como proxy reverso; o
+  sistema marca o cookie de sessão como `Secure` quando recebe `X-Forwarded-Proto: https`
+  (no Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`).
+- **Domínio próprio**: aponte o DNS para o serviço (no Render: *Settings → Custom Domain*).
+- **Backup**: copie de tempos em tempos a pasta de dados (`data/` ou `/var/data`), que contém
+  o banco `db.json`, os uploads (logo, assinatura, fotos) e o cache de imagens.
+- **Atualizações**: cada `git push` na branch conectada faz o deploy automático.
+
+### Opção E — apenas demonstrar sem hospedar
+
+Rode localmente (`npm start`) e use <https://ngrok.com> para gerar um link temporário.
+Não use isso com dados reais de clientes.
 
 ---
 
