@@ -1,0 +1,103 @@
+# Utilitário: baixa a logo da marca do Google Drive, converte para PNG e
+# publica o resultado no log do job (base64) + como artefato.
+#
+# Serve para este ambiente sem acesso à internet: o runner do GitHub baixa o
+# arquivo e o conteúdo é trazido de volta pelo log (leitura via API).
+# Roda quando este arquivo muda (ou manualmente, em "Actions").
+name: Buscar logo da marca
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/buscar-logo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  baixar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar a logo do Google Drive e converter para PNG
+        env:
+          LOGO_URL: https://drive.google.com/file/d/1aTPegfG2Vv1SNmGTrG2TvluNctSLMSIp/view?usp=sharing
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check Pillow
+          python3 - <<'PY'
+          import base64, io, os, re, sys, urllib.request
+          from PIL import Image
+
+          url = os.environ["LOGO_URL"]
+          achado = re.search(r"/d/([A-Za-z0-9_-]{15,})", url) or re.search(r"[?&]id=([A-Za-z0-9_-]{15,})", url)
+          fid = achado.group(1) if achado else None
+          print("ID do arquivo:", fid)
+
+          candidatos = []
+          if fid:
+              candidatos += [
+                  "https://drive.usercontent.google.com/download?id=%s&export=download&confirm=t" % fid,
+                  "https://drive.google.com/uc?export=download&id=%s" % fid,
+                  "https://docs.google.com/uc?export=download&id=%s" % fid,
+                  "https://drive.google.com/uc?id=%s&export=png" % fid,
+                  "https://lh3.googleusercontent.com/d/%s=w2400" % fid,
+                  "https://lh3.googleusercontent.com/d/%s" % fid,
+              ]
+          candidatos.append(url)
+
+          def eh_imagem(dados):
+              return dados[:8] == b"\x89PNG\r\n\x1a\n" or dados[:3] == b"\xff\xd8\xff" or dados[:4] == b"RIFF"
+
+          dados = None
+          for c in candidatos:
+              try:
+                  pedido = urllib.request.Request(c, headers={"User-Agent": "Mozilla/5.0 (github-actions)"})
+                  with urllib.request.urlopen(pedido, timeout=60) as resposta:
+                      corpo = resposta.read()
+                  print("tentativa %s -> %d bytes, inicio %r" % (c[:90], len(corpo), corpo[:8]))
+                  if eh_imagem(corpo):
+                      dados = corpo
+                      break
+                  print("  resposta não é imagem (página de aviso do Drive ou outro formato)")
+              except Exception as erro:
+                  print("tentativa %s falhou: %s" % (c[:90], erro))
+
+          if dados is None:
+              print("NAO_FOI_POSSIVEL_BAIXAR")
+              sys.exit(1)
+
+          try:
+              imagem = Image.open(io.BytesIO(dados))
+              imagem.load()
+          except Exception as erro:
+              print("ARQUIVO_NAO_E_IMAGEM_LEGIVEL: %s" % erro)
+              sys.exit(1)
+
+          print("origem: %s %s %s" % (imagem.format, imagem.size, imagem.mode))
+          if imagem.mode not in ("RGBA", "RGB"):
+              imagem = imagem.convert("RGBA")
+          if max(imagem.size) > 1000:
+              fator = 1000 / max(imagem.size)
+              imagem = imagem.resize((max(1, round(imagem.width * fator)), max(1, round(imagem.height * fator))), Image.LANCZOS)
+
+          saida = io.BytesIO()
+          imagem.save(saida, "PNG", optimize=True)
+          png = saida.getvalue()
+          os.makedirs("public/marca", exist_ok=True)
+          with open("public/marca/logo.png", "wb") as arquivo:
+              arquivo.write(png)
+          print("PNG gerado: %d bytes, %s" % (len(png), imagem.size))
+
+          b64 = base64.b64encode(png).decode()
+          print("LOGO_B64_INICIO")
+          for i in range(0, len(b64), 4000):
+              print(b64[i:i + 4000])
+          print("LOGO_B64_FIM")
+          PY
+
+      - name: Guardar como artefato (cópia de segurança)
+        uses: actions/upload-artifact@v4
+        with:
+          name: logo-marca
+          path: public/marca/logo.png
+          if-no-files-found: error
