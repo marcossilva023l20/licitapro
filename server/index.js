@@ -70,6 +70,12 @@ app.get('/api/health', (req, res) => {
 
 // arquivos estáticos da interface
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+const RAIZ_PROJETO = path.join(__dirname, '..');
+
+// página de apresentação (a mesma usada pelo GitHub Pages), útil para enviar a clientes
+app.use('/site', express.static(path.join(RAIZ_PROJETO, 'site'), { maxAge: '1d' }));
+app.get('/apresentacao', (req, res) => res.sendFile(path.join(RAIZ_PROJETO, 'index.html')));
+
 app.use('/shared', express.static(path.join(__dirname, '..', 'shared'), { maxAge: '1h' }));
 app.use(
   express.static(PUBLIC_DIR, {
