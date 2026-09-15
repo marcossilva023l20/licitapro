@@ -26,8 +26,9 @@ const AVISO = [
   '<!--',
   '  ATENÇÃO: arquivo gerado por scripts/paginas.js — não edite à mão.',
   '  É a página do sistema (public/index.html) preparada para o GitHub Pages,',
-  '  que publica apenas arquivos estáticos. O <base href="public/"> faz o',
-  '  navegador procurar css/, js/, vendor/ e ../shared/ no lugar certo.',
+  '  que publica apenas arquivos estáticos: os caminhos relativos foram',
+  '  reescritos (css/ e js/ passam a public/..., ../shared/ vira shared/) e a',
+  '  meta licitapro-base avisa o modo local de onde vêm as bibliotecas.',
   '  Para alterar, edite public/index.html e rode: npm run paginas',
   '-->',
 ].join('\n');
@@ -39,9 +40,19 @@ function gerar() {
   if (!/<head>/i.test(sistema)) throw new Error('public/index.html sem <head>.');
   if (/<base\s/i.test(sistema)) throw new Error('public/index.html já tem <base> — remova para não duplicar.');
 
-  return sistema
-    .replace('<head>', '<head>\n' + AVISO + '\n  <base href="public/" />\n  <meta name="licitapro-sobre" content="apresentacao.html" />');
+  const caminhos = sistema
+    .replace('href="css/estilos.css"', 'href="public/css/estilos.css"')
+    .replace(/src="\.\.\/shared\//g, 'src="shared/')
+    .replace(/src="js\//g, 'src="public/js/');
+
+  // A raiz do Pages não tem servidor: o modo local usa esta meta para achar
+  // vendor/ e shared/ (que ficam em public/... e na raiz do repositório).
+  return caminhos
+    .replace('<head>', '<head>\n' + AVISO +
+      '\n  <meta name="licitapro-base" content="public/" />' +
+      '\n  <meta name="licitapro-sobre" content="apresentacao.html" />');
 }
+
 
 function principal() {
   const conteudo = gerar();

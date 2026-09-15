@@ -246,8 +246,19 @@
     });
   }
 
+  /**
+   * Pasta onde estão css/js/vendor/shared.
+   * No servidor é a própria raiz; na página gerada para o GitHub Pages a meta
+   * licitapro-base indica "public/" (o repositório é publicado como está).
+   */
+  function prefixoBase() {
+    const meta = document.querySelector('meta[name="licitapro-base"]');
+    return meta && meta.content ? meta.content : '';
+  }
+
   async function carregarLista(arquivos, marca) {
-    for (const arquivo of arquivos) await carregarScript(arquivo);
+    const prefixo = prefixoBase();
+    for (const arquivo of arquivos) await carregarScript(prefixo + arquivo);
     marca.carregado = true;
   }
 

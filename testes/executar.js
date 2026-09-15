@@ -928,7 +928,15 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
     'index.html da raiz desatualizado — rode: npm run paginas'
   );
   const raiz = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
-  assert.ok(raiz.includes('<base href="public/" />'), 'a raiz aponta para os arquivos do sistema');
+  assert.ok(raiz.includes('<meta name="licitapro-base" content="public/" />'), 'a raiz avisa onde estão css/js/vendor');
+  assert.ok(raiz.includes('href="public/css/estilos.css"'), 'CSS com o caminho da raiz');
+  assert.ok(raiz.includes('src="public/js/modo-estatico.js"'), 'scripts com o caminho da raiz');
+  assert.ok(!/<base\s/i.test(raiz), 'sem <base>, para os links internos ficarem em /licitapro/');
+  assert.strictEqual(
+    new URL('#/documentos', 'https://marcossilva023l20.github.io/licitapro/').pathname,
+    '/licitapro/',
+    'navegação interna permanece na raiz do site'
+  );
   assert.ok(raiz.includes('js/modo-estatico.js'), 'a raiz carrega o modo local');
   assert.ok(raiz.includes('id="tela-login"'), 'a raiz é a tela do sistema');
 
@@ -952,8 +960,25 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   assert.ok($('#botao-nova-proposta'), 'botão de nova proposta disponível na raiz');
   assert.ok($('#nome-usuario').textContent.length > 0, 'perfil local no topo');
 
-  // e o "Sobre o LicitaPro" leva à apresentação
+  // e o "Sobre o LicitaPro" leva à apresentação (arquivo que existe no repositório)
   assert.strictEqual($('.banner-local-sobre').getAttribute('href'), 'apresentacao.html', 'link da apresentação');
+  assert.ok(fs.existsSync(path.join(RAIZ, 'apresentacao.html')), 'a apresentação existe no repositório');
+
+  // no endereço da raiz, o PDF também sai: as bibliotecas vêm de public/vendor/
+  const criado = await aberto.window.API.pedir('/api/documentos', {
+    method: 'POST',
+    corpo: {
+      tipo: 'proposta',
+      numero: { sequencial: 1, ano: 2026, grupo: '' },
+      orgao: { nome: 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA' },
+      itens: [{ descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL', unidade: 'UND', quantidade: 6, precoVenda: 1490 }],
+    },
+  });
+  const blob = await aberto.window.API.previaPdf(criado.documento);
+  assert.ok(blob && blob.size > 2000, 'PDF gerado na raiz do Pages (' + (blob ? blob.size : 0) + ' bytes)');
+  const inicio = new Uint8Array(await blob.arrayBuffer()).slice(0, 5);
+  assert.strictEqual(String.fromCharCode.apply(null, inicio), '%PDF-', 'PDF válido na raiz do Pages');
+  assert.ok(aberto.window.pdfMake, 'pdfmake carregado de public/vendor/');
   aberto.window.close();
 });
 

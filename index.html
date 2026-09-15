@@ -4,18 +4,19 @@
 <!--
   ATENÇÃO: arquivo gerado por scripts/paginas.js — não edite à mão.
   É a página do sistema (public/index.html) preparada para o GitHub Pages,
-  que publica apenas arquivos estáticos. O <base href="public/"> faz o
-  navegador procurar css/, js/, vendor/ e ../shared/ no lugar certo.
+  que publica apenas arquivos estáticos: os caminhos relativos foram
+  reescritos (css/ e js/ passam a public/..., ../shared/ vira shared/) e a
+  meta licitapro-base avisa o modo local de onde vêm as bibliotecas.
   Para alterar, edite public/index.html e rode: npm run paginas
 -->
-  <base href="public/" />
+  <meta name="licitapro-base" content="public/" />
   <meta name="licitapro-sobre" content="apresentacao.html" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LicitaPro — Propostas de licitação e orçamentos em PDF</title>
   <meta name="description" content="Monte propostas de licitação e orçamentos importando a planilha de itens e gere o PDF pronto para envio." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230F766E'/%3E%3Cpath d='M18 44V20h6v18h12v6H18z' fill='white'/%3E%3Ccircle cx='45' cy='24' r='5' fill='%235EEAD4'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="css/estilos.css" />
+  <link rel="stylesheet" href="public/css/estilos.css" />
 </head>
 <body>
   <!-- ============================== TELA DE ENTRADA ============================== -->
@@ -671,11 +672,11 @@
     </div>
   </div>
 
-  <script src="../shared/format.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/editar.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/modo-estatico.js"></script>
+  <script src="shared/format.js"></script>
+  <script src="public/js/api.js"></script>
+  <script src="public/js/ui.js"></script>
+  <script src="public/js/editar.js"></script>
+  <script src="public/js/app.js"></script>
+  <script src="public/js/modo-estatico.js"></script>
 </body>
 </html>
