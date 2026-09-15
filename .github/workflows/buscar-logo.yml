@@ -101,14 +101,27 @@ jobs:
           sha256sum public/marca/logo.png
           echo "::notice title=logo-marca-resumo::PNG $(stat -c%s public/marca/logo.png) bytes em $TOTAL pedacos | sha256 $(sha256sum public/marca/logo.png | cut -c1-64)"
 
-      - name: Anotações dos pedaços (1)
-        run: bash .github/enviar-pedacos.sh 1 10
-      - name: Anotações dos pedaços (2)
-        run: bash .github/enviar-pedacos.sh 11 20
-      - name: Anotações dos pedaços (3)
-        run: bash .github/enviar-pedacos.sh 21 30
-      - name: Anotações dos pedaços (4)
-        run: bash .github/enviar-pedacos.sh 31 40
+      - name: Anotações dos pedaços (1 a 10)
+        run: |
+          i=0
+          for arquivo in $(ls /tmp/pedacos/pedaco*.txt | sed -n '1,10p'); do
+            i=$((i + 1))
+            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::$(cat "$arquivo")"
+          done
+      - name: Anotações dos pedaços (11 a 20)
+        run: |
+          i=10
+          for arquivo in $(ls /tmp/pedacos/pedaco*.txt | sed -n '11,20p'); do
+            i=$((i + 1))
+            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::$(cat "$arquivo")"
+          done
+      - name: Anotações dos pedaços (21 a 30)
+        run: |
+          i=20
+          for arquivo in $(ls /tmp/pedacos/pedaco*.txt | sed -n '21,30p'); do
+            i=$((i + 1))
+            echo "::notice title=logo-pedaco-$(printf '%02d' $i)::$(cat "$arquivo")"
+          done
 
       - name: Guardar como artefato (cópia de segurança)
         if: always()
