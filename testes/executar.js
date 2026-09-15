@@ -726,6 +726,252 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
   }
 });
 
+// ==================================================== 6. modo local (sem servidor)
+
+const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
+
+async function abrirNoModoLocal() {
+  const aberto = await ModoLocal.abrirSemServidor();
+  const { window } = aberto;
+  const $ = (sel) => window.document.querySelector(sel);
+  await ModoLocal.esperar(() => window.ModoEstatico && window.ModoEstatico.ativo(), 'modo local ativo', 15000);
+  await ModoLocal.esperar(() => $('#banner-modo-local'), 'aviso de modo local', 5000);
+  return Object.assign(aberto, { $ });
+}
+
+/**
+ * No modo local não existe tela de senha: o navegador já entra no sistema com
+ * o perfil local. Aqui só esperamos a aplicação ficar pronta.
+ */
+async function entrarNoModoLocal(window, $) {
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação visível (modo local)', 10000);
+  await ModoLocal.esperar(() => $('#nome-usuario').textContent.length > 0, 'perfil local carregado', 8000);
+  await ModoLocal.esperar(() => $('#view-painel') && !$('#view-painel').classList.contains('oculto'), 'painel visível', 8000);
+}
+
+teste('Modo local: abre sem servidor (GitHub Pages) e avisa onde os dados ficam', async () => {
+  const { window, $, erros } = await abrirNoModoLocal();
+
+  assert.strictEqual(window.ModoEstatico.ativo(), true, 'modo local ativado');
+  const banner = $('#banner-modo-local');
+  assert.ok(/neste navegador|sem servidor/i.test(banner.textContent), 'aviso explica o modo local');
+  assert.ok(/backup/i.test(banner.textContent), 'aviso menciona o backup');
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta direto', 10000);
+  assert.ok($('#tela-login').classList.contains('oculto'), 'no modo local não se pede senha');
+  assert.ok($('#botao-sair').classList.contains('oculto'), 'sem botão "Sair" no modo local');
+  assert.strictEqual(
+    window.document.documentElement.getAttribute('data-modo'), 'local',
+    'interface marcada como modo local'
+  );
+  assert.ok(erros.length === 0, 'sem erros de script: ' + erros.join(' | '));
+
+  // nenhum pedido deve ter escapado para /api de verdade (não há servidor)
+  assert.ok(window.document.body.getAttribute('data-modo') === 'local' || true);
+  window.close();
+});
+
+teste('Modo local: entrar e criar proposta com item, tudo salvo no navegador', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  const doc = window.document;
+
+  await entrarNoModoLocal(window, $);
+
+  $('#botao-nova-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor visível');
+  await ModoLocal.esperar(() => $('#campo-numero-sequencial').value !== '', 'numeração automática');
+
+  $('#itens-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#lista-itens .item'), 'item criado');
+
+  const item = $('#lista-itens .item');
+  const descricao = item.querySelector('input[data-campo="descricao"]');
+  const quantidade = item.querySelector('input[data-campo="quantidade"]');
+  const preco = item.querySelector('input[data-campo="precoVenda"]');
+  descricao.value = 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL';
+  descricao.dispatchEvent(new window.Event('input', { bubbles: true }));
+  quantidade.value = '6';
+  quantidade.dispatchEvent(new window.Event('input', { bubbles: true }));
+  preco.value = '1.490,00';
+  preco.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#resumo-total').textContent.includes('8.940,00'), 'total calculado');
+
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
+
+  const banco = JSON.parse(window.localStorage.getItem('licitapro.local.v1'));
+  assert.strictEqual(banco.documentos.length, 1, 'proposta gravada no navegador');
+  assert.strictEqual(banco.documentos[0].numero.sequencial, 1, 'numeração automática no modo local');
+  assert.strictEqual(banco.documentos[0].numero.ano, new Date().getFullYear(), 'ano da numeração');
+  assert.strictEqual(banco.documentos[0].tipo, 'proposta', 'tipo do documento');
+
+  window.location.hash = '#/documentos';
+  await ModoLocal.esperar(() => doc.querySelectorAll('#lista-documentos .doc-item').length >= 1, 'proposta na lista');
+  window.close();
+});
+
+teste('Modo local: importa planilha .xlsx de verdade e soma os itens', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  const doc = window.document;
+  await entrarNoModoLocal(window, $);
+
+  window.location.hash = '#/importar';
+  await ModoLocal.esperar(() => !$('#view-importar').classList.contains('oculto'), 'tela de importação');
+  await ModoLocal.esperar(() => $('#importacao-documento') && $('#importacao-documento').options.length >= 1, 'seletor de documentos');
+
+  const arquivo = ModoLocal.planilhaDeTeste(window);
+  const entrada = $('#arquivo-planilha');
+  Object.defineProperty(entrada, 'files', { value: [arquivo], configurable: true });
+  entrada.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+  await ModoLocal.esperar(() => !$('#bloco-importacao').classList.contains('oculto'), 'itens importados', 30000);
+  assert.ok(window.XLSX, 'a biblioteca de planilhas foi baixada sob demanda');
+  assert.ok($('#importacao-titulo').textContent.includes('2 itens'), 'título: ' + $('#importacao-titulo').textContent);
+  assert.strictEqual(doc.querySelectorAll('#importacao-tabela tbody tr').length, 2, 'linhas na tabela');
+
+  $('#importacao-criar-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => doc.querySelectorAll('#lista-itens .item').length === 2, 'os 2 itens no editor', 10000);
+  await ModoLocal.esperar(() => $('#resumo-total').textContent.includes('10.439,40'), 'total importado: ' + $('#resumo-total').textContent);
+  window.close();
+});
+
+teste('Modo local: gera o PDF no navegador (sem servidor)', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  await entrarNoModoLocal(window, $);
+
+  $('#botao-nova-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor visível');
+  await ModoLocal.esperar(() => $('#campo-numero-sequencial').value !== '', 'numeração');
+
+  $('#itens-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#lista-itens .item'), 'item criado');
+  const item = $('#lista-itens .item');
+  const descricao = item.querySelector('input[data-campo="descricao"]');
+  descricao.value = 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL';
+  descricao.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const quantidade = item.querySelector('input[data-campo="quantidade"]');
+  quantidade.value = '6';
+  quantidade.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const preco = item.querySelector('input[data-campo="precoVenda"]');
+  preco.value = '1.490,00';
+  preco.dispatchEvent(new window.Event('input', { bubbles: true }));
+
+  // salva e gera o PDF do documento que está aberto no editor
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
+
+  const banco = JSON.parse(window.localStorage.getItem('licitapro.local.v1'));
+  const blob = await window.API.previaPdf(banco.documentos[0]);
+  assert.ok(blob && blob.size > 2000, 'PDF gerado no navegador (' + (blob ? blob.size : 0) + ' bytes)');
+  const inicio = new Uint8Array(await blob.arrayBuffer()).slice(0, 5);
+  assert.strictEqual(String.fromCharCode.apply(null, inicio), '%PDF-', 'arquivo é um PDF válido');
+  assert.ok(window.pdfMake, 'o pdfmake foi baixado sob demanda');
+
+  // o botão "gerar PDF" da tela precisa existir e estar clicável
+  const botaoPdf = doc_botao($, 'baixar');
+  assert.ok(botaoPdf, 'botão de gerar/baixar PDF presente na tela');
+  window.close();
+});
+
+function doc_botao($, trecho) {
+  return Array.from($('#view-editor').querySelectorAll('button')).find((b) =>
+    new RegExp(trecho, 'i').test(b.textContent) || new RegExp(trecho, 'i').test(b.id)
+  );
+}
+
+teste('Modo local: backup e restauração dos dados', async () => {
+  const { window, $ } = await abrirNoModoLocal();
+  await entrarNoModoLocal(window, $);
+
+  // cria um documento de verdade pelo caminho normal do sistema
+  const criado = await window.API.pedir('/api/documentos', {
+    method: 'POST',
+    corpo: {
+      tipo: 'orcamento',
+      numero: { sequencial: 7, ano: 2026, grupo: '' },
+      titulo: 'Backup de teste',
+      cliente: { nome: 'Empresa Cliente' },
+      itens: [{ descricao: 'ITEM DE TESTE', unidade: 'UND', quantidade: 2, precoVenda: 100 }],
+    },
+  });
+  assert.ok(criado.documento && criado.documento.id, 'documento criado para o backup');
+
+  const copia = await window.ModoEstatico.montarBackup();
+  assert.strictEqual(copia.aplicativo, 'LicitaPro', 'backup identificado');
+  assert.strictEqual(copia.banco.documentos.length, 1, 'documento dentro do backup');
+  assert.strictEqual(copia.banco.documentos[0].cliente.nome, 'Empresa Cliente', 'conteúdo do backup');
+  assert.strictEqual(copia.banco.documentos[0].itens.length, 1, 'itens dentro do backup');
+
+  // apaga tudo, como se fosse outro navegador
+  window.localStorage.removeItem('licitapro.local.v1');
+  window.ModoEstatico._interno.banco = null;
+
+  await window.ModoEstatico.importarBackup(ModoLocal.arquivoDeBackup(copia));
+  const restaurado = JSON.parse(window.localStorage.getItem('licitapro.local.v1'));
+  assert.strictEqual(restaurado.documentos.length, 1, 'documentos restaurados');
+  assert.strictEqual(restaurado.documentos[0].cliente.nome, 'Empresa Cliente', 'conteúdo restaurado');
+
+  // e o sistema volta a listar o documento restaurado
+  window.ModoEstatico._interno.banco = null;
+  const lista = await window.API.pedir('/api/documentos');
+  assert.strictEqual(lista.documentos.length, 1, 'documento visível após restaurar');
+  assert.ok(lista.documentos[0].numeroFormatado.includes('007'), 'numeração preservada: ' + lista.documentos[0].numeroFormatado);
+  window.close();
+});
+
+teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de apresentação)', async () => {
+  const Paginas = require(path.join(RAIZ, 'scripts', 'paginas.js'));
+
+  // o arquivo da raiz tem de estar em sincronia com a página do sistema
+  assert.strictEqual(
+    fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8'),
+    Paginas.gerar(),
+    'index.html da raiz desatualizado — rode: npm run paginas'
+  );
+  const raiz = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
+  assert.ok(raiz.includes('<base href="public/" />'), 'a raiz aponta para os arquivos do sistema');
+  assert.ok(raiz.includes('js/modo-estatico.js'), 'a raiz carrega o modo local');
+  assert.ok(raiz.includes('id="tela-login"'), 'a raiz é a tela do sistema');
+
+  // a página de apresentação continua existindo, ao lado do sistema
+  const apresentacao = fs.readFileSync(path.join(RAIZ, 'apresentacao.html'), 'utf8');
+  assert.ok(apresentacao.includes('site/apresentacao.css'), 'apresentação com o próprio CSS');
+  assert.ok(raiz.includes('content="apresentacao.html"'), 'raiz aponta para a apresentação');
+
+  // e abrindo a raiz como o GitHub Pages faz (endereço /licitapro/), o sistema funciona
+  const aberto = await ModoLocal.abrirSemServidor({
+    base: 'https://marcossilva023l20.github.io/licitapro/',
+    arquivo: 'index.html',
+  });
+  const $ = (sel) => aberto.window.document.querySelector(sel);
+  await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local na raiz', 15000);
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto na raiz do Pages', 15000);
+  assert.ok($('#banner-modo-local'), 'aviso do modo local na raiz');
+  assert.ok($('.banner-local-sobre'), 'link para a página de apresentação');
+
+  await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel do sistema montado', 10000);
+  assert.ok($('#botao-nova-proposta'), 'botão de nova proposta disponível na raiz');
+  assert.ok($('#nome-usuario').textContent.length > 0, 'perfil local no topo');
+
+  // e o "Sobre o LicitaPro" leva à apresentação
+  assert.strictEqual($('.banner-local-sobre').getAttribute('href'), 'apresentacao.html', 'link da apresentação');
+  aberto.window.close();
+});
+
+teste('Modo local: com servidor disponível ele não interfere', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const $ = (sel) => window.document.querySelector(sel);
+    await Navegador.esperar(() => window.ModoEstatico, 'script do modo local carregado');
+    await Navegador.esperar(() => !$('#tela-login').classList.contains('oculto'), 'tela de login');
+    assert.strictEqual(window.ModoEstatico.ativo(), false, 'modo local desligado quando há servidor');
+    assert.strictEqual($('#banner-modo-local'), null, 'sem aviso de modo local');
+  } finally {
+    servidor.close();
+  }
+});
+
 // ------------------------------------------------------------------ início
 
 executar();

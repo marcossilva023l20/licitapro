@@ -9,6 +9,7 @@
     "dev": "node --watch server/index.js",
     "testes": "node testes/executar.js",
     "modelo": "node scripts/gerar-modelo.js",
+    "paginas": "node scripts/paginas.js",
     "usuarios": "node scripts/usuarios.js"
   },
   "engines": {

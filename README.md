@@ -7,8 +7,11 @@ preenchimento.
 [![Testes](https://github.com/marcossilva023l20/licitapro/actions/workflows/testes.yml/badge.svg)](https://github.com/marcossilva023l20/licitapro/actions/workflows/testes.yml)
 [![Publicar no Render](https://img.shields.io/badge/Render-publicar-0f766e?logo=render&logoColor=white)](https://render.com/deploy?repo=https://github.com/marcossilva023l20/licitapro)
 
-> Quer colocar no ar? Veja a seção **[6. Publicando na internet](#6-publicando-na-internet-hospedagem)**
-> (Render, Railway, Docker ou VPS). O GitHub Pages não roda este projeto porque ele tem backend.
+> **Usar agora:** <https://marcossilva023l20.github.io/licitapro/> — o endereço do GitHub Pages
+> abre o próprio sistema, rodando **no navegador (modo local)**, sem servidor. Nesse modo os
+> documentos ficam salvos no navegador e há backup/restauração em arquivo. Para **vários usuários**
+> com login e senha, publique com servidor — veja
+> **[6. Publicando na internet](#6-publicando-na-internet-hospedagem)** (Render, Railway, Docker ou VPS).
 
 O PDF segue a estrutura do modelo enviado pelo usuário:
 
@@ -253,6 +256,44 @@ pm2 save && pm2 startup
 Rode localmente (`npm start`) e use <https://ngrok.com> para gerar um link temporário.
 Não use isso com dados reais de clientes.
 
+### Opção F — GitHub Pages (modo local, sem servidor)
+
+O endereço <https://marcossilva023l20.github.io/licitapro/> abre o sistema completo funcionando
+**dentro do navegador**. É o mesmo sistema (mesmas telas, mesma planilha, mesmo PDF), mas sem
+backend: o GitHub Pages publica apenas arquivos estáticos.
+
+| | Modo local (GitHub Pages) | Com servidor (Render/Railway/Docker/VPS) |
+|---|---|---|
+| Onde ficam os documentos | No navegador usado (localStorage) | No servidor (arquivo `db.json`) |
+| Fotos e logos | No navegador (IndexedDB) | Em `data/uploads` |
+| Login e senha | Não (o acesso é o do próprio navegador) | Sim, vários usuários isolados |
+| Vários usuários | Não — cada navegador tem os seus dados | Sim |
+| Backup | Botão *Baixar backup* / *Restaurar backup* | Cópia da pasta de dados |
+
+Como funciona (e por que é seguro): o navegador guarda os documentos **naquele computador e
+naquele navegador**. Nada é enviado para fora — os únicos downloads são as bibliotecas que geram
+o PDF e leem a planilha (`public/vendor/`), servidas pelo próprio site.
+
+Recomendações no modo local:
+
+1. Abra o site, vá em **Minha empresa** e preencha os dados que saem no PDF (razão social, CNPJ,
+   endereço, logo e assinatura).
+2. Importe a planilha e gere os PDFs normalmente.
+3. Clique em **Baixar backup** de tempos em tempos e guarde o arquivo `.json`. Para trocar de
+   computador (ou recuperar), use **Restaurar backup**.
+4. Não use janela anônima/privada nem limpe os dados do site sem antes baixar o backup.
+
+Para gerar a página que o Pages publica na raiz (o arquivo `index.html` da raiz é gerado):
+
+```bash
+npm run paginas              # grava o index.html da raiz
+npm run paginas -- --verificar   # confere se está atualizado (roda nos testes)
+```
+
+A página de apresentação do projeto fica em `apresentacao.html`
+(<https://marcossilva023l20.github.io/licitapro/apresentacao.html>) e o servidor a expõe em
+`/apresentacao`.
+
 ---
 
 ## 7. Segurança
@@ -276,8 +317,12 @@ npm run testes
 Cobre formatação brasileira (moeda, por extenso, máscaras), geração do modelo de planilha,
 importação de arquivos (xlsx, csv, cabeçalhos alternativos, arquivos inválidos), cálculo de
 totais, geração dos PDFs de proposta e orçamento, rotas HTTP (autenticação, CRUD, PDF,
-planilha, isolamento entre usuários) e um teste de navegador com **jsdom** que faz login,
-cria uma proposta, adiciona item, confere os cálculos, salva e abre a pré-visualização.
+planilha, isolamento entre usuários) e testes de navegador com **jsdom** que fazem login,
+criam proposta, adicionam itens, conferem os cálculos, salvam e abrem a pré-visualização.
+
+Também cobre o **modo local** (GitHub Pages): a página da raiz publicada abre o sistema sem
+servidor, importa uma planilha `.xlsx` de verdade, gera um PDF válido (`%PDF-`) no navegador,
+salva/restaura backup e — quando existe servidor — o modo local fica desligado.
 
 ---
 
@@ -296,12 +341,25 @@ server/
   colunas.js            → colunas da planilha (fonte única de verdade)
   imagens.js            → links do Drive, download e cache de fotos
   routes/               → rotas de autenticação, documentos e arquivos
+  routes/               → rotas de autenticação, documentos e arquivos
 public/
   index.html            → interface (SPA)
   css/estilos.css
   js/api.js, ui.js, editar.js, app.js
-shared/format.js        → formatações em pt-BR (usado no servidor e no navegador)
-scripts/                → utilitários (gerar modelo, administrar usuários)
+  js/modo-estatico.js   → modo local: atende /api/* no navegador (GitHub Pages)
+  js/navegador-imagens.js → fotos enviadas/enviadas do computador no navegador
+  vendor/               → pdfmake, fontes e xlsx usados no modo local
+shared/                 → mesmo código usado no servidor e no navegador
+  format.js             → formatações em pt-BR
+  colunas.js            → colunas da planilha (fonte única de verdade)
+  importar.js           → leitura das planilhas (Node e navegador)
+  modelo-importacao.js  → modelo .xlsx para download (Node e navegador)
+  documento-schema.js   → validação das propostas e orçamentos
+  documento-pdf.js      → montagem do PDF (Node e navegador)
+  imagens-links.js      → links do Google Drive
+index.html              → gerado por `npm run paginas` (raiz publicada no Pages)
+apresentacao.html       → página de apresentação do projeto
+scripts/                → utilitários (gerar modelo, usuários, página do Pages)
 testes/                 → suíte de testes
 data/                   → dados gerados em execução (não versionado)
 ```
@@ -319,6 +377,8 @@ data/                   → dados gerados em execução (não versionado)
 | Quero apagar todos os dados | pare o sistema e remova a pasta `data/` |
 | O PDF sai sem o catálogo | confira a aba **Layout do PDF** → "Incluir página de catálogo" |
 | A logo não aparece no cabeçalho | envie a imagem em *Minha empresa* e marque "Usar logo no cabeçalho" |
+| (GitHub Pages) os documentos sumiram | eles ficam no navegador usado; restaure pelo **Restaurar backup** |
+| (GitHub Pages) quero usar em outro computador | baixe o backup em um e restaure no outro |
 
 ---
 

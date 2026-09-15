@@ -1,250 +1,681 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<!--
+  ATENÇÃO: arquivo gerado por scripts/paginas.js — não edite à mão.
+  É a página do sistema (public/index.html) preparada para o GitHub Pages,
+  que publica apenas arquivos estáticos. O <base href="public/"> faz o
+  navegador procurar css/, js/, vendor/ e ../shared/ no lugar certo.
+  Para alterar, edite public/index.html e rode: npm run paginas
+-->
+  <base href="public/" />
+  <meta name="licitapro-sobre" content="apresentacao.html" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LicitaPro — propostas de licitação e orçamentos em PDF</title>
-  <meta name="description" content="Sistema web que importa a planilha de itens do edital e gera a proposta de licitação e o orçamento em PDF, prontos para envio." />
+  <title>LicitaPro — Propostas de licitação e orçamentos em PDF</title>
+  <meta name="description" content="Monte propostas de licitação e orçamentos importando a planilha de itens e gere o PDF pronto para envio." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230F766E'/%3E%3Cpath d='M18 44V20h6v18h12v6H18z' fill='white'/%3E%3Ccircle cx='45' cy='24' r='5' fill='%235EEAD4'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="site/apresentacao.css" />
+  <link rel="stylesheet" href="css/estilos.css" />
 </head>
 <body>
-  <header class="topo">
-    <div class="envelope topo-conteudo">
-      <div class="marca">
+  <!-- ============================== TELA DE ENTRADA ============================== -->
+  <section id="tela-login" class="tela-login oculto">
+    <div class="login-fundo"></div>
+    <div class="login-conteudo">
+      <header class="login-cabecalho">
+        <div class="marca">
+          <span class="marca-icone">LP</span>
+          <div>
+            <h1>LicitaPro</h1>
+            <p>Propostas de licitação e orçamentos em PDF</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="login-grade">
+        <div class="login-apresentacao">
+          <h2>Da planilha de itens ao PDF do edital em poucos minutos.</h2>
+          <ul class="lista-beneficios">
+            <li><strong>Importe a planilha</strong> de itens e o sistema preenche tudo automaticamente.</li>
+            <li><strong>Proposta de licitação</strong> com órgão, processo, prazo, tabela de preços, catálogo com fotos e assinatura.</li>
+            <li><strong>Orçamento comercial</strong> com condições de pagamento, validade e dados bancários.</li>
+            <li><strong>Botão Gerar PDF</strong> — baixe ou imprima o documento pronto para envio.</li>
+            <li><strong>Histórico</strong> de propostas com numeração, status (ganha/perdida) e busca.</li>
+          </ul>
+          <div class="cartao-destaque">
+            <div>
+              <strong>Modelo de planilha para importação</strong>
+              <p>Baixe o .xlsx, preencha os itens e envie no site.</p>
+            </div>
+            <a class="botao botao-claro" href="/api/modelo-planilha">Baixar modelo</a>
+          </div>
+        </div>
+
+        <div class="login-caixa">
+          <div class="abas" role="tablist">
+            <button class="aba ativa" data-aba="entrar" type="button">Entrar</button>
+            <button class="aba" data-aba="criar" type="button">Criar conta</button>
+          </div>
+
+          <form id="form-login" class="formulario" autocomplete="on">
+            <label>E-mail<input type="email" name="email" required placeholder="seu@email.com.br" autocomplete="username" /></label>
+            <label>Senha<input type="password" name="senha" required placeholder="••••••••" autocomplete="current-password" /></label>
+            <button class="botao botao-primario botao-largo" type="submit">Entrar</button>
+            <p class="aviso-erro oculto" data-erro></p>
+          </form>
+
+          <form id="form-criar" class="formulario oculto" autocomplete="on">
+            <label>Nome completo<input type="text" name="nome" required placeholder="Seu nome" /></label>
+            <label>E-mail<input type="email" name="email" required placeholder="seu@email.com.br" autocomplete="username" /></label>
+            <label>Senha (mínimo 6 caracteres)<input type="password" name="senha" required minlength="6" autocomplete="new-password" /></label>
+            <button class="botao botao-primario botao-largo" type="submit">Criar conta e entrar</button>
+            <p class="aviso-erro oculto" data-erro></p>
+          </form>
+        </div>
+      </div>
+
+      <footer class="login-rodape">
+        <span data-somente-servidor>Seus dados ficam salvos no servidor da sua empresa.</span>
+        <span data-modo-local-forcar>Modo local: seus documentos ficam salvos neste navegador.</span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ================================= APLICAÇÃO ================================= -->
+  <div id="app" class="app oculto">
+    <header class="topo">
+      <button class="botao-icone so-mobile" id="alternar-menu" title="Menu" type="button">☰</button>
+      <a class="marca marca-clara" href="#/painel">
         <span class="marca-icone">LP</span>
         <strong>LicitaPro</strong>
-      </div>
-      <nav class="topo-links">
-        <a href="#recursos">Recursos</a>
-        <a href="#exemplos">Exemplos de PDF</a>
-        <a href="#planilha">Planilha</a>
-        <a href="#publicar">Como publicar</a>
-        <a class="botao botao-claro" href="https://github.com/marcossilva023l20/licitapro">Ver no GitHub</a>
+      </a>
+
+      <nav class="navegacao" id="navegacao">
+        <a href="#/painel" data-rota="painel">Painel</a>
+        <a href="#/documentos" data-rota="documentos">Documentos</a>
+        <a href="#/importar" data-rota="importar">Importar planilha</a>
+        <a href="#/empresa" data-rota="empresa">Minha empresa</a>
       </nav>
-    </div>
-  </header>
 
-  <section class="capa">
-    <div class="envelope capa-grade">
-      <div>
-        <span class="etiqueta">Sistema web — Node.js · PDF · Planilha</span>
-        <h1>Da planilha do edital ao PDF da proposta em poucos minutos.</h1>
-        <p class="capa-texto">
-          O <strong>LicitaPro</strong> importa os itens da planilha, monta a
-          <strong>proposta de licitação</strong> e o <strong>orçamento comercial</strong> com a sua marca,
-          as fotos dos produtos, o valor total por extenso e o bloco de assinatura —
-          e entrega tudo em <strong>PDF pronto para enviar</strong>.
-        </p>
-        <div class="capa-botoes">
-          <a class="botao botao-primario" href="https://render.com/deploy?repo=https://github.com/marcossilva023l20/licitapro">Publicar no Render</a>
-          <a class="botao" href="#publicar">Ver passo a passo</a>
-          <a class="botao botao-fantasma" href="https://github.com/marcossilva023l20/licitapro/pull/1">Abrir o pull request</a>
-        </div>
-        <p class="aviso">
-          <strong>Atenção:</strong> este endereço (GitHub Pages) mostra apenas a apresentação do projeto.
-          O sistema precisa de um servidor Node para rodar — veja <a href="#publicar">como publicar</a>.
-        </p>
-      </div>
-
-      <div class="capa-figura">
-        <div class="janela">
-          <div class="janela-barra"><span></span><span></span><span></span> <em>licitapro — Proposta de Fornecimento nº 001/2026</em></div>
-          <div class="janela-corpo">
-            <div class="falso-campo">Órgão / UASG <b>UASG 787010 — CENTRO DE INTENDÊNCIA DA MARINHA</b></div>
-            <div class="falso-campo">Processo nº <b>44/2026</b></div>
-            <table class="falso-tabela">
-              <thead><tr><th>Item</th><th>Especificação</th><th>QTD</th><th>Valor</th></tr></thead>
-              <tbody>
-                <tr><td>1</td><td>RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL</td><td>6</td><td>R$ 8.940,00</td></tr>
-                <tr><td>2</td><td>BATERIA EXTRA 1500 mAh</td><td>6</td><td>R$ 1.499,40</td></tr>
-              </tbody>
-            </table>
-            <div class="falso-total"><span>TOTAL DA PROPOSTA</span><b>R$ 10.439,40</b></div>
-            <div class="falso-botao">Gerar PDF</div>
+      <div class="topo-acoes">
+        <button class="botao botao-primario" id="botao-nova-proposta" type="button">+ Nova proposta</button>
+        <div class="usuario-menu">
+          <button class="usuario-botao" id="botao-usuario" type="button">
+            <span class="avatar" id="avatar-usuario">?</span>
+            <span class="usuario-nome" id="nome-usuario"></span>
+          </button>
+          <div class="usuario-lista oculto" id="lista-usuario">
+            <a href="#/empresa">Dados da empresa</a>
+            <a href="/api/modelo-planilha">Baixar modelo de planilha</a>
+            <button type="button" id="botao-sair" data-somente-servidor>Sair</button>
           </div>
         </div>
       </div>
+    </header>
+
+    <main id="conteudo" class="conteudo">
+      <!-- ------------------------------------------------ Painel -->
+      <section id="view-painel" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Painel</h2>
+            <p class="texto-suave" id="saudacao"></p>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao" id="painel-novo-orcamento" type="button">+ Novo orçamento</button>
+            <button class="botao botao-primario" id="painel-nova-proposta" type="button">+ Nova proposta</button>
+          </div>
+        </div>
+
+        <div class="cartoes-indicadores">
+          <div class="cartao-indicador">
+            <span class="rotulo">Documentos</span>
+            <strong id="ind-total">0</strong>
+            <span class="texto-suave" id="ind-total-valor">R$ 0,00 em valores</span>
+          </div>
+          <div class="cartao-indicador">
+            <span class="rotulo">Propostas enviadas</span>
+            <strong id="ind-enviadas">0</strong>
+            <span class="texto-suave">aguardando resultado</span>
+          </div>
+          <div class="cartao-indicador destaque">
+            <span class="rotulo">Propostas ganhas</span>
+            <strong id="ind-ganhas">0</strong>
+            <span class="texto-suave">parabéns!</span>
+          </div>
+          <div class="cartao-indicador">
+            <span class="rotulo">Modelo de importação</span>
+            <a class="botao botao-claro" href="/api/modelo-planilha">Baixar planilha .xlsx</a>
+            <span class="texto-suave">preencha os itens e envie no site</span>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho">
+            <h3>Últimos documentos</h3>
+            <a class="link" href="#/documentos">ver todos</a>
+          </div>
+          <div id="painel-recentes" class="lista-documentos"></div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Como funciona</h3></div>
+          <ol class="passos">
+            <li><strong>Preencha os dados da empresa</strong> uma única vez em <em>Minha empresa</em> (CNPJ, endereço, banco, representante legal, logo e assinatura).</li>
+            <li><strong>Baixe o modelo de planilha</strong>, cole os itens do edital com quantidade, preço e foto, e envie em <em>Importar planilha</em>.</li>
+            <li><strong>Revise na tela de edição</strong>: descrição, fotos, preços e condições.</li>
+            <li><strong>Clique em Gerar PDF</strong> para baixar a proposta ou o orçamento pronto para enviar ao órgão ou ao cliente.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ Documentos -->
+      <section id="view-documentos" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Documentos</h2>
+            <p class="texto-suave">Propostas e orçamentos salvos no seu usuário.</p>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao" id="docs-novo-orcamento" type="button">+ Novo orçamento</button>
+            <button class="botao botao-primario" id="docs-nova-proposta" type="button">+ Nova proposta</button>
+          </div>
+        </div>
+
+        <div class="filtros">
+          <input type="search" id="filtro-busca" placeholder="Buscar por órgão, cliente, processo ou número..." />
+          <select id="filtro-tipo">
+            <option value="">Todos os tipos</option>
+            <option value="proposta">Propostas</option>
+            <option value="orcamento">Orçamentos</option>
+          </select>
+          <select id="filtro-status">
+            <option value="">Todos os status</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="enviada">Enviada</option>
+            <option value="ganha">Ganha</option>
+            <option value="perdida">Perdida</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+
+        <div id="lista-documentos" class="lista-documentos"></div>
+      </section>
+
+      <!-- ------------------------------------------------ Editor -->
+      <section id="view-editor" class="vista oculto">
+        <div class="editor-topo">
+          <div class="editor-topo-info">
+            <button class="botao botao-fantasma" id="editor-voltar" type="button">← Voltar</button>
+            <div>
+              <h2 id="editor-titulo">Nova proposta</h2>
+              <p class="texto-suave" id="editor-subtitulo"></p>
+            </div>
+          </div>
+          <div class="editor-topo-acoes">
+            <span class="etiqueta-estado" id="editor-estado">Não salvo</span>
+            <button class="botao" id="editor-importar" type="button">Importar planilha</button>
+            <button class="botao" id="editor-exportar" type="button">Exportar itens</button>
+            <button class="botao" id="editor-salvar" type="button">Salvar</button>
+            <button class="botao botao-primario" id="editor-gerar-pdf" type="button">Gerar PDF</button>
+          </div>
+        </div>
+
+        <nav class="abas-editor" id="abas-editor">
+          <button class="aba ativa" data-aba-editor="identificacao" type="button">Identificação</button>
+          <button class="aba" data-aba-editor="itens" type="button">Itens e preços</button>
+          <button class="aba" data-aba-editor="condicoes" type="button">Condições</button>
+          <button class="aba" data-aba-editor="proponente" type="button">Dados do proponente</button>
+          <button class="aba" data-aba-editor="layout" type="button">Layout do PDF</button>
+        </nav>
+
+        <div class="editor-corpo">
+          <div class="editor-formulario">
+            <!-- Identificação -->
+            <div class="painel-aba" data-painel="identificacao">
+              <div class="grade-2">
+                <label class="campo">Tipo de documento
+                  <select id="campo-tipo">
+                    <option value="proposta">Proposta de licitação</option>
+                    <option value="orcamento">Orçamento comercial</option>
+                  </select>
+                </label>
+                <label class="campo">Status
+                  <select id="campo-status">
+                    <option value="rascunho">Rascunho</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="ganha">Ganha</option>
+                    <option value="perdida">Perdida</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </label>
+                <label class="campo">Número — sequencial
+                  <input type="number" id="campo-numero-sequencial" min="1" step="1" />
+                </label>
+                <label class="campo">Ano
+                  <input type="number" id="campo-numero-ano" min="2000" max="2100" step="1" />
+                </label>
+                <label class="campo">Série / grupo (opcional)
+                  <input type="text" id="campo-numero-grupo" placeholder="Ex.: PE-17" />
+                </label>
+                <label class="campo">Data do documento
+                  <input type="date" id="campo-data" />
+                </label>
+              </div>
+
+              <div class="grupo-proposta">
+                <h3>Dados do órgão (proposta de licitação)</h3>
+                <div class="grade-2">
+                  <label class="campo campo-largo">Órgão / UASG
+                    <input type="text" id="campo-orgao-nome" placeholder="Ex.: UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA EM BRASÍLIA" />
+                  </label>
+                  <label class="campo">UASG
+                    <input type="text" id="campo-orgao-uasg" placeholder="787010" />
+                  </label>
+                  <label class="campo">Processo nº
+                    <input type="text" id="campo-orgao-processo" placeholder="44/2026" />
+                  </label>
+                  <label class="campo">Modalidade
+                    <input type="text" id="campo-orgao-modalidade" placeholder="Pregão Eletrônico" />
+                  </label>
+                  <label class="campo">Edital / Pregão
+                    <input type="text" id="campo-orgao-pregao" placeholder="Pregão nº 17/2026" />
+                  </label>
+                  <label class="campo">Prazo de entrega
+                    <input type="text" id="campo-orgao-prazo" placeholder="Conforme Edital." />
+                  </label>
+                  <label class="campo campo-largo">Objeto
+                    <textarea id="campo-orgao-objeto" rows="2" placeholder="Aquisição de rádios transceptores e acessórios..."></textarea>
+                  </label>
+                </div>
+              </div>
+
+              <div class="grupo-orcamento oculto">
+                <h3>Dados do cliente (orçamento)</h3>
+                <div class="grade-2">
+                  <label class="campo campo-largo">Cliente / empresa
+                    <input type="text" id="campo-cliente-nome" placeholder="Nome do cliente" />
+                  </label>
+                  <label class="campo">CNPJ / CPF
+                    <input type="text" id="campo-cliente-cnpj" placeholder="00.000.000/0001-00" />
+                  </label>
+                  <label class="campo">Contato
+                    <input type="text" id="campo-cliente-contato" placeholder="Nome do responsável" />
+                  </label>
+                  <label class="campo">Telefone
+                    <input type="text" id="campo-cliente-telefone" placeholder="(00) 00000-0000" />
+                  </label>
+                  <label class="campo">E-mail
+                    <input type="email" id="campo-cliente-email" placeholder="contato@cliente.com.br" />
+                  </label>
+                  <label class="campo campo-largo">Endereço
+                    <input type="text" id="campo-cliente-endereco" placeholder="Rua, número, bairro, cidade - UF, CEP" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Itens -->
+            <div class="painel-aba oculto" data-painel="itens">
+              <div class="barra-itens">
+                <button class="botao botao-primario" id="itens-adicionar" type="button">+ Adicionar item</button>
+                <button class="botao" id="itens-importar" type="button">Importar da planilha</button>
+                <button class="botao" id="itens-limpar" type="button">Limpar itens</button>
+                <div class="ferramenta-margem">
+                  <span>Margem sobre o custo:</span>
+                  <input type="number" id="margem-percentual" value="30" min="-90" max="500" step="1" />
+                  <span>%</span>
+                  <button class="botao" id="aplicar-margem" type="button">Aplicar em todos</button>
+                </div>
+              </div>
+
+              <div id="lista-itens" class="lista-itens"></div>
+              <p class="texto-suave vazio-itens" id="itens-vazio">
+                Nenhum item ainda. Clique em <strong>Adicionar item</strong> ou importe a planilha com os itens do edital.
+              </p>
+
+              <div class="resumo-valores">
+                <div><span>Itens</span><strong id="resumo-qtd-itens">0</strong></div>
+                <div><span>Subtotal</span><strong id="resumo-subtotal">R$ 0,00</strong></div>
+                <div><span>Custo total</span><strong id="resumo-custo">R$ 0,00</strong></div>
+                <div><span>Lucro estimado</span><strong id="resumo-lucro">R$ 0,00</strong></div>
+                <div class="destaque"><span>Total</span><strong id="resumo-total">R$ 0,00</strong></div>
+              </div>
+
+              <div class="grade-2 bloco-desconto">
+                <label class="campo">Desconto
+                  <select id="campo-desconto-modo">
+                    <option value="nenhum">Sem desconto</option>
+                    <option value="percentual">Percentual (%)</option>
+                    <option value="valor">Valor (R$)</option>
+                  </select>
+                </label>
+                <label class="campo">Valor do desconto
+                  <input type="text" id="campo-desconto-valor" inputmode="decimal" placeholder="0,00" />
+                </label>
+                <label class="campo checkbox-linha">
+                  <input type="checkbox" id="campo-acrescimo-ativo" />
+                  <span>Incluir frete / instalação</span>
+                </label>
+                <label class="campo">Descrição do acréscimo
+                  <input type="text" id="campo-acrescimo-descricao" placeholder="Frete / Instalação" />
+                </label>
+                <label class="campo">Valor do acréscimo
+                  <input type="text" id="campo-acrescimo-valor" inputmode="decimal" placeholder="0,00" />
+                </label>
+              </div>
+            </div>
+
+            <!-- Condições -->
+            <div class="painel-aba oculto" data-painel="condicoes">
+              <div class="grade-2">
+                <label class="campo">Validade da proposta (dias)
+                  <input type="number" id="campo-validade" min="0" step="1" />
+                </label>
+                <label class="campo">Local (cidade - UF)
+                  <input type="text" id="campo-local" placeholder="Fortaleza - CE" />
+                </label>
+                <label class="campo">Prazo de entrega
+                  <input type="text" id="campo-prazo-entrega" placeholder="Conforme Edital." />
+                </label>
+                <label class="campo">Garantia
+                  <input type="text" id="campo-garantia" placeholder="12 meses contra defeitos de fabricação" />
+                </label>
+                <label class="campo campo-largo">Condições de pagamento
+                  <textarea id="campo-pagamento" rows="2" placeholder="Ex.: 30 dias após o recebimento definitivo, mediante nota fiscal."></textarea>
+                </label>
+                <label class="campo campo-largo">Observações gerais
+                  <textarea id="campo-observacoes" rows="3" placeholder="Informações adicionais que aparecem na proposta."></textarea>
+                </label>
+              </div>
+            </div>
+
+            <!-- Proponente -->
+            <div class="painel-aba oculto" data-painel="proponente">
+              <p class="texto-suave">
+                Estes dados são copiados de <a href="#/empresa">Minha empresa</a>. Altere aqui se este documento
+                precisar de dados diferentes — os próximos documentos continuam usando os dados cadastrados.
+              </p>
+              <div class="grade-2">
+                <label class="campo campo-largo">Razão social
+                  <input type="text" id="campo-prop-razao" />
+                </label>
+                <label class="campo">Nome fantasia
+                  <input type="text" id="campo-prop-fantasia" />
+                </label>
+                <label class="campo">CNPJ
+                  <input type="text" id="campo-prop-cnpj" />
+                </label>
+                <label class="campo">Inscrição estadual
+                  <input type="text" id="campo-prop-ie" />
+                </label>
+                <label class="campo checkbox-linha">
+                  <input type="checkbox" id="campo-prop-simples" />
+                  <span>Enquadrada no SIMPLES NACIONAL</span>
+                </label>
+                <label class="campo">Telefone
+                  <input type="text" id="campo-prop-telefone" />
+                </label>
+                <label class="campo">E-mail
+                  <input type="text" id="campo-prop-email" />
+                </label>
+                <label class="campo">Cidade
+                  <input type="text" id="campo-prop-cidade" />
+                </label>
+                <label class="campo">UF
+                  <input type="text" id="campo-prop-uf" maxlength="2" />
+                </label>
+                <label class="campo campo-largo">Endereço
+                  <input type="text" id="campo-prop-endereco" />
+                </label>
+                <label class="campo">CEP
+                  <input type="text" id="campo-prop-cep" />
+                </label>
+                <label class="campo">Banco
+                  <input type="text" id="campo-prop-banco" />
+                </label>
+                <label class="campo">Agência
+                  <input type="text" id="campo-prop-agencia" />
+                </label>
+                <label class="campo">Conta corrente
+                  <input type="text" id="campo-prop-conta" />
+                </label>
+                <label class="campo">Chave PIX
+                  <input type="text" id="campo-prop-pix" />
+                </label>
+                <label class="campo">Representante legal
+                  <input type="text" id="campo-prop-representante" />
+                </label>
+                <label class="campo">CPF do representante
+                  <input type="text" id="campo-prop-cpf" />
+                </label>
+                <label class="campo campo-largo">Cargo do representante
+                  <input type="text" id="campo-prop-cargo" />
+                </label>
+              </div>
+
+              <div class="grade-2">
+                <div class="campo-upload">
+                  <span class="rotulo-campo">Logo da empresa</span>
+                  <div class="upload-area">
+                    <img id="previa-logo" alt="Logo" class="previa-imagem oculto" />
+                    <div class="upload-acoes">
+                      <input type="file" id="arquivo-logo" accept="image/*" class="oculto" />
+                      <button class="botao" type="button" data-upload="logo">Enviar imagem</button>
+                      <button class="botao botao-fantasma" type="button" data-remover="logo">Remover</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="campo-upload">
+                  <span class="rotulo-campo">Assinatura digitalizada</span>
+                  <div class="upload-area">
+                    <img id="previa-assinatura" alt="Assinatura" class="previa-imagem oculto" />
+                    <div class="upload-acoes">
+                      <input type="file" id="arquivo-assinatura" accept="image/*" class="oculto" />
+                      <button class="botao" type="button" data-upload="assinatura">Enviar imagem</button>
+                      <button class="botao botao-fantasma" type="button" data-remover="assinatura">Remover</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Layout -->
+            <div class="painel-aba oculto" data-painel="layout">
+              <div class="lista-opcoes">
+                <label class="checkbox-linha"><input type="checkbox" id="op-catalogo" /><span>Incluir página de <strong>catálogo</strong> com descrições e fotos</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-fotos" /><span>Mostrar <strong>fotos dos produtos</strong> no catálogo</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-bancarios" /><span>Mostrar <strong>dados bancários</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-extenso" /><span>Mostrar <strong>valor total por extenso</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-assinatura" /><span>Incluir <strong>bloco de assinatura</strong> do representante legal</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-declaracao" /><span>Incluir <strong>declaração de aceitação</strong> das condições do edital</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-quebra" /><span>Começar o <strong>catálogo em nova página</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-logo" /><span>Usar <strong>logo no cabeçalho</strong> de todas as páginas</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-link-compra" /><span>Mostrar o <strong>link da compra</strong> no catálogo (uso interno)</span></label>
+              </div>
+              <label class="campo campo-cor">Cor principal do documento
+                <input type="color" id="op-cor" value="#0F766E" />
+              </label>
+            </div>
+          </div>
+
+          <aside class="editor-previa">
+            <div class="previa-cabecalho">
+              <h3>Pré-visualização</h3>
+              <div>
+                <button class="botao botao-fantasma" id="previa-atualizar" type="button">Atualizar</button>
+                <button class="botao botao-fantasma" id="previa-baixar" type="button">Baixar PDF</button>
+              </div>
+            </div>
+            <div class="previa-quadro" id="previa-quadro">
+              <p class="texto-suave" id="previa-aviso">Clique em <strong>Atualizar</strong> para ver o PDF.</p>
+              <iframe id="previa-iframe" title="Pré-visualização do PDF" class="oculto"></iframe>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ Importar -->
+      <section id="view-importar" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Importar planilha de itens</h2>
+            <p class="texto-suave">Envie a planilha no formato do modelo para preencher a proposta automaticamente.</p>
+          </div>
+          <a class="botao botao-primario" href="/api/modelo-planilha">Baixar modelo .xlsx</a>
+        </div>
+
+        <div class="bloco">
+          <div class="area-upload" id="area-upload">
+            <input type="file" id="arquivo-planilha" accept=".xlsx,.xls,.csv,.ods" class="oculto" />
+            <p class="area-upload-icone">📄</p>
+            <p><strong>Arraste a planilha aqui</strong> ou clique para escolher o arquivo</p>
+            <p class="texto-suave">Aceita .xlsx, .xls, .csv e .ods — até 15 MB</p>
+          </div>
+
+          <div class="colunas-modelo">
+            <h3>Colunas do modelo</h3>
+            <ul id="lista-colunas-modelo"></ul>
+            <p class="texto-suave">"Descreva_Edital" e "Quantidade" são obrigatórias. As demais colunas são opcionais e podem ficar vazias.</p>
+          </div>
+        </div>
+
+        <div class="bloco oculto" id="bloco-importacao">
+          <div class="bloco-cabecalho">
+            <h3 id="importacao-titulo">Itens encontrados</h3>
+            <div class="acoes-vista">
+              <button class="botao" id="importacao-marcar" type="button">Desmarcar todos</button>
+              <button class="botao botao-primario" id="importacao-criar-proposta" type="button">Criar proposta com os itens</button>
+              <button class="botao" id="importacao-criar-orcamento" type="button">Criar orçamento</button>
+            </div>
+          </div>
+
+          <div class="grade-2">
+            <label class="campo">Ou adicionar os itens num documento existente
+              <select id="importacao-documento"><option value="">Selecione...</option></select>
+            </label>
+            <div class="campo">
+              <span class="rotulo-campo">&nbsp;</span>
+              <button class="botao botao-largo" id="importacao-adicionar" type="button">Adicionar ao documento selecionado</button>
+            </div>
+          </div>
+
+          <div id="importacao-avisos" class="avisos oculto"></div>
+          <div id="importacao-tabela" class="tabela-rolavel"></div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ Empresa -->
+      <section id="view-empresa" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Minha empresa</h2>
+            <p class="texto-suave">Estes dados preenchem automaticamente todas as propostas e orçamentos.</p>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Dados cadastrais e bancários</h3></div>
+          <div class="grade-2">
+            <label class="campo campo-largo">Razão social<input type="text" id="emp-razao" /></label>
+            <label class="campo">Nome fantasia<input type="text" id="emp-fantasia" /></label>
+            <label class="campo">CNPJ<input type="text" id="emp-cnpj" placeholder="00.000.000/0001-00" /></label>
+            <label class="campo">Inscrição estadual<input type="text" id="emp-ie" /></label>
+            <label class="campo checkbox-linha"><input type="checkbox" id="emp-simples" /><span>Enquadrada no SIMPLES NACIONAL</span></label>
+            <label class="campo">Telefone<input type="text" id="emp-telefone" placeholder="(00) 00000-0000" /></label>
+            <label class="campo">E-mail<input type="text" id="emp-email" /></label>
+            <label class="campo">Cidade<input type="text" id="emp-cidade" /></label>
+            <label class="campo">UF<input type="text" id="emp-uf" maxlength="2" /></label>
+            <label class="campo campo-largo">Endereço<input type="text" id="emp-endereco" /></label>
+            <label class="campo">CEP<input type="text" id="emp-cep" /></label>
+            <label class="campo">Banco<input type="text" id="emp-banco" /></label>
+            <label class="campo">Agência<input type="text" id="emp-agencia" /></label>
+            <label class="campo">Conta corrente<input type="text" id="emp-conta" /></label>
+            <label class="campo">Chave PIX<input type="text" id="emp-pix" /></label>
+            <label class="campo">Representante legal<input type="text" id="emp-representante" /></label>
+            <label class="campo">CPF do representante<input type="text" id="emp-cpf" /></label>
+            <label class="campo campo-largo">Cargo<input type="text" id="emp-cargo" /></label>
+          </div>
+
+          <div class="grade-2">
+            <div class="campo-upload">
+              <span class="rotulo-campo">Logo da empresa</span>
+              <div class="upload-area">
+                <img id="emp-previa-logo" alt="Logo" class="previa-imagem oculto" />
+                <div class="upload-acoes">
+                  <input type="file" id="emp-arquivo-logo" accept="image/*" class="oculto" />
+                  <button class="botao" type="button" data-upload-emp="logo">Enviar imagem</button>
+                  <button class="botao botao-fantasma" type="button" data-remover-emp="logo">Remover</button>
+                </div>
+              </div>
+            </div>
+            <div class="campo-upload">
+              <span class="rotulo-campo">Assinatura digitalizada</span>
+              <div class="upload-area">
+                <img id="emp-previa-assinatura" alt="Assinatura" class="previa-imagem oculto" />
+                <div class="upload-acoes">
+                  <input type="file" id="emp-arquivo-assinatura" accept="image/*" class="oculto" />
+                  <button class="botao" type="button" data-upload-emp="assinatura">Enviar imagem</button>
+                  <button class="botao botao-fantasma" type="button" data-remover-emp="assinatura">Remover</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="botao botao-primario" id="emp-salvar" type="button">Salvar dados da empresa</button>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Padrões para novos documentos</h3></div>
+          <div class="grade-2">
+            <label class="campo">Validade (dias)<input type="number" id="pad-validade" min="0" /></label>
+            <label class="campo">Cidade - UF<input type="text" id="pad-cidade" placeholder="Fortaleza - CE" /></label>
+            <label class="campo">Prazo de entrega<input type="text" id="pad-prazo" /></label>
+            <label class="campo">Garantia<input type="text" id="pad-garantia" /></label>
+            <label class="campo campo-largo">Condições de pagamento<textarea id="pad-pagamento" rows="2"></textarea></label>
+            <label class="campo campo-largo">Observações padrão<textarea id="pad-observacoes" rows="2"></textarea></label>
+          </div>
+          <button class="botao botao-primario" id="pad-salvar" type="button">Salvar padrões</button>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Meu acesso</h3></div>
+          <div class="grade-2">
+            <label class="campo">Nome<input type="text" id="perfil-nome" /></label>
+            <label class="campo">E-mail<input type="email" id="perfil-email" /></label>
+          </div>
+          <button class="botao" id="perfil-salvar" type="button">Salvar meus dados</button>
+
+          <hr class="divisor" data-somente-servidor />
+          <div class="grade-2" data-somente-servidor>
+            <label class="campo">Senha atual<input type="password" id="senha-atual" autocomplete="current-password" /></label>
+            <label class="campo">Nova senha<input type="password" id="senha-nova" autocomplete="new-password" /></label>
+          </div>
+          <button class="botao" id="senha-salvar" type="button" data-somente-servidor>Alterar senha</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ================================ COMPONENTES ================================ -->
+  <div id="caixa-toasts" class="caixa-toasts"></div>
+
+  <div id="modal" class="modal oculto">
+    <div class="modal-fundo" data-fechar-modal></div>
+    <div class="modal-caixa" role="dialog" aria-modal="true">
+      <header class="modal-cabecalho">
+        <h3 id="modal-titulo">Título</h3>
+        <button class="botao-icone" data-fechar-modal type="button" title="Fechar">✕</button>
+      </header>
+      <div class="modal-corpo" id="modal-corpo"></div>
+      <footer class="modal-rodape" id="modal-rodape"></footer>
     </div>
-  </section>
+  </div>
 
-  <section id="recursos" class="secao">
-    <div class="envelope">
-      <h2>O que o sistema faz</h2>
-      <div class="cartoes">
-        <article class="cartao">
-          <h3>Importação da planilha</h3>
-          <p>Envie o arquivo <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code> ou <code>.ods</code>. O sistema
-          reconhece as colunas do modelo (e variações de nome), avisa sobre linhas com problema e deixa
-          você escolher os itens.</p>
-        </article>
-        <article class="cartao">
-          <h3>Proposta de licitação</h3>
-          <p>Órgão, UASG, processo, pregão, objeto e prazo; dados do proponente com CNPJ, inscrição estadual,
-          SIMPLES NACIONAL, banco e PIX; tabela de preços com marca/modelo e unidade.</p>
-        </article>
-        <article class="cartao">
-          <h3>Orçamento comercial</h3>
-          <p>Mesma estrutura, com identificação do cliente, validade da proposta, condições de pagamento,
-          prazo de entrega e garantia.</p>
-        </article>
-        <article class="cartao">
-          <h3>Catálogo com fotos</h3>
-          <p>Uma página de catálogo com a descrição comercial e a foto de cada produto — por link
-          (inclusive Google Drive) ou enviando a imagem do computador.</p>
-        </article>
-        <article class="cartao">
-          <h3>Cálculos e margem</h3>
-          <p>Preço de custo e de venda por item, desconto, frete, lucro estimado e aplicação de margem em
-          lote. O total sai em números e por extenso.</p>
-        </article>
-        <article class="cartao">
-          <h3>Histórico e numeração</h3>
-          <p>Numeração automática (001/2026), status de rascunho a ganha/perdida, busca, filtros,
-          duplicar, excluir e exportar os itens de volta para planilha.</p>
-        </article>
-        <article class="cartao">
-          <h3>Login por usuário</h3>
-          <p>Cada pessoa entra com e-mail e senha (criptografada) e vê apenas as próprias propostas.
-          A empresa é cadastrada uma única vez e preenche todos os documentos.</p>
-        </article>
-        <article class="cartao">
-          <h3>Botão Gerar PDF</h3>
-          <p>Um clique gera o arquivo com cabeçalho, logo, numeração de páginas e o nome pronto
-          (<code>Proposta_001-2026_orgao.pdf</code>), com pré-visualização na tela antes de baixar.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <section id="exemplos" class="secao secao-clara">
-    <div class="envelope">
-      <h2>Como fica o PDF</h2>
-      <p class="subtitulo">Páginas geradas pelo próprio sistema a partir de uma proposta de exemplo.</p>
-      <div class="galeria">
-        <figure>
-          <img src="site/imagens/proposta-1.jpg" alt="Primeira página da proposta: dados do órgão, do proponente e tabela de preços" loading="lazy" />
-          <figcaption>Página 1 — identificação, dados do proponente e tabela de preços com o total.</figcaption>
-        </figure>
-        <figure>
-          <img src="site/imagens/proposta-2.jpg" alt="Segunda página da proposta: catálogo com fotos e assinatura" loading="lazy" />
-          <figcaption>Página 2 — catálogo dos produtos e bloco de assinatura do representante legal.</figcaption>
-        </figure>
-        <figure>
-          <img src="site/imagens/proposta-3-itens.jpg" alt="Exemplo de proposta com três itens, desconto e frete" loading="lazy" />
-          <figcaption>Exemplo com desconto percentual, frete e valor total por extenso.</figcaption>
-        </figure>
-      </div>
-    </div>
-  </section>
-
-  <section id="planilha" class="secao">
-    <div class="envelope">
-      <h2>Modelo da planilha</h2>
-      <p class="subtitulo">
-        O arquivo <code>Modelo_Importacao_Itens_LicitaPro.xlsx</code> é gerado pelo próprio site
-        (aba <em>Painel → Baixar planilha</em>) e traz uma aba com instruções e exemplos.
-      </p>
-      <div class="tabela-rolavel">
-        <table class="tabela">
-          <thead>
-            <tr><th>Coluna</th><th>Obrigatória</th><th>O que preencher</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>Numero_Item</code></td><td>não</td><td>número do item conforme o edital</td></tr>
-            <tr><td><code>Descricao_Edital</code></td><td class="sim">sim</td><td>descrição exata do item no edital</td></tr>
-            <tr><td><code>Unidade</code></td><td>não</td><td>UND, UN, CX, PCT, M, KG...</td></tr>
-            <tr><td><code>Quantidade</code></td><td class="sim">sim</td><td>quantidade solicitada</td></tr>
-            <tr><td><code>Valor_Referencia</code></td><td>não</td><td>valor unitário estimado no edital</td></tr>
-            <tr><td><code>Preco_Custo</code></td><td>não</td><td>quanto você paga no fornecedor (uso interno)</td></tr>
-            <tr><td><code>Preco_Venda</code></td><td>não</td><td>valor unitário ofertado</td></tr>
-            <tr><td><code>Marca_Modelo</code></td><td>não</td><td>marca e modelo ofertados</td></tr>
-            <tr><td><code>Foto_Produto</code></td><td>não</td><td>link da imagem ou upload no site</td></tr>
-            <tr><td><code>Descricao_Catalogo</code></td><td>não</td><td>texto comercial do catálogo</td></tr>
-            <tr><td><code>Link_da_compra</code></td><td>não</td><td>link onde você compra (não sai no PDF)</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="nota">Valores podem ser digitados como número (<code>1490,00</code>) ou texto (<code>R$ 1.490,00</code>).</p>
-    </div>
-  </section>
-
-  <section id="publicar" class="secao secao-escura">
-    <div class="envelope">
-      <h2>Como colocar no ar</h2>
-      <p class="subtitulo claro">
-        O GitHub guarda o código, mas quem executa o sistema é um serviço que roda Node
-        (o GitHub Pages não executa backend). O repositório já vem com
-        <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>.
-      </p>
-
-      <div class="passos">
-        <article class="passo">
-          <span class="passo-numero">1</span>
-          <h3>Junte o código na branch principal</h3>
-          <p>Abra o pull request, clique em <em>Merge pull request</em> e confirme.</p>
-          <a class="botao botao-claro" href="https://github.com/marcossilva023l20/licitapro/pull/1">Abrir o pull request</a>
-        </article>
-        <article class="passo">
-          <span class="passo-numero">2</span>
-          <h3>Crie o serviço no Render</h3>
-          <p>Entre em render.com, conecte o GitHub e escolha <em>New + → Blueprint</em> apontando para
-          o repositório <code>licitapro</code>. O resto é lido do <code>render.yaml</code>.</p>
-          <a class="botao botao-claro" href="https://render.com/deploy?repo=https://github.com/marcossilva023l20/licitapro">Publicar no Render</a>
-        </article>
-        <article class="passo">
-          <span class="passo-numero">3</span>
-          <h3>Informe o seu login</h3>
-          <p>Preencha <code>LICITAPRO_ADMIN_EMAIL</code>, <code>LICITAPRO_ADMIN_SENHA</code> e
-          <code>LICITAPRO_ADMIN_NOME</code>. Esses dados serão o primeiro acesso ao sistema.</p>
-        </article>
-        <article class="passo">
-          <span class="passo-numero">4</span>
-          <h3>Use e faça backup</h3>
-          <p>Acesse a URL gerada, cadastre a sua empresa, importe a planilha e gere o PDF.
-          Guarde a pasta de dados (<code>/var/data</code> ou <code>data/</code>) — nela ficam o banco, os uploads e o cache.</p>
-        </article>
-      </div>
-
-      <div class="alternativas">
-        <p><strong>Outras opções:</strong> Railway (com volume em <code>/var/data</code>),
-        uma VPS com <code>docker run</code> ou <code>npm start</code> com PM2, ou ainda rodar na sua
-        máquina e expor por túnel temporário. O passo a passo completo está no
-        <a href="https://github.com/marcossilva023l20/licitapro#6-publicando-na-internet-hospedagem">README</a>.</p>
-        <p class="aviso-claro"><strong>Sobre os dados:</strong> em planos gratuitos o disco costuma ser apagado
-        a cada reinício — ótimo para testar, mas para uso real prefira um disco persistente ou uma VPS.</p>
-      </div>
-    </div>
-  </section>
-
-  <section class="secao">
-    <div class="envelope">
-      <h2>Rodar na sua máquina</h2>
-      <pre class="codigo"><code>git clone https://github.com/marcossilva023l20/licitapro.git
-cd licitapro
-npm install
-npm start          # abre em http://localhost:3000
-
-npm run testes     # 22 testes automatizados
-npm run modelo     # gera a planilha-modelo (.xlsx)
-npm run usuarios   # lista usuários / troca senha</code></pre>
-      <p class="nota">Na primeira execução o sistema cria o primeiro acesso e mostra e-mail e senha no
-      terminal (e em <code>data/primeiro-acesso.txt</code>).</p>
-    </div>
-  </section>
-
-  <footer class="rodape">
-    <div class="envelope rodape-conteudo">
-      <div>
-        <strong>LicitaPro</strong>
-        <p>Gerador de propostas de licitação e orçamentos em PDF.</p>
-      </div>
-      <div class="rodape-links">
-        <a href="https://github.com/marcossilva023l20/licitapro">Repositório</a>
-        <a href="https://github.com/marcossilva023l20/licitapro/blob/main/README.md">Documentação</a>
-        <a href="https://github.com/marcossilva023l20/licitapro/pull/1">Pull request</a>
-      </div>
-    </div>
-  </footer>
+  <script src="../shared/format.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/editar.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/modo-estatico.js"></script>
 </body>
 </html>

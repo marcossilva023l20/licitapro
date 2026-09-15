@@ -32,3 +32,6 @@ jobs:
 
       - name: Rodar os testes
         run: npm run testes
+
+      - name: Conferir a página publicada no GitHub Pages
+        run: npm run paginas -- --verificar
