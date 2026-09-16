@@ -41,7 +41,8 @@ function gerar() {
   if (/<base\s/i.test(sistema)) throw new Error('public/index.html já tem <base> — remova para não duplicar.');
 
   const caminhos = sistema
-    .replace('href="css/estilos.css"', 'href="public/css/estilos.css"')
+    // as referências podem trazer ?v= (versão dos arquivos): trocamos só o caminho
+    .replace(/href="css\//g, 'href="public/css/')
     .replace(/src="\.\.\/shared\//g, 'src="shared/')
     .replace(/src="js\//g, 'src="public/js/');
 

@@ -498,6 +498,30 @@ teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as página
   assert.strictEqual(padrao.opcoes.cor, '#0B1F33', 'cor padrão é o azul-marinho da paleta');
 });
 
+teste('Site: a versão dos arquivos (?v=) combina em todos os lugares', () => {
+  const paginas = ['public/index.html', 'index.html', 'apresentacao.html'].map((rel) =>
+    fs.readFileSync(path.join(RAIZ, rel), 'utf8')
+  );
+  const versoes = new Set();
+  for (const texto of paginas) {
+    for (const m of texto.matchAll(/\?v=([0-9A-Za-z._-]+)/g)) versoes.add(m[1]);
+  }
+  const modoLocal = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'modo-estatico.js'), 'utf8');
+  const declarada = modoLocal.match(/VERSAO_ARQUIVOS = '([^']+)'/);
+  assert.ok(declarada, 'a versão dos arquivos está declarada no modo local');
+  versoes.add(declarada[1]);
+
+  assert.strictEqual(versoes.size, 1, 'mesma versão em todas as páginas: ' + [...versoes].join(', '));
+  const versao = [...versoes][0];
+  assert.match(versao, /^[0-9]+$/, 'versão numérica');
+
+  // o carregador do modo local carrega os módulos com a mesma versão
+  assert.ok(
+    modoLocal.includes("searchParams.set('v', VERSAO_ARQUIVOS)"),
+    'os módulos do modo local entram com a versão na URL'
+  );
+});
+
 teste('Site: identidade da marca na página e no editor (logo + opção de marca d\'água)', async () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(RAIZ, 'public', 'css', 'estilos.css'), 'utf8');
@@ -749,6 +773,15 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     const inicio = await requisitar(servidor, '/');
     assert.strictEqual(inicio.status, 200);
     assert.ok(inicio.texto.includes('DEJ Solutions'));
+
+    // código do site sai com revalidação: uma atualização não fica presa no cache
+    const js = await requisitar(servidor, '/js/app.js');
+    assert.strictEqual(js.status, 200);
+    assert.match(String(js.headers['cache-control'] || ''), /no-cache/, 'JS servido com no-cache');
+    const css = await requisitar(servidor, '/css/estilos.css');
+    assert.match(String(css.headers['cache-control'] || ''), /no-cache/, 'CSS servido com no-cache');
+    const marca = await requisitar(servidor, '/marca/logo.png');
+    assert.match(String(marca.headers['cache-control'] || ''), /max-age/, 'imagem segue com cache normal');
   } finally {
     servidor.close();
   }
@@ -1406,8 +1439,8 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   );
   const raiz = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');
   assert.ok(raiz.includes('<meta name="licitapro-base" content="public/" />'), 'a raiz avisa onde estão css/js/vendor');
-  assert.ok(raiz.includes('href="public/css/estilos.css"'), 'CSS com o caminho da raiz');
-  assert.ok(raiz.includes('src="public/js/modo-estatico.js"'), 'scripts com o caminho da raiz');
+  assert.ok(/href="public\/css\/estilos\.css(\?v=[^"]+)?"/.test(raiz), 'CSS com o caminho da raiz');
+  assert.ok(/src="public\/js\/modo-estatico\.js(\?v=[^"]+)?"/.test(raiz), 'scripts com o caminho da raiz');
   assert.ok(!/<base\s/i.test(raiz), 'sem <base>, para os links internos ficarem em /licitapro/');
   assert.strictEqual(
     new URL('#/documentos', 'https://marcossilva023l20.github.io/licitapro/').pathname,

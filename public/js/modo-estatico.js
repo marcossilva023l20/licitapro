@@ -201,10 +201,20 @@
     'vendor/times-afm.js', // métricas da Times (Times New Roman)
   ];
 
+  /**
+   * Versão dos arquivos de código. Ao publicar mudanças em js/, shared/ ou
+   * css/, aumente este número e os ?v= do index.html e da apresentação: assim
+   * o navegador baixa a versão nova em vez de reusar a que está no cache
+   * (importante no GitHub Pages, onde o cache dura alguns minutos).
+   */
+  const VERSAO_ARQUIVOS = '4';
+
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
       const script = document.createElement('script');
-      script.src = new URL(caminho, document.baseURI).href;
+      const endereco = new URL(caminho, document.baseURI);
+      endereco.searchParams.set('v', VERSAO_ARQUIVOS);
+      script.src = endereco.href;
       script.onload = () => resolver();
       script.onerror = () => rejeitar(new Error('Não foi possível carregar ' + caminho));
       document.head.appendChild(script);

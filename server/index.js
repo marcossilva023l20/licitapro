@@ -73,17 +73,30 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const RAIZ_PROJETO = path.join(__dirname, '..');
 
 // página de apresentação (a mesma usada pelo GitHub Pages), útil para enviar a clientes
-app.use('/site', express.static(path.join(RAIZ_PROJETO, 'site'), { maxAge: '1d' }));
+app.use('/site', express.static(path.join(RAIZ_PROJETO, 'site'), { maxAge: '1d', setHeaders: semCacheParaCodigo }));
 app.get('/apresentacao', (req, res) => res.sendFile(path.join(RAIZ_PROJETO, 'apresentacao.html')));
 app.get('/apresentacao.html', (req, res) => res.redirect('/apresentacao'));
 
-app.use('/shared', express.static(path.join(__dirname, '..', 'shared'), { maxAge: '1h' }));
+/**
+ * Código do site (HTML, JS, CSS) é servido com revalidação: o navegador
+ * reusa a versão em cache só depois de perguntar ao servidor. Sem isso uma
+ * atualização do sistema (por exemplo, o layout do PDF) pode demorar uma
+ * hora para aparecer. Imagens e fontes continuam em cache normal.
+ */
+function semCacheParaCodigo(res, caminho) {
+  if (/\.(html|js|css)$/i.test(caminho)) res.setHeader('Cache-Control', 'no-cache');
+}
+
+app.use('/shared', express.static(path.join(__dirname, '..', 'shared'), { setHeaders: semCacheParaCodigo }));
 app.use(
   express.static(PUBLIC_DIR, {
     index: 'index.html',
     maxAge: '1h',
     setHeaders: (res, caminho) => {
-      if (caminho.endsWith('index.html')) res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-cache');
+      if (caminho.endsWith('index.html')) return;
+      // imagens, fontes e afins podem ficar em cache por mais tempo
+      if (/\.(png|jpe?g|svg|ico|woff2?|ttf)$/i.test(caminho)) res.setHeader('Cache-Control', 'public, max-age=86400');
     },
   })
 );
