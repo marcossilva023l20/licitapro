@@ -19,7 +19,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="public/css/estilos.css?v=19" />
+  <link rel="stylesheet" href="public/css/estilos.css?v=20" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -65,6 +65,29 @@
         texto cifrado e a senha não é enviada para lugar nenhum. Com o mesmo e-mail e a mesma senha
         você abre o sistema em qualquer computador.
       </p>
+
+      <ul class="lista-passos oculto" id="entrar-passos"></ul>
+
+      <details class="onde-guardar" id="entrar-onde">
+        <summary>Usar outro projeto / testar a conexão</summary>
+        <label class="campo-entrar">
+          <span>Endereço do projeto (Supabase)</span>
+          <input id="entrar-url" name="url" type="url" spellcheck="false"
+            placeholder="https://xxxxxxxx.supabase.co">
+        </label>
+        <label class="campo-entrar">
+          <span>Chave pública do projeto (anon / publishable)</span>
+          <input id="entrar-chave" name="chave" type="text" spellcheck="false"
+            placeholder="eyJ... ou sb_publishable_...">
+        </label>
+        <div class="acoes-banco">
+          <button class="botao botao-suave" id="entrar-testar" type="button">Testar a conexão</button>
+          <button class="botao-link" id="entrar-usar-projeto" type="button">usar este projeto</button>
+          <button class="botao-link oculto" id="entrar-esquecer-projeto" type="button">voltar ao projeto do site</button>
+          <span class="mensagem-banco" id="entrar-teste-mensagem" role="status"></span>
+        </div>
+        <p class="texto-suave" id="entrar-projeto-atual"></p>
+      </details>
 
       <p class="entrar-rodape oculto" id="entrar-rodape">
         <button class="botao-link" id="entrar-sem-conta" type="button">
@@ -182,10 +205,12 @@
               <div class="acoes-banco">
                 <button class="botao botao-suave" id="nuvem-entrar" type="button">Entrar numa conta</button>
                 <button class="botao botao-suave oculto" id="nuvem-sincronizar" type="button">Sincronizar agora</button>
+                <button class="botao botao-suave" id="nuvem-testar" type="button">Testar a conta</button>
                 <button class="botao-link oculto" id="nuvem-link" type="button">link para o outro computador</button>
                 <button class="botao-link oculto" id="nuvem-sair" type="button">sair da conta</button>
                 <span class="mensagem-banco" id="nuvem-mensagem" role="status"></span>
               </div>
+              <ul class="lista-passos oculto" id="nuvem-passos"></ul>
               <input class="oculto" id="nuvem-link-caixa" readonly spellcheck="false"
                 aria-label="Link para abrir o sistema em outro computador">
             </details>
@@ -720,13 +745,13 @@
     </div>
   </div>
 
-  <script src="shared/format.js?v=19"></script>
-  <script src="public/js/api.js?v=19"></script>
-  <script src="public/js/ui.js?v=19"></script>
-  <script src="public/js/editar.js?v=19"></script>
-  <script src="public/js/app.js?v=19"></script>
-  <script src="public/js/config-nuvem.js?v=19"></script>
-  <script src="public/js/modo-estatico.js?v=19"></script>
-  <script src="public/js/nuvem.js?v=19"></script>
+  <script src="shared/format.js?v=20"></script>
+  <script src="public/js/api.js?v=20"></script>
+  <script src="public/js/ui.js?v=20"></script>
+  <script src="public/js/editar.js?v=20"></script>
+  <script src="public/js/app.js?v=20"></script>
+  <script src="public/js/config-nuvem.js?v=20"></script>
+  <script src="public/js/modo-estatico.js?v=20"></script>
+  <script src="public/js/nuvem.js?v=20"></script>
 </body>
 </html>

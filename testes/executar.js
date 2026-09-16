@@ -68,6 +68,17 @@ teste('Publicação: o guia do Render existe e não carrega chave nenhuma', () =
   assert.ok(/esquema\.sql/.test(guia), 'o guia manda rodar o SQL das tabelas do servidor');
   assert.ok(/SUPABASE_SERVICE_KEY/.test(guia), 'e diz qual variável o Render espera');
   assert.ok(/Render/.test(readme) && /PUBLICAR\.md/.test(readme), 'o README aponta para o guia');
+
+  // e o guia "do zero" (conta nova) existe, com o essencial e sem chave escrita
+  const comecar = fs.readFileSync(path.join(RAIZ, 'COMECAR.md'), 'utf8');
+  assert.ok(/supabase\.com\/dashboard\/sign-up/.test(comecar), 'o guia diz onde criar a conta');
+  assert.ok(/nuvem\.sql/.test(comecar), 'manda rodar o SQL do cofre');
+  assert.ok(/Testar a conexão/.test(comecar), 'usa o teste passo a passo do próprio site');
+  assert.ok(/service_role/.test(comecar), 'avisa qual chave NÃO vai para o site');
+  assert.ok(/COMECAR\.md/.test(readme), 'o README aponta para o guia do zero');
+  [/eyJ[A-Za-z0-9_-]{10,}\./, /sb_secret_[A-Za-z0-9_-]{10,}/].forEach((padrao) => {
+    assert.strictEqual(padrao.test(comecar), false, 'sem chave escrita no guia do zero');
+  });
   assert.ok(/SUPABASE_SERVICE_KEY/.test(render), 'o render.yaml pede a chave do servidor');
   // o guia é público no repositório: nenhum valor de chave pode estar escrito nele
   [/eyJ[A-Za-z0-9_-]{10,}\./, /sb_secret_[A-Za-z0-9_-]{10,}/].forEach((padrao) => {
@@ -1255,9 +1266,12 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     assert.strictEqual($1('#app').classList.contains('oculto'), true, 'o sistema espera a conta');
     // e a tela pede só e-mail e senha: endereço e chave já vêm com o site
     assert.strictEqual($1('#entrar-usuario').getAttribute('type'), 'email', 'o login é um e-mail');
-    assert.strictEqual($1('#entrar-url'), null, 'sem campo de endereço do projeto');
-    assert.strictEqual($1('#entrar-chave'), null, 'sem campo de chave pública');
-    assert.strictEqual($1('#entrar-onde'), null, 'sem o bloco "onde os dados ficam guardados"');
+    // o endereço e a chave existem só no bloco "Usar outro projeto", fechado:
+    // para entrar, nada disso é pedido
+    assert.strictEqual($1('#entrar-onde').open, false, 'o bloco de outro projeto começa fechado');
+    assert.ok($1('#entrar-url').value.length > 20, 'e já vem com o endereço do projeto gravado no site');
+    assert.ok($1('#entrar-chave').value.length > 20, 'e com a chave pública dele');
+    assert.strictEqual($1('#entrar-passos').classList.contains('oculto'), true, 'sem resultado de teste na tela ainda');
 
     // um e-mail inválido não passa
     $1('#aba-criar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
@@ -1463,8 +1477,7 @@ teste('Nuvem: o link leva o projeto para o outro computador (a senha não sai da
     await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar no outro computador');
     assert.strictEqual(w.Nuvem.padrao().url, falso.url, 'a tela já aponta para o projeto do link');
     assert.strictEqual(w.Nuvem.padrao().chave, CHAVE, 'com a chave pública dele');
-    assert.strictEqual($('#entrar-url'), null, 'a tela não pede endereço');
-    assert.strictEqual($('#entrar-chave'), null, 'nem chave');
+    assert.strictEqual($('#entrar-onde').open, false, 'a tela não pede endereço nem chave (bloco fechado)');
     assert.strictEqual($('#entrar-usuario').value, '', 'o e-mail é digitado aqui');
     assert.strictEqual($('#entrar-senha').value, '', 'e a senha também');
 
@@ -1491,6 +1504,135 @@ teste('Nuvem: o link leva o projeto para o outro computador (a senha não sai da
     assert.strictEqual(outro.erros.length, 0, 'sem erros de script: ' + outro.erros.join(' | '));
     w.close();
     wo.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: o teste passo a passo mostra por que não está salvando', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+
+  // ---- 1) projeto certo: todas as etapas passam (e a linha de teste é apagada)
+  const bom = await criarServidorDeMentira({ chave: CHAVE });
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({
+      externo: [bom.url],
+      base: linkParaOProjeto(bom.url, CHAVE),
+      armazenamento: {
+        'licitapro.nuvem.v1': JSON.stringify({
+          usuario: 'dej@empresa.com.br', senha: 'senha-secreta-123',
+        }),
+      },
+    });
+    await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local');
+    const resultado = await aberto.window.Nuvem.diagnostico({});
+    const nomes = resultado.passos.map((passo) => passo.nome);
+    assert.strictEqual(resultado.ok, true, 'o diagnóstico passou: ' + JSON.stringify(resultado.passos));
+    assert.ok(nomes.some((n) => /projeto respondeu/.test(n)), 'confere se o projeto responde');
+    assert.ok(nomes.some((n) => /aceita gravação/.test(n)), 'confere a gravação (era o que faltava saber)');
+    assert.ok(nomes.some((n) => /volta na leitura/.test(n)), 'confere a leitura de volta');
+    const sobraram = [...bom.linhas.keys()].filter((chave) => chave.startsWith('teste:'));
+    assert.deepStrictEqual(sobraram, [], 'e a linha de teste não ficou no banco: ' + sobraram.join(', '));
+    assert.ok(bom.autenticadas.some((linha) => /^DELETE /.test(linha)), 'a limpeza usou DELETE');
+    aberto.window.close();
+  } finally {
+    await bom.fechar();
+  }
+
+  // ---- 2) tabela ausente: o teste para na primeira etapa e diz o motivo
+  const semTabela = await criarServidorDeMentira({ chave: CHAVE, semTabela: true });
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({
+      externo: [semTabela.url],
+      base: linkParaOProjeto(semTabela.url, CHAVE),
+      armazenamento: {
+        'licitapro.nuvem.v1': JSON.stringify({
+          usuario: 'dej@empresa.com.br', senha: 'senha-secreta-123',
+        }),
+      },
+    });
+    await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local');
+    const resultado = await aberto.window.Nuvem.diagnostico({});
+    assert.strictEqual(resultado.ok, false, 'sem a tabela, o diagnóstico não passa');
+    const parou = resultado.passos[resultado.passos.length - 1];
+    assert.strictEqual(parou.ok, false, 'a última etapa é a que falhou');
+    assert.ok(/nuvem\.sql/.test(parou.detalhe), 'e ela diz o que fazer: ' + parou.detalhe);
+    aberto.window.close();
+  } finally {
+    await semTabela.fechar();
+  }
+
+  // ---- 3) chave pública errada: diz que foi o projeto que recusou
+  const comChave = await criarServidorDeMentira({ chave: 'outra-chave-publica-do-projeto' });
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({
+      externo: [comChave.url],
+      base: linkParaOProjeto(comChave.url, CHAVE),
+      armazenamento: {
+        'licitapro.nuvem.v1': JSON.stringify({
+          usuario: 'dej@empresa.com.br', senha: 'senha-secreta-123',
+        }),
+      },
+    });
+    await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local');
+    const resultado = await aberto.window.Nuvem.diagnostico({});
+    assert.strictEqual(resultado.ok, false, 'chave errada não passa');
+    const parou = resultado.passos[resultado.passos.length - 1];
+    assert.ok(/chave pública|políticas/i.test(parou.detalhe), 'explica a chave/políticas: ' + parou.detalhe);
+    aberto.window.close();
+  } finally {
+    await comChave.fechar();
+  }
+});
+
+teste('Nuvem: dá para apontar outro projeto (conta nova) sem mexer no site', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-do-projeto-novo';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  try {
+    // um navegador limpo: usa o projeto gravado no site até a pessoa escolher outro
+    const aberto = await ModoLocal.abrirSemServidor({ externo: [falso.url] });
+    const w = aberto.window;
+    const $ = (sel) => w.document.querySelector(sel);
+    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local');
+    await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+    assert.strictEqual(w.Nuvem.padrao().origem, 'site', 'começa com o projeto gravado no site');
+
+    // escolher o projeto novo, pela tela (é o que a pessoa faz ao criar a conta nova)
+    $('#entrar-onde').open = true;
+    $('#entrar-url').value = falso.url;
+    $('#entrar-chave').value = CHAVE;
+    $('#entrar-usar-projeto').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(
+      () => w.Nuvem.padrao().url === falso.url,
+      'o projeto escolhido entrou em uso: ' + JSON.stringify(w.Nuvem.padrao())
+    );
+    assert.strictEqual(w.Nuvem.padrao().origem, 'escolhido', 'e fica marcado como escolhido aqui');
+    // sem conta ainda, o teste confere o projeto (endereço, tabela e gravação)
+    await ModoLocal.esperar(
+      () => /funcionando|Tudo certo/i.test($('#entrar-teste-mensagem').textContent),
+      'o teste da conexão roda sozinho depois da troca: ' + $('#entrar-teste-mensagem').textContent
+    );
+    assert.ok(/aceita gravação/.test($('#entrar-passos').textContent), 'e confere a gravação de verdade');
+    const marcadores = [...falso.linhas.keys()].filter((chave) => chave.startsWith('teste:'));
+    assert.deepStrictEqual(marcadores, [], 'nenhuma linha de teste ficou no projeto novo');
+
+    // a conta é criada nesse projeto novo e o sistema abre
+    $('#entrar-usuario').value = 'dej@empresa.com.br';
+    $('#entrar-senha').value = 'senha-secreta-123';
+    $('#entrar-repetir').value = 'senha-secreta-123';
+    $('#aba-criar').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    $('#form-entrar').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'o sistema abriu no projeto novo', 30000);
+    assert.ok(falso.linhas.has('u:dej@empresa.com.br'), 'a conta foi criada no projeto escolhido');
+
+    // o link para o outro computador leva o projeto escolhido (não o do site)
+    const link = w.Nuvem.linkParaOutroComputador();
+    assert.ok(/[?]nuvem=/.test(link), 'o link leva o projeto escolhido: ' + link.slice(0, 60));
+    assert.strictEqual(link.includes('senha-secreta-123'), false, 'sem a senha, como sempre');
+    assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+    w.close();
   } finally {
     await falso.fechar();
   }
@@ -2706,11 +2848,15 @@ teste('Conta: o site leva a chave pública gravada (e só ela)', () => {
     html.indexOf('js/config-nuvem.js') < html.indexOf('js/nuvem.js'),
     'o config entra antes do módulo da nuvem'
   );
-  // a tela de entrar não tem mais campo de endereço/chave: só e-mail e senha
+  // a tela de entrar pede o e-mail e a senha: o projeto e a chave já vêm do site
   assert.ok(/id="entrar-usuario"[^>]*type="email"/.test(html), 'o login é um e-mail');
-  assert.strictEqual(html.includes('id="entrar-url"'), false, 'sem campo de endereço do projeto');
-  assert.strictEqual(html.includes('id="entrar-chave"'), false, 'sem campo de chave pública');
   assert.strictEqual(html.includes('Onde os dados ficam guardados'), false, 'sem o bloco "onde os dados ficam guardados"');
+  // trocar de projeto é possível, mas fica fora do caminho (dentro de um bloco fechado)
+  const blocoOutroProjeto = html.slice(html.indexOf('id="entrar-onde"'), html.indexOf('id="entrar-rodape"'));
+  assert.ok(/id="entrar-url"/.test(blocoOutroProjeto), 'dá para apontar outro projeto');
+  assert.ok(/id="entrar-testar"/.test(blocoOutroProjeto), 'e testar a conexão antes de entrar');
+  assert.ok(/Usar outro projeto/.test(blocoOutroProjeto), 'num bloco discreto, fechado por padrão');
+  assert.ok(!/<details[^>]*id="entrar-onde"[^>]*open/.test(html), 'o bloco começa fechado');
 
   // e a regra do teste de segurança continua pegando a chave de servidor e o
   // endereço do projeto quando eles aparecem fora do config-nuvem.js

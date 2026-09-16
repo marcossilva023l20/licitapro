@@ -84,6 +84,9 @@
       } else if (nuvemAtiva && nuvem.erro) {
         caixa.className = 'situacao-dados erro';
         texto.textContent = 'Nuvem: ' + nuvem.erro + ' — os dados continuam salvos neste navegador.';
+      } else if (nuvemAtiva && nuvem.aviso) {
+        caixa.className = 'situacao-dados aviso';
+        texto.textContent = 'Conta "' + (nuvem.usuario || '') + '": ' + nuvem.aviso;
       } else if (nuvemAtiva) {
         caixa.className = 'situacao-dados ok';
         texto.textContent =
@@ -845,6 +848,21 @@
     if (usuario && !usuario.value && window.Nuvem && window.Nuvem.usuario()) {
       usuario.value = window.Nuvem.usuario();
     }
+    // onde estão os dados hoje (e como trocar de projeto, se a pessoa criou outro)
+    const projeto = window.Nuvem ? window.Nuvem.padrao() : { url: '', chave: '', origem: '' };
+    const atual = $('#entrar-projeto-atual');
+    if (atual) {
+      atual.textContent = projeto.url
+        ? 'Projeto em uso: ' + projeto.url +
+          (projeto.origem === 'site' ? ' (o do site)' : ' (escolhido neste navegador)') + '.'
+        : 'Nenhum projeto configurado ainda.';
+    }
+    const url = $('#entrar-url');
+    const chave = $('#entrar-chave');
+    if (url && !url.value) url.value = projeto.url || '';
+    if (chave && !chave.value) chave.value = projeto.chave || '';
+    const esquecer = $('#entrar-esquecer-projeto');
+    if (esquecer) esquecer.classList.toggle('oculto', projeto.origem === 'site');
     if (usuario && !tela.classList.contains('oculto')) usuario.focus();
   }
 
@@ -852,6 +870,44 @@
   function oferecerSemConta() {
     const rodape = $('#entrar-rodape');
     if (rodape) rodape.classList.remove('oculto');
+  }
+
+  /**
+   * Mostra o resultado de um teste passo a passo ("testar a conexão/conta"):
+   * uma linha por etapa, com ✓ ou ✕ e o motivo exato quando falha.
+   */
+  function mostrarPassos(seletor, resultado) {
+    const lista = $(seletor);
+    if (!lista) return;
+    lista.textContent = '';
+    const passos = (resultado && resultado.passos) || [];
+    if (!passos.length) {
+      lista.classList.add('oculto');
+      return;
+    }
+    passos.forEach((passo) => {
+      const item = document.createElement('li');
+      item.className = passo.ok ? 'ok' : 'erro';
+      const texto = document.createElement('span');
+      texto.textContent = passo.nome;
+      item.appendChild(texto);
+      if (passo.detalhe) {
+        const detalhe = document.createElement('span');
+        detalhe.className = 'detalhe';
+        detalhe.textContent = passo.detalhe;
+        item.appendChild(detalhe);
+      }
+      lista.appendChild(item);
+    });
+    const resumo = document.createElement('li');
+    resumo.className = resultado.ok ? 'ok' : 'erro';
+    const texto = document.createElement('span');
+    texto.textContent = resultado.ok
+      ? 'Tudo certo: o banco está respondendo, aceitando gravação e devolvendo o que foi gravado.'
+      : 'Parei na primeira etapa que falhou — o motivo está acima.';
+    resumo.appendChild(texto);
+    lista.appendChild(resumo);
+    lista.classList.remove('oculto');
   }
 
   /**
@@ -981,6 +1037,70 @@
       });
     }
 
+    // ------------------------------------ testar a conexão / usar outro projeto
+    const escreverTeste = (texto, tipo) => {
+      const mensagem = $('#entrar-teste-mensagem');
+      if (!mensagem) return;
+      mensagem.textContent = texto || '';
+      mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+    };
+
+    const testarNaTela = async (comOsCampos) => {
+      escreverTeste('Testando...');
+      $('#entrar-passos').classList.add('oculto');
+      const dados = {
+        usuario: $('#entrar-usuario').value,
+        senha: $('#entrar-senha').value,
+      };
+      if (comOsCampos) {
+        dados.url = $('#entrar-url').value;
+        dados.chave = $('#entrar-chave').value;
+      }
+      try {
+        const resultado = await window.Nuvem.diagnostico(dados);
+        mostrarPassos('#entrar-passos', resultado);
+        escreverTeste(
+          resultado.ok ? 'A conta e o banco estão funcionando.' : 'O teste parou — veja as etapas acima.',
+          resultado.ok ? 'ok' : 'erro'
+        );
+      } catch (erro) {
+        escreverTeste(erro.message, 'erro');
+      }
+    };
+
+    const testar = $('#entrar-testar');
+    if (testar) testar.addEventListener('click', () => testarNaTela(true));
+
+    const usar = $('#entrar-usar-projeto');
+    if (usar) {
+      usar.addEventListener('click', async () => {
+        try {
+          const troca = window.Nuvem.usarOutroProjeto($('#entrar-url').value, $('#entrar-chave').value);
+          escreverTeste(
+            troca.saiuDaConta
+              ? 'Projeto trocado. A conta que estava ligada foi desconectada: entre (ou crie a conta) de novo neste projeto.'
+              : 'Projeto trocado para ' + troca.url + '.',
+            'ok'
+          );
+          $('#entrar-esquecer-projeto').classList.remove('oculto');
+          await testarNaTela(false);
+        } catch (erro) {
+          escreverTeste(erro.message, 'erro');
+        }
+      });
+    }
+
+    const esquecer = $('#entrar-esquecer-projeto');
+    if (esquecer) {
+      esquecer.addEventListener('click', () => {
+        window.Nuvem.esquecerProjeto();
+        $('#entrar-url').value = '';
+        $('#entrar-chave').value = '';
+        mostrarTelaEntrar();
+        escreverTeste('Voltou ao projeto gravado no site.');
+      });
+    }
+
     const sincronizar = $('#nuvem-sincronizar');
     if (sincronizar) {
       sincronizar.addEventListener('click', async () => {
@@ -1001,6 +1121,29 @@
           await carregarDocumentos();
           desenharPainel();
           atualizarSituacaoDados();
+        } catch (erro) {
+          escrever(erro.message, 'erro');
+        }
+      });
+    }
+
+    const testarConta = $('#nuvem-testar');
+    if (testarConta) {
+      testarConta.addEventListener('click', async () => {
+        const mensagem = $('#nuvem-mensagem');
+        const escrever = (texto, tipo) => {
+          mensagem.textContent = texto || '';
+          mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+        };
+        escrever('Testando...');
+        $('#nuvem-passos').classList.add('oculto');
+        try {
+          const resultado = await window.Nuvem.diagnostico({});
+          mostrarPassos('#nuvem-passos', resultado);
+          escrever(
+            resultado.ok ? 'Conta e banco funcionando.' : 'O teste parou — veja as etapas abaixo.',
+            resultado.ok ? 'ok' : 'erro'
+          );
         } catch (erro) {
           escrever(erro.message, 'erro');
         }

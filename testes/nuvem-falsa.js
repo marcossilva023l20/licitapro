@@ -26,7 +26,7 @@ function criarServidorDeMentira(opcoes) {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       });
-      res.end(JSON.stringify(corpo));
+      res.end(corpo === null || corpo === undefined ? '' : JSON.stringify(corpo));
     };
 
     if (config.semTabela) {
@@ -70,6 +70,14 @@ function criarServidorDeMentira(opcoes) {
         }
       });
       return undefined;
+    }
+
+    // o cofre também apaga (é o que a limpeza do teste passo a passo usa)
+    if (req.method === 'DELETE') {
+      const pedido = url.searchParams.get('id') || '';
+      const id = pedido.startsWith('eq.') ? decodeURIComponent(pedido.slice(3)) : null;
+      if (id) linhas.delete(id);
+      return responder(204, null);
     }
 
     return responder(405, { message: 'método não usado pelo cofre: ' + req.method });

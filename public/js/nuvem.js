@@ -20,7 +20,12 @@
   'use strict';
 
   const CHAVE_CONFIG = 'licitapro.nuvem.v1';
+  const CHAVE_PROJETO = 'licitapro.nuvem.projeto.v1';
   const TABELA = 'licitapro_cofre';
+  // fotos grandes demais atrapalham a gravação (o cofre é uma linha de tabela,
+  // não um serviço de arquivos): acima disso a foto é reduzida antes de subir
+  const PESO_MAXIMO_FOTO = 1200 * 1024;
+  const LARGURA_MAXIMA_FOTO = 1600;
   const ESPERA_ENVIO = 2500; // ms depois da última gravação, antes de enviar
 
   const estado = {
@@ -46,19 +51,81 @@
     }
   }
 
+  /** Projeto escolhido neste navegador (link, ou trocado à mão na tela). */
+  function lerProjeto() {
+    try {
+      const bruto = window.localStorage.getItem(CHAVE_PROJETO);
+      return bruto ? JSON.parse(bruto) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function gravarProjeto(projeto) {
+    try {
+      window.localStorage.setItem(CHAVE_PROJETO, JSON.stringify(projeto));
+    } catch (_) {
+      /* sem armazenamento: vale só o que está gravado no site */
+    }
+  }
+
   /**
    * Endereço e chave pública que este site usa, na ordem: o link `?nuvem=...`
-   * (quando alguém abriu o sistema por ele), o projeto da conta que já está
-   * ligada neste navegador e, por fim, o que está gravado em config-nuvem.js.
+   * (quando alguém abriu o sistema por ele), o projeto já escolhido neste
+   * navegador e, por fim, o que está gravado em config-nuvem.js.
    */
   function padrao() {
+    const doLink = doEndereco();
+    if (doLink) {
+      const salvo = lerProjeto();
+      if (!salvo || salvo.url !== doLink.url || salvo.chave !== doLink.chave) {
+        gravarProjeto({ url: doLink.url, chave: doLink.chave, origem: 'link', escolhidoEm: new Date().toISOString() });
+      }
+      return Object.assign({ origem: 'link' }, doLink);
+    }
+    const salvo = lerProjeto();
+    if (salvo && salvo.url && salvo.chave) {
+      return { url: salvo.url, chave: salvo.chave, origem: salvo.origem || 'escolhido' };
+    }
     const gravado = window.NuvemPadrao || {};
-    const doLink = doEndereco() || {};
-    const conta = lerConfig() || {};
-    return {
-      url: doLink.url || conta.url || gravado.url || '',
-      chave: doLink.chave || conta.chave || gravado.chave || '',
-    };
+    return { url: gravado.url || '', chave: gravado.chave || '', origem: 'site' };
+  }
+
+  /**
+   * Troca o projeto usado neste navegador (é o caminho de quem criou um
+   * projeto novo no Supabase). A conta que estava ligada precisa entrar de
+   * novo — as duas ficam em projetos diferentes.
+   */
+  function usarOutroProjeto(url, chave) {
+    const endereco = String(url || '').trim().replace(/\/+$/, '');
+    const publica = String(chave || '').trim();
+    if (!/^https?:\/\/[^\s/]+\.[^\s/]+$/i.test(endereco)) {
+      throw new Error('Endereço do projeto inválido. Ele é assim: https://xxxxxxxx.supabase.co');
+    }
+    if (publica.length < 20) {
+      throw new Error('Cole a chave pública (anon/publishable): no Supabase, em Project Settings → API Keys.');
+    }
+    const tinhaConta = Boolean((lerConfig() || {}).usuario);
+    gravarProjeto({ url: endereco, chave: publica, origem: 'escolhido', escolhidoEm: new Date().toISOString() });
+    sair();
+    return { url: endereco, chave: publica, trocou: true, saiuDaConta: tinhaConta };
+  }
+
+  /** Esquece o projeto escolhido neste navegador (volta ao projeto do site). */
+  function esquecerProjeto() {
+    try {
+      window.localStorage.removeItem(CHAVE_PROJETO);
+    } catch (_) {
+      /* nada a fazer */
+    }
+    return padrao();
+  }
+
+  /** A conta ligada + o projeto em uso: é o que as funções daqui para baixo usam. */
+  function emUso() {
+    const config = lerConfig();
+    if (!config) return null;
+    return Object.assign({}, config, padrao());
   }
 
   function lerConfig() {
@@ -79,7 +146,7 @@
   }
 
   function configurada() {
-    const config = lerConfig();
+    const config = emUso();
     return Boolean(config && config.url && config.chave && config.usuario && config.senha);
   }
 
@@ -114,8 +181,8 @@
 
   /** O que a tela mostra sobre a conta/nuvem. */
   function situacao() {
-    const config = lerConfig();
-    const vazia = { ativa: false, enviando: false, erro: '', sincronizadoEm: null, projeto: '', usuario: '' };
+    const config = emUso();
+    const vazia = { ativa: false, enviando: false, erro: '', sincronizadoEm: null, projeto: '', usuario: '', aviso: '' };
     if (!config || !configurada()) return vazia;
     return {
       ativa: true,
@@ -265,8 +332,11 @@
     const gravado = padrao();
     const url = String((dados && dados.url) || gravado.url || '').trim().replace(/\/+$/, '');
     const chave = String((dados && dados.chave) || gravado.chave || '').trim();
-    const email = String((dados && (dados.usuario || dados.email)) || '').trim().toLowerCase();
-    const senha = String((dados && dados.senha) || '');
+    const daConta = lerConfig() || {};
+    const email = String(
+      (dados && (dados.usuario || dados.email)) || daConta.usuario || ''
+    ).trim().toLowerCase();
+    const senha = String((dados && dados.senha) || daConta.senha || '');
     if (!/^https?:\/\/[^\s/]+\.[^\s/]+$/i.test(url)) {
       throw new Error('Endereço do projeto não configurado (veja public/js/config-nuvem.js).');
     }
@@ -362,21 +432,19 @@
   }
 
   /**
-   * Sair da conta: este navegador esquece a senha (e a conta). O endereço do
-   * projeto fica guardado para a próxima entrada cair no mesmo lugar — o que
-   * já subiu para a conta continua lá.
+   * Sair da conta: este navegador esquece o e-mail e a senha. O **projeto**
+   * continua escolhido (é o que faz a próxima entrada cair no mesmo lugar) e o
+   * que já subiu para a conta continua lá.
    */
   function sair() {
     const config = lerConfig() || {};
     try {
-      window.localStorage.setItem(
-        CHAVE_CONFIG,
-        JSON.stringify({ url: config.url || '', chave: config.chave || '', projeto: config.projeto || '' })
-      );
+      window.localStorage.removeItem(CHAVE_CONFIG);
     } catch (_) {
-      /* sem armazenamento: a próxima entrada usa o projeto gravado no site */
+      /* nada a fazer */
     }
     estado.ultimoErro = '';
+    estado.ultimoAviso = '';
     return config.usuario || '';
   }
 
@@ -386,7 +454,7 @@
   // ------------------------------------------------------------------ envio
 
   async function enviar() {
-    const config = lerConfig();
+    const config = emUso();
     if (!config || !configurada()) throw new Error('Entre numa conta para enviar os dados.');
     if (!window.ModoEstatico || !window.ModoEstatico.montarBackup) {
       throw new Error('A nuvem funciona no sistema que roda sem servidor (GitHub Pages).');
@@ -394,16 +462,24 @@
 
     const backup = await window.ModoEstatico.montarBackup();
 
-    // 1) imagens novas: cada uma vira uma linha e nunca mais é enviada
+    // 1) imagens novas: cada uma vira uma linha e nunca mais é enviada.
+    //    Uma foto problemática não pode derrubar o resto: ela fica de fora (e
+    //    vai de novo na próxima tentativa) enquanto os dados seguem viagem.
     const enviadas = new Set(config.imagens || []);
+    const fotosQueFalharam = [];
     for (const [id, dataUrl] of Object.entries(backup.imagens || {})) {
       if (enviadas.has(id)) continue;
-      const blob = await (await window.fetch(dataUrl)).blob();
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const pacote = await cifrar({ imagem: paraBase64(bytes), tipo: blob.type || 'image/jpeg' }, config.senha);
-      await gravarLinha(config, linhaImagem(config, id), pacote);
-      enviadas.add(id);
-      gravarConfig(Object.assign({}, config, { imagens: Array.from(enviadas) }));
+      try {
+        const blob = await (await window.fetch(dataUrl)).blob();
+        const foto = await prepararFoto(blob);
+        const bytes = new Uint8Array(await foto.arrayBuffer());
+        const pacote = await cifrar({ imagem: paraBase64(bytes), tipo: foto.type || 'image/jpeg' }, config.senha);
+        await gravarLinha(config, linhaImagem(config, id), pacote);
+        enviadas.add(id);
+        gravarConfig(Object.assign({}, config, { imagens: Array.from(enviadas) }));
+      } catch (erro) {
+        fotosQueFalharam.push({ id, motivo: erro.message });
+      }
     }
 
     // 2) o conteúdo principal: documento, empresa, padrões e numeração
@@ -423,8 +499,28 @@
       erro: '',
     }));
     estado.ultimoErro = '';
-    estado.ultimoAviso = '';
+    estado.ultimoAviso = fotosQueFalharam.length
+      ? fotosQueFalharam.length + ' foto(s) não subiram para a conta (o resto foi). ' +
+        'O motivo da primeira: ' + fotosQueFalharam[0].motivo
+      : '';
     return agora;
+  }
+
+  /**
+   * A foto que vai para o cofre: em geral a original; acima do peso máximo ela
+   * é reduzida (o cofre guarda uma linha por foto, não é serviço de arquivos).
+   */
+  async function prepararFoto(blob) {
+    if (!blob || blob.size <= PESO_MAXIMO_FOTO) return blob;
+    const reduzir = window.ImagensNavegador && window.ImagensNavegador.reduzirParaJpeg;
+    if (!reduzir) return blob;
+    try {
+      const menor = await reduzir(blob, LARGURA_MAXIMA_FOTO);
+      // só troca se realmente ficou menor (e se o navegador soube reduzir)
+      return menor && menor.size && menor.size < blob.size ? menor : blob;
+    } catch (_) {
+      return blob;
+    }
   }
 
   /** Envia depois de uma pausa (cada gravação no meio de uma digitação não pesa). */
@@ -454,7 +550,7 @@
 
   /** Baixa uma imagem da nuvem (usada quando o PDF precisa dela neste PC). */
   async function baixarImagem(id) {
-    const config = lerConfig();
+    const config = emUso();
     if (!config) return null;
     const linhas = await pedir(
       config,
@@ -518,7 +614,7 @@
    * Se os dois lados mudaram, junta documento por documento (nada é perdido).
    */
   async function sincronizar() {
-    const config = lerConfig();
+    const config = emUso();
     if (!config || !configurada()) throw new Error('Entre numa conta para sincronizar.');
     estado.enviando = true;
     try {
@@ -565,14 +661,12 @@
    */
   function linkParaOutroComputador() {
     const endereco = window.location.origin + window.location.pathname.replace(/index\.html$/, '');
-    const enderecado = endereco + '#/painel';
-    const gravado = padrao();
+    const projeto = padrao();
     // o endereço e a chave já vão gravados no site: o link só precisa levá-los
-    // quando este navegador está usando outro projeto (link `?nuvem=...`)
-    if (gravado.url === (window.NuvemPadrao || {}).url && gravado.chave === (window.NuvemPadrao || {}).chave) {
-      return enderecado;
-    }
-    const dados = encodeURIComponent(JSON.stringify(gravado));
+    // quando este navegador está usando outro projeto (escolhido aqui ou vindo
+    // de um link `?nuvem=...`)
+    if (projeto.origem === 'site') return endereco + '#/painel';
+    const dados = encodeURIComponent(JSON.stringify({ url: projeto.url, chave: projeto.chave }));
     return endereco + '?nuvem=' + dados + '#/painel';
   }
 
@@ -585,10 +679,118 @@
     return doEndereco();
   }
 
+  /**
+   * Teste do cofre, passo a passo. É a resposta para "por que não está
+   * salvando?": cada etapa diz se passou e, quando não passa, o motivo exato
+   * (com o que o Supabase respondeu).
+   *
+   * Não encosta nos seus dados: a gravação de teste é uma linha marcada como
+   * "teste" e é apagada no fim. O e-mail e a senha são opcionais — sem conta
+   * ainda, o teste confere o projeto (endereço, chave, tabela e gravação).
+   */
+  async function diagnostico(dados) {
+    const passos = [];
+    const anotar = (nome, ok, detalhe) => {
+      passos.push({ nome, ok: Boolean(ok), detalhe: detalhe || '' });
+      return Boolean(ok);
+    };
+
+    const projeto = padrao();
+    const conta = lerConfig() || {};
+    const url = String((dados && dados.url) || projeto.url || '').trim().replace(/\/+$/, '');
+    const chave = String((dados && dados.chave) || projeto.chave || '').trim();
+    const email = String((dados && (dados.usuario || dados.email)) || conta.usuario || '').trim().toLowerCase();
+    const senha = String((dados && dados.senha) || conta.senha || '');
+
+    if (!/^https?:\/\/[^\s/]+\.[^\s/]+$/i.test(url) || chave.length < 20) {
+      anotar(
+        'Endereço do projeto e chave pública',
+        false,
+        url || chave
+          ? 'Confira o endereço e a chave pública (no Supabase: Project Settings → API Keys → anon/publishable).'
+          : 'Nenhum projeto configurado: em "Usar outro projeto", cole o endereço e a chave pública.'
+      );
+      return { ok: false, passos };
+    }
+    anotar('Endereço do projeto e chave pública', true, url);
+    const config = { url, chave, usuario: email || 'teste-sem-conta', senha };
+
+    // 1) o projeto responde e a tabela existe?
+    try {
+      await testar(config);
+      anotar('O projeto respondeu', true, 'a tabela licitapro_cofre existe e aceita a chave pública');
+    } catch (erro) {
+      anotar('O projeto respondeu', false, erro.message);
+      return { ok: false, passos };
+    }
+
+    // 2) o cofre aceita gravação? (linha marcada como teste, apagada no fim)
+    const idTeste = 'teste:' + String(config.usuario).slice(0, 40) + ':' + Math.random().toString(36).slice(2, 8);
+    let gravou = false;
+    try {
+      await gravarLinha(config, idTeste, { teste: true, claro: true, quando: new Date().toISOString() });
+      gravou = true;
+      anotar('O cofre aceita gravação', true, 'linha de teste criada no banco');
+    } catch (erro) {
+      anotar('O cofre aceita gravação', false, erro.message);
+    }
+
+    // 3) o que foi gravado volta?
+    if (gravou) {
+      try {
+        const linhas = await pedir(config, TABELA + '?id=eq.' + encodeURIComponent(idTeste) + '&select=conteudo');
+        const voltou = linhas && linhas.length ? linhas[0].conteudo : null;
+        anotar(
+          'O que foi gravado volta na leitura',
+          Boolean(voltou && voltou.teste),
+          voltou ? 'o banco devolveu a linha de teste' : 'a linha não voltou na leitura'
+        );
+      } catch (erro) {
+        anotar('O que foi gravado volta na leitura', false, erro.message);
+      }
+    }
+
+    // 4) limpeza: a linha de teste não pode ficar no banco
+    if (gravou) {
+      try {
+        await pedir(config, TABELA + '?id=eq.' + encodeURIComponent(idTeste), { method: 'DELETE' });
+        anotar('Limpeza da linha de teste', true, 'nada sobrou no banco');
+      } catch (_) {
+        anotar('Limpeza da linha de teste', false, 'a linha ' + idTeste + ' ficou no banco (pode apagar na mão)');
+      }
+    }
+
+    // 5) com conta: a senha cifra e decifra o conteúdo (é ela que protege o cofre)
+    if (email || senha) {
+      if (!emailValido(email) || senha.length < 6) {
+        anotar('E-mail e senha da conta', false, 'Informe um e-mail válido e uma senha com pelo menos 6 caracteres.');
+      } else {
+        try {
+          const pacote = await cifrar({ teste: true, quando: new Date().toISOString() }, senha);
+          const aberto = await decifrar(pacote, senha);
+          anotar(
+            'A senha cifra e decifra o conteúdo',
+            Boolean(aberto && aberto.teste),
+            'o que sai daqui cifrado só abre com a sua senha (AES-256)'
+          );
+        } catch (erro) {
+          anotar('A senha cifra e decifra o conteúdo', false, erro.message);
+        }
+      }
+    }
+
+    return { ok: passos.every((passo) => passo.ok), passos };
+  }
+
   window.Nuvem = {
     configurada,
     lerConfig,
     padrao,
+    emUso,
+    lerProjeto,
+    usarOutroProjeto,
+    esquecerProjeto,
+    diagnostico,
     situacao,
     usuario,
     emailValido,

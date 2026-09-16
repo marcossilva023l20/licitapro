@@ -18,13 +18,30 @@
     return meta && meta.content ? meta.content : '';
   })();
 
-  const $ = (seletor, raiz) => (raiz || document).querySelector(seletor);
-  const $$ = (seletor, raiz) => Array.from((raiz || document).querySelectorAll(seletor));
+  /** O documento da janela — null quando ela já foi fechada (só acontece em teste). */
+  const documento = () => {
+    try {
+      return typeof document !== 'undefined' && document ? document : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const $ = (seletor, raiz) => {
+    const onde = raiz || documento();
+    return onde ? onde.querySelector(seletor) : null;
+  };
+  const $$ = (seletor, raiz) => {
+    const onde = raiz || documento();
+    return onde ? Array.from(onde.querySelectorAll(seletor)) : [];
+  };
 
   // ------------------------------------------------------------- toasts
 
   function toast(mensagem, tipo, duracaoMs) {
+    // a janela pode ter sido fechada no meio de um pedido (aí não há tela para
+    // avisar): sem caixa de avisos, não há o que fazer
     const caixa = $('#caixa-toasts');
+    if (!caixa) return;
     const elemento = document.createElement('div');
     elemento.className = 'toast ' + (tipo || '');
     elemento.textContent = mensagem;

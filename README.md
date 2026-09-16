@@ -232,6 +232,10 @@ estiverem, vale o Supabase):
    configurado…"* ou *"O banco (…) não está recebendo os dados: <motivo>"*. O
    `/api/health` também responde `"armazenamento"` e o estado do banco.
 
+> **Começando do zero (conta nova na nuvem):** siga [`COMECAR.md`](COMECAR.md) — criar o
+> projeto no Supabase, rodar o SQL, apontar o site para ele e conferir etapa por etapa com o
+> botão **Testar a conexão**.
+
 #### Sem servidor: entrar numa conta e abrir o sistema de outro computador
 
 O endereço do GitHub Pages **não tem servidor**: ali os dados ficam no navegador (com backup em
