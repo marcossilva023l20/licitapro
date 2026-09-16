@@ -13,7 +13,7 @@
  * sistema por um link com ?nuvem=..., que tem prioridade sobre eles).
  */
 window.NuvemPadrao = {
-  url: 'https://dynebhtodtkbtydzgouo.supabase.co',
+  url: 'https://yrqhxljwdxsacaopbllq.supabase.co',
   // chave pública (anon) do projeto — a mesma que aparece em Settings → API Keys
-  chave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bmViaHRvZHRrYnR5ZHpnb3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1MTc0OTgsImV4cCI6MjEwNTA5MzQ5OH0.T217Fpknh02Uoih64rhSE-f3rgZi6FnxHMebGH41Av0',
+  chave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlycWh4bGp3ZHhzYWNhb3BibGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1NzE1MDAsImV4cCI6MjEwNTE0NzUwMH0.r_8QBOAdlYvM2MBWjO4r2XshsLFM_dxFB7rjXVdQ_uw',
 };
