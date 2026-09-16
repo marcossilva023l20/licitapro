@@ -1085,7 +1085,13 @@
     estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
     mostrarApp();
     await atualizarSituacaoDados();
-    if (!window.location.hash) window.location.hash = '#/painel';
+    // O endereço inicial é escrito com replaceState (e não com location.hash):
+    // assim o app não disputa o endereço com quem clicou num link no mesmo
+    // instante em que a conta abre — antes, o clique podia ser perdido porque
+    // o app terminava de escrever '#/painel' por cima dele.
+    if (!window.location.hash && window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + '#/painel');
+    }
     rotear();
     await sincronizarAoAbrir();
   }

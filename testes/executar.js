@@ -1314,6 +1314,25 @@ teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {
  *  (o endereço e a chave que valem são os do link, no lugar dos que o site traz
  *  gravados em public/js/config-nuvem.js). */
 const SITE_DO_PAGES = 'https://marcossilva023l20.github.io/licitapro/public/';
+/**
+ * Espera o sistema terminar de abrir depois do login: a tela precisa estar
+ * visível E a situação dos dados já informada (é o último passo da abertura).
+ *
+ * Sem isso o teste clica no meio da abertura — e aí o clique compete com o
+ * endereço que o app está escrevendo (no jsdom a navegação do link é aplicada
+ * depois do clique). Foi o que deixou estes testes instáveis no CI.
+ */
+async function esperarSistemaAberto(janela, descricao, tempo = 30000) {
+  const $ = (sel) => janela.document.querySelector(sel);
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto ' + descricao, tempo);
+  await ModoLocal.esperar(
+    () => /na conta|última sincronização|neste navegador|sem servidor/.test($('#situacao-dados-texto').textContent),
+    'a abertura terminou ' + descricao + ': ' + $('#situacao-dados-texto').textContent,
+    tempo
+  );
+  return $;
+}
+
 function linkParaOProjeto(url, chave) {
   return SITE_DO_PAGES + '?nuvem=' + encodeURIComponent(JSON.stringify({ url, chave }));
 }
@@ -1505,7 +1524,7 @@ teste('Nuvem: editar a empresa e sair do site na mesma hora não perde o que foi
     $1('#entrar-senha').value = SENHA;
     $1('#entrar-repetir').value = SENHA;
     $1('#form-entrar').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
-    await ModoLocal.esperar(() => !$1('#app').classList.contains('oculto'), 'sistema aberto', 30000);
+    await esperarSistemaAberto(w1, 'no computador 1');
 
     w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa');
@@ -1532,7 +1551,7 @@ teste('Nuvem: editar a empresa e sair do site na mesma hora não perde o que foi
     $2('#entrar-usuario').value = EMAIL;
     $2('#entrar-senha').value = SENHA;
     $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
-    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'sistema aberto no computador 2', 30000);
+    await esperarSistemaAberto(w2, 'no computador 2');
     await ModoLocal.esperar(
       () => w2.ModoEstatico._interno.banco.perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL LTDA',
       'a empresa editada apareceu no outro computador: ' +
@@ -1607,9 +1626,13 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
     $2('#entrar-usuario').value = EMAIL;
     $2('#entrar-senha').value = SENHA;
     $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
-    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'sistema aberto no computador 2', 30000);
+    await esperarSistemaAberto(w2, 'no computador 2');
     w2.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
-    await ModoLocal.esperar(() => !$2('#view-empresa').classList.contains('oculto'), 'tela da empresa no computador 2');
+    await ModoLocal.esperar(
+      () => !$2('#view-empresa').classList.contains('oculto'),
+      'tela da empresa no computador 2 (endereço: ' + w2.location.hash + ')',
+      20000
+    );
     await ModoLocal.esperar(
       () => $2('#emp-razao').value === 'D.E.J SOLUTIONS & GLOBAL LTDA',
       'o computador 2 recebeu o cadastro: ' + JSON.stringify($2('#emp-razao').value),
@@ -1637,7 +1660,7 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
     $3('#entrar-usuario').value = EMAIL;
     $3('#entrar-senha').value = SENHA;
     $3('#form-entrar').dispatchEvent(new w3.Event('submit', { bubbles: true, cancelable: true }));
-    await ModoLocal.esperar(() => !$3('#app').classList.contains('oculto'), 'sistema aberto de novo', 30000);
+    await esperarSistemaAberto(w3, 'no computador 1 de novo');
     await ModoLocal.esperar(
       () => w3.ModoEstatico._interno.banco.perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL — MATRIZ',
       'a edição nova venceu a antiga: ' +
@@ -1645,7 +1668,11 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
       20000
     );
     w3.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w3.MouseEvent('click', { bubbles: true }));
-    await ModoLocal.esperar(() => !$3('#view-empresa').classList.contains('oculto'), 'tela da empresa de novo');
+    await ModoLocal.esperar(
+      () => !$3('#view-empresa').classList.contains('oculto'),
+      'tela da empresa de novo (endereço: ' + w3.location.hash + ')',
+      20000
+    );
     assert.strictEqual(
       $3('#emp-razao').value,
       'D.E.J SOLUTIONS & GLOBAL — MATRIZ',
