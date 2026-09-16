@@ -7,6 +7,7 @@ const Esquema = require('../documento-schema');
 const Pdf = require('../pdf');
 const Formato = require('../../shared/format');
 const { COLUNAS } = require('../colunas');
+const PlanilhaAuxiliar = require('../../shared/planilha-auxiliar');
 
 const rotas = express.Router();
 
@@ -212,6 +213,27 @@ rotas.get('/:id/planilha', (req, res) => {
   const buffer = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
 
   const nome = `${doc.tipo === 'orcamento' ? 'Orcamento' : 'Proposta'}_${Pdf.numeroFormatado(doc).replace(/\W+/g, '-')}_itens.xlsx`;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${Formato.slug(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+  res.end(buffer);
+});
+
+// ------------------------------------------------ planilha auxiliar (Excel)
+
+/**
+ * A planilha auxiliar: os itens do documento no MESMO formato da
+ * planilha-modelo de importação (mesmas colunas e títulos), mais uma aba
+ * "Resumo" com identificação, totais e condições. Serve para trabalhar os
+ * itens no Excel e para reenviar pelo próprio sistema.
+ */
+rotas.get('/:id/planilha-auxiliar', (req, res) => {
+  const doc = Documento.porId(req.params.id);
+  if (!doc) return res.status(404).json({ erro: 'Documento não encontrado.' });
+
+  const empresa = Perfil.obter().empresa || {};
+  const buffer = PlanilhaAuxiliar.gerarBuffer(doc, empresa);
+  const nome = PlanilhaAuxiliar.nomeArquivo(doc);
+
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${Formato.slug(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
   res.end(buffer);

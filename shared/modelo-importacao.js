@@ -46,20 +46,9 @@
     },
   ];
 
-  /** Monta o arquivo .xlsx (aba "Itens" para preencher + aba "Instruções"). */
-  function montarLivro() {
-    const vazia = XLSX.utils.aoa_to_sheet([COLUNAS.map((c) => c.titulo)]);
-    vazia['!cols'] = COLUNAS.map((c) => ({ wch: c.largura }));
-
-    // Comentários explicativos em cada cabeçalho
-    COLUNAS.forEach((coluna, indice) => {
-      const endereco = XLSX.utils.encode_cell({ r: 0, c: indice });
-      if (vazia[endereco]) {
-        vazia[endereco].c = [{ t: `${coluna.rotulo}\n\n${coluna.dica}` }];
-      }
-    });
-
-    const linhasInstrucoes = [
+  /** Linhas da aba "Instruções" (usadas aqui e na planilha auxiliar). */
+  function linhasInstrucoes() {
+    return [
       ['COMO PREENCHER ESTA PLANILHA — DEJ SOLUTIONS & GLOBAL'],
       [''],
       ['1) Preencha somente a aba "Itens", a partir da linha 2 (não altere os títulos da linha 1).'],
@@ -80,8 +69,22 @@
       COLUNAS.map((c) => c.rotulo),
       ...EXEMPLOS.map((ex) => COLUNAS.map((c) => (ex[c.chave] === undefined ? '' : ex[c.chave]))),
     ];
+  }
 
-    const instrucoes = XLSX.utils.aoa_to_sheet(linhasInstrucoes);
+  /** Monta o arquivo .xlsx (aba "Itens" para preencher + aba "Instruções"). */
+  function montarLivro() {
+    const vazia = XLSX.utils.aoa_to_sheet([COLUNAS.map((c) => c.titulo)]);
+    vazia['!cols'] = COLUNAS.map((c) => ({ wch: c.largura }));
+
+    // Comentários explicativos em cada cabeçalho
+    COLUNAS.forEach((coluna, indice) => {
+      const endereco = XLSX.utils.encode_cell({ r: 0, c: indice });
+      if (vazia[endereco]) {
+        vazia[endereco].c = [{ t: `${coluna.rotulo}\n\n${coluna.dica}` }];
+      }
+    });
+
+    const instrucoes = XLSX.utils.aoa_to_sheet(linhasInstrucoes());
     instrucoes['!cols'] = [{ wch: 22 }, { wch: 70 }, { wch: 14 }];
 
     const livro = XLSX.utils.book_new();
@@ -95,5 +98,5 @@
     return Importador.escreverXlsx(montarLivro());
   }
 
-  return { gerarBuffer, montarLivro, EXEMPLOS };
+  return { gerarBuffer, montarLivro, linhasInstrucoes, EXEMPLOS };
 });

@@ -1068,6 +1068,36 @@
       }
     });
 
+    // planilha auxiliar: itens preenchidos no formato do modelo de importação
+    // (+ aba de resumo), para trabalhar no Excel e para reenviar pelo sistema
+    const planilha = $('#editor-planilha');
+    if (planilha) {
+      planilha.addEventListener('click', async () => {
+        if (estado.sujo || estado.novo || !estado.doc.id) {
+          // a planilha sai do que está salvo: salva antes, para não ir desatualizada
+          try {
+            await salvar(true);
+          } catch (_) {
+            return;
+          }
+        }
+        try {
+          planilha.disabled = true;
+          const arquivo = await window.API.baixar('/api/documentos/' + estado.doc.id + '/planilha-auxiliar');
+          window.API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
+          UI.toast(
+            'Planilha auxiliar gerada: ' + arquivo.nomeArquivo + ' (itens no formato do modelo + aba Resumo).',
+            'sucesso',
+            9000
+          );
+        } catch (erro) {
+          UI.toast('Não consegui gerar a planilha: ' + erro.message, 'erro');
+        } finally {
+          planilha.disabled = false;
+        }
+      });
+    }
+
     window.addEventListener('beforeunload', (evento) => {
       if (estado.sujo && !$('#view-editor').classList.contains('oculto')) {
         evento.preventDefault();

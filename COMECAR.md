@@ -132,6 +132,14 @@ no menu do usuário, é a **cópia em arquivo**:
 Quem faz o papel de "abrir em qualquer computador" é a **conta** (Supabase), não o Drive — e o menu
 explica isso em **Guardar uma cópia no Drive**.
 
+## Trabalhar os itens no Excel
+
+No editor do documento, o botão **Planilha auxiliar** gera um `.xlsx` com os itens
+preenchidos **no mesmo formato da planilha-modelo** (as mesmas colunas), mais uma aba
+**Resumo** (número, órgão/cliente, totais, condições). Serve para conferir contas no
+Excel e para reenviar depois na tela **Importar planilha** — o sistema lê de volta os
+mesmos itens. Na lista de documentos, o botão **Planilha (Excel)** faz o mesmo.
+
 ## Se alguma etapa falhar
 
 O próprio **Testar a conexão** diz onde parou. Traduzindo:

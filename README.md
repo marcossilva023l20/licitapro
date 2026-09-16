@@ -100,6 +100,19 @@ Desenvolvimento com recarga automática: `npm run dev`.
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.
 
+5b. **Planilha auxiliar (Excel)** — botão **Planilha auxiliar** no editor (e
+   *Planilha (Excel)* na lista de documentos). Sai um `.xlsx` com:
+
+   | Aba | O que traz |
+   |---|---|
+   | **Resumo** | tipo, número, data, status, órgão/cliente, modalidade, objeto, empresa, quantidade de itens, subtotal, desconto, acréscimo, total, custo e lucro (uso interno), condições e a assinatura digital, quando houver |
+   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`), com os comentários explicativos em cada título |
+   | **Instruções** | a mesma legenda de colunas do modelo |
+
+   Como as colunas são as do modelo, a planilha pode ser **editada no Excel e
+   reenviada na tela "Importar planilha"** — o sistema lê de volta os mesmos
+   itens (inclusive custo, venda, marca, foto, descrição do catálogo e link).
+
 6. **Histórico** — a tela *Documentos* tem busca, filtro por tipo e status
    (rascunho / enviada / ganha / perdida / cancelada), duplicação, exclusão e
    exportação dos itens de volta para planilha.

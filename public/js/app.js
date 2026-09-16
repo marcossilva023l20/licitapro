@@ -423,6 +423,7 @@
         <div class="doc-acoes">
           <button class="botao" data-acao="abrir" data-id="${doc.id}" type="button">Abrir / editar</button>
           <button class="botao botao-primario" data-acao="pdf" data-id="${doc.id}" type="button">Gerar PDF</button>
+          <button class="botao" data-acao="planilha" data-id="${doc.id}" type="button">Planilha (Excel)</button>
           <button class="botao" data-acao="duplicar" data-id="${doc.id}" type="button">Duplicar</button>
           <select data-acao="status" data-id="${doc.id}" data-status="${doc.status}" title="Alterar status">
             <option value="rascunho">Rascunho</option>
@@ -517,6 +518,22 @@
         window.location.hash = '#/documento/' + id;
         return;
       }
+      if (acao === 'planilha') {
+        try {
+          botao.disabled = true;
+          botao.textContent = 'Gerando...';
+          const arquivo = await API.baixar('/api/documentos/' + id + '/planilha-auxiliar');
+          API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
+          UI.toast('Planilha auxiliar gerada: ' + arquivo.nomeArquivo, 'sucesso', 9000);
+        } catch (erro) {
+          UI.toast('Não consegui gerar a planilha: ' + erro.message, 'erro');
+        } finally {
+          botao.disabled = false;
+          botao.textContent = 'Planilha (Excel)';
+        }
+        return;
+      }
+
       if (acao === 'pdf') {
         try {
           botao.disabled = true;

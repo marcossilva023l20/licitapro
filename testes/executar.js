@@ -853,6 +853,16 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     assert.strictEqual(previa.status, 200, previa.texto);
     assert.strictEqual(previa.corpo.subarray(0, 5).toString(), '%PDF-');
 
+    // planilha auxiliar (itens no formato do modelo + resumo)
+    const auxiliar = await requisitar(servidor, `/api/documentos/${id}/planilha-auxiliar`);
+    assert.strictEqual(auxiliar.status, 200, 'planilha auxiliar gerada');
+    const livroAuxiliar = XLSX.read(auxiliar.corpo, { type: 'buffer' });
+    assert.deepStrictEqual(livroAuxiliar.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas da planilha auxiliar');
+    assert.ok(
+      XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens']).length >= 1,
+      'a planilha auxiliar tem os itens do documento'
+    );
+
     // exportar itens para planilha
     const planilha = await requisitar(servidor, `/api/documentos/${id}/planilha`);
     assert.strictEqual(planilha.status, 200);
@@ -1022,6 +1032,259 @@ teste('Editor: modalidade é uma lista (com opção nova) e sem Série/grupo nem
   } finally {
     servidor.close();
   }
+});
+
+teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela importação)', async () => {
+  const PlanilhaAuxiliar = require(path.join(RAIZ, 'shared', 'planilha-auxiliar.js'));
+  const Importador = require(path.join(RAIZ, 'shared', 'importar.js'));
+
+  const doc = {
+    id: 'doc-1',
+    tipo: 'proposta',
+    numeroFormatado: '045/2026',
+    data: '2026-09-16',
+    status: 'enviada',
+    atualizadoEm: '2026-09-16T18:00:00.000Z',
+    orgao: { nome: 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA', uasg: '787010', modalidade: 'Dispensa de Licitação', pregao: 'Pregão nº 17/2026', objeto: 'Aquisição de rádios' },
+    cliente: {},
+    proponente: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL LTDA' },
+    condicoes: {
+      validadeDias: 60,
+      local: 'Imperatriz - MA',
+      prazoEntrega: 'Conforme Edital.',
+      garantia: '12 meses',
+      condicoesPagamento: '30 dias',
+      observacoes: 'Entrega única.',
+    },
+    desconto: { modo: 'percentual', valor: 5 },
+    acrescimo: { ativo: true, descricao: 'Frete / Instalação', valor: 120 },
+    itens: [
+      {
+        numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS',
+        unidade: 'UND', quantidade: 6, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490,
+        marcaModelo: 'Hytera / BP516', foto: 'https://drive.google.com/file/d/exemplo/view',
+        descricaoCatalogo: 'Rádio robusto com bateria de 1500 mAh.', linkCompra: 'https://loja.exemplo/radio',
+      },
+      {
+        numeroItem: '2', descricao: 'BATERIA EXTRA 1500 mAh',
+        unidade: 'UND', quantidade: 6, valorReferencia: 320, precoCusto: 180, precoVenda: 249.9,
+        marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: '', linkCompra: '',
+      },
+    ],
+  };
+  const empresa = { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL LTDA', nomeFantasia: 'DEJ Solutions & Global', cnpj: '65.180.352/0001-11' };
+
+  const buffer = PlanilhaAuxiliar.gerarBuffer(doc, empresa);
+  assert.ok(buffer && buffer.length > 800, 'o arquivo foi gerado: ' + (buffer && buffer.length) + ' bytes');
+
+  const livro = XLSX.read(buffer, { type: 'buffer' });
+  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas do arquivo: ' + livro.SheetNames.join(' | '));
+
+  // 1) os títulos da aba de itens são EXATAMENTE os do modelo de importação
+  const { COLUNAS } = require(path.join(RAIZ, 'shared', 'colunas.js'));
+  const matriz = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1, blankrows: false, defval: '' });
+  assert.deepStrictEqual(matriz[0], COLUNAS.map((c) => c.titulo), 'cabeçalho igual ao do modelo');
+  assert.strictEqual(matriz.length, 3, 'uma linha de título + os dois itens');
+
+  // 2) e os itens vêm preenchidos, coluna por coluna
+  const linhas = XLSX.utils.sheet_to_json(livro.Sheets['Itens']);
+  const primeiro = linhas[0];
+  assert.strictEqual(primeiro.Descricao_Edital, 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS', 'descrição');
+  assert.strictEqual(primeiro.Unidade, 'UND', 'unidade');
+  assert.strictEqual(Number(primeiro.Quantidade), 6, 'quantidade');
+  assert.strictEqual(Number(primeiro.Valor_Referencia), 1600, 'valor de referência');
+  assert.strictEqual(Number(primeiro.Preco_Custo), 1150, 'preço de custo (uso interno)');
+  assert.strictEqual(Number(primeiro.Preco_Venda), 1490, 'preço de venda');
+  assert.strictEqual(primeiro.Marca_Modelo, 'Hytera / BP516', 'marca/modelo');
+  assert.strictEqual(primeiro.Foto_Produto, 'https://drive.google.com/file/d/exemplo/view', 'link da foto');
+  assert.strictEqual(primeiro.Descricao_Catalogo, 'Rádio robusto com bateria de 1500 mAh.', 'descrição do catálogo');
+  assert.strictEqual(primeiro.Link_da_compra, 'https://loja.exemplo/radio', 'link da compra');
+  assert.strictEqual(linhas.length, 2, 'os dois itens estão na planilha');
+
+  // 3) a aba Resumo traz identificação, totais (com desconto e acréscimo) e condições
+  const resumo = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' });
+  const achar = (rotulo) => {
+    const linha = resumo.find((l) => l[0] === rotulo);
+    return linha ? linha[1] : undefined;
+  };
+  assert.strictEqual(achar('Número'), '045/2026', 'número no resumo');
+  assert.strictEqual(achar('Tipo'), 'PROPOSTA DE FORNECIMENTO', 'tipo no resumo');
+  assert.strictEqual(achar('Órgão / UASG'), 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA', 'órgão no resumo');
+  assert.strictEqual(achar('Modalidade'), 'Dispensa de Licitação', 'modalidade no resumo');
+  assert.strictEqual(achar('Razão social'), 'D.E.J SOLUTIONS & GLOBAL LTDA', 'empresa no resumo');
+  assert.strictEqual(Number(achar('Quantidade de itens')), 2, 'quantidade de itens');
+  const bruto = 6 * 1490 + 6 * 249.9;
+  assert.strictEqual(Number(achar('Subtotal (itens)')), Number(bruto.toFixed(2)), 'subtotal');
+  assert.strictEqual(Number(achar('Desconto (5%)')), Number((bruto * 0.05).toFixed(2)), 'desconto de 5%');
+  assert.strictEqual(Number(achar('Acréscimo (Frete / Instalação)')), 120, 'acréscimo');
+  assert.strictEqual(
+    Number(achar('TOTAL')),
+    Number((bruto - bruto * 0.05 + 120).toFixed(2)),
+    'total com desconto e acréscimo'
+  );
+  assert.strictEqual(Number(achar('Custo dos itens (uso interno)')), 6 * 1150 + 6 * 180, 'custo');
+  assert.strictEqual(achar('Local'), 'Imperatriz - MA', 'local');
+  assert.strictEqual(achar('Garantia'), '12 meses', 'garantia');
+
+  // 4) a planilha volta pela importação (é o formato do modelo: dá para reenviar)
+  const lido = Importador.importar(buffer, 'Proposta_045-2026_planilha.xlsx');
+  assert.strictEqual(lido.itens.length, 2, 'a importação leu os dois itens');
+  assert.strictEqual(lido.itens[0].descricao, 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS', 'volta a descrição');
+  assert.strictEqual(lido.itens[0].unidade, 'UND', 'volta a unidade');
+  assert.strictEqual(Number(lido.itens[0].quantidade), 6, 'volta a quantidade');
+  assert.strictEqual(Number(lido.itens[0].precoVenda), 1490, 'volta o preço de venda');
+  assert.strictEqual(Number(lido.itens[0].precoCusto), 1150, 'volta o custo');
+  assert.strictEqual(lido.itens[0].marcaModelo, 'Hytera / BP516', 'volta a marca/modelo');
+  assert.strictEqual(lido.itens[0].linkCompra, 'https://loja.exemplo/radio', 'volta o link da compra');
+  assert.strictEqual(lido.itens[1].descricao, 'BATERIA EXTRA 1500 mAh', 'e o segundo item também');
+
+  // 5) a aba "Instruções" existe e explica as colunas (igual ao modelo)
+  const instrucoes = XLSX.utils.sheet_to_json(livro.Sheets['Instruções'], { header: 1, defval: '' });
+  const texto = instrucoes.map((l) => l.join(' ')).join('\n');
+  assert.match(texto, /mesmas colunas/i, 'as instruções dizem que é o formato do modelo');
+  assert.match(texto, /Descricao_Edital/, 'e trazem a legenda das colunas');
+  assert.match(texto, /Importar planilha/, 'diz onde reenviar');
+
+  // 6) orçamento usa os dados do cliente no lugar do órgão
+  const orcamento = Object.assign({}, doc, { tipo: 'orcamento', cliente: { nome: 'CLIENTE X', cnpjCpf: '00.000.000/0001-00' }, orgao: {} });
+  const livroOrcamento = XLSX.read(PlanilhaAuxiliar.gerarBuffer(orcamento, empresa), { type: 'buffer' });
+  const resumoOrcamento = XLSX.utils.sheet_to_json(livroOrcamento.Sheets['Resumo'], { header: 1, defval: '' });
+  const acharOrcamento = (rotulo) => {
+    const linha = resumoOrcamento.find((l) => l[0] === rotulo);
+    return linha ? linha[1] : undefined;
+  };
+  assert.strictEqual(acharOrcamento('Tipo'), 'ORÇAMENTO', 'tipo orçamento');
+  assert.strictEqual(acharOrcamento('Cliente / empresa'), 'CLIENTE X', 'cliente no resumo');
+  assert.strictEqual(acharOrcamento('CNPJ / CPF'), '00.000.000/0001-00', 'CNPJ do cliente');
+  assert.match(PlanilhaAuxiliar.nomeArquivo(orcamento), /^Orcamento_.*_planilha\.xlsx$/, 'nome do arquivo do orçamento');
+});
+
+teste('Planilha auxiliar: a rota do servidor e o botão da tela entregam o arquivo', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+
+    await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel visível');
+
+    // um documento com todos os campos que a planilha leva
+    const criado = await requisitar(servidor, '/api/documentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        tipo: 'proposta',
+        orgao: { nome: 'UASG 787010', uasg: '787010', modalidade: 'Pregão Eletrônico', pregao: 'Pregão nº 17/2026', objeto: 'Aquisição de rádios' },
+        condicoes: { local: 'Imperatriz - MA', garantia: '12 meses' },
+        itens: [
+          {
+            numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR DIGITAL', unidade: 'UND', quantidade: 2,
+            precoCusto: 1150, precoVenda: 1490, marcaModelo: 'Hytera / BP516',
+            foto: 'https://drive.google.com/file/d/exemplo/view', descricaoCatalogo: 'Rádio robusto.',
+            linkCompra: 'https://loja.exemplo/radio',
+          },
+        ],
+      }),
+    });
+    assert.strictEqual(criado.status, 201, 'documento criado: ' + criado.texto);
+    const id = criado.json.documento.id;
+
+    // 1) rota do servidor (usada na hospedagem e no preview)
+    const resposta = await requisitar(servidor, '/api/documentos/' + id + '/planilha-auxiliar');
+    assert.strictEqual(resposta.status, 200, 'a rota respondeu: ' + resposta.texto);
+    assert.match(
+      String(resposta.headers['content-type']),
+      /spreadsheetml\.sheet/,
+      'é um arquivo do Excel: ' + resposta.headers['content-type']
+    );
+    assert.match(
+      String(resposta.headers['content-disposition']),
+      /_planilha\.xlsx/,
+      'o nome do arquivo diz que é a planilha: ' + resposta.headers['content-disposition']
+    );
+    const livro = XLSX.read(resposta.corpo, { type: 'buffer' });
+    assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas do arquivo');
+    const itens = XLSX.utils.sheet_to_json(livro.Sheets['Itens']);
+    assert.strictEqual(itens.length, 1, 'o item do documento está na planilha');
+    assert.strictEqual(itens[0].Descricao_Edital, 'RÁDIO TRANSCEPTOR DIGITAL', 'descrição preenchida');
+    assert.strictEqual(itens[0].Marca_Modelo, 'Hytera / BP516', 'marca/modelo preenchida');
+    assert.strictEqual(itens[0].Link_da_compra, 'https://loja.exemplo/radio', 'link da compra preenchido');
+    const resumo = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' });
+    assert.ok(
+      resumo.some((l) => l[0] === 'TOTAL' && Number(l[1]) === 2980),
+      'o resumo traz o total do documento: ' + JSON.stringify(resumo.find((l) => l[0] === 'TOTAL'))
+    );
+
+    // 2) botão da tela (editor), com o mesmo arquivo
+    window.location.hash = '#/documento/' + id;
+    await Navegador.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto');
+    await Navegador.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado');
+    assert.ok($('#editor-planilha'), 'o botão da planilha auxiliar existe no editor');
+
+    let baixado = null;
+    const original = window.API.baixarBlob;
+    window.API.baixarBlob = (blob, nome) => { baixado = { blob, nome }; };
+    $('#editor-planilha').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Navegador.esperar(() => baixado, 'a planilha auxiliar foi baixada', 20000);
+    assert.match(baixado.nome, /_planilha\.xlsx$/, 'nome do arquivo baixado: ' + baixado.nome);
+    const doBotao = XLSX.read(Buffer.from(await baixado.blob.arrayBuffer()), { type: 'buffer' });
+    assert.deepStrictEqual(doBotao.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'mesmas abas pelo botão');
+
+    // 3) e a lista de documentos também tem a ação
+    window.API.baixarBlob = original;
+    window.location.hash = '#/documentos';
+    await Navegador.esperar(() => !$('#view-documentos').classList.contains('oculto'), 'tela de documentos');
+    await Navegador.esperar(() => doc.querySelector('#lista-documentos [data-acao="planilha"]'), 'ação na lista');
+    assert.match(
+      doc.querySelector('#lista-documentos [data-acao="planilha"]').textContent,
+      /Planilha/,
+      'o botão da lista é a planilha'
+    );
+    window.close();
+  } finally {
+    servidor.close();
+  }
+});
+
+teste('Planilha auxiliar: no modo local (GitHub Pages) o navegador gera o arquivo', async () => {
+  // "continuar sem conta": é como o sistema abre no GitHub Pages (sem tela de senha)
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  // cria um documento direto no banco do navegador e pede a planilha auxiliar
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
+  documento.cliente = { nome: 'CLIENTE DO MODO LOCAL', cnpjCpf: '', contato: '', telefone: '', email: '', endereco: '' };
+  documento.itens = [
+    {
+      numeroItem: '1', descricao: 'ITEM DO MODO LOCAL', unidade: 'CX', quantidade: 3,
+      valorReferencia: 100, precoCusto: 60, precoVenda: 90, marcaModelo: 'Marca X',
+      foto: '', descricaoCatalogo: 'Descrição de catálogo.', linkCompra: 'https://loja.exemplo/item',
+    },
+  ];
+  const salvo = await window.API.post('/api/documentos', documento);
+  const id = salvo.documento.id;
+
+  // a rota é atendida pelo próprio navegador (é o que o botão usa no Pages)
+  const arquivo = await window.API.baixar('/api/documentos/' + id + '/planilha-auxiliar');
+  assert.match(arquivo.nomeArquivo, /_planilha\.xlsx$/, 'nome do arquivo: ' + arquivo.nomeArquivo);
+  const bytes = new Uint8Array(await arquivo.blob.arrayBuffer());
+  assert.ok(bytes.length > 800, 'o arquivo tem conteúdo: ' + bytes.length + ' bytes');
+  const livro = XLSX.read(Buffer.from(bytes), { type: 'buffer' });
+  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas da planilha no modo local');
+  const itens = XLSX.utils.sheet_to_json(livro.Sheets['Itens']);
+  assert.strictEqual(itens.length, 1, 'o item está na planilha');
+  assert.strictEqual(itens[0].Descricao_Edital, 'ITEM DO MODO LOCAL', 'descrição preenchida');
+  assert.strictEqual(itens[0].Unidade, 'CX', 'unidade preenchida');
+  assert.strictEqual(Number(itens[0].Preco_Venda), 90, 'preço de venda preenchido');
+  const resumo = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' });
+  assert.ok(
+    resumo.some((l) => l[0] === 'Cliente / empresa' && l[1] === 'CLIENTE DO MODO LOCAL'),
+    'o resumo traz o cliente'
+  );
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
 });
 
 teste('Interface: JavaScript e HTML estão consistentes', () => {

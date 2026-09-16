@@ -307,6 +307,7 @@
     'vendor/xlsx.full.min.js',
     '../shared/importar.js',
     '../shared/modelo-importacao.js',
+    '../shared/planilha-auxiliar.js',
     'vendor/pdfmake.min.js',
     'vendor/times-afm.js', // métricas da Times (Times New Roman)
   ];
@@ -317,7 +318,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '27';
+  const VERSAO_ARQUIVOS = '28';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -612,6 +613,12 @@
           __fotosIgnoradas: gerado.fotosIgnoradas,
           __fotosDetalhe: gerado.detalhe,
         };
+      }
+
+      if (acao === '/planilha-auxiliar' && metodo === 'GET') {
+        await carregarPesadas();
+        const livro = window.PlanilhaAuxiliar.montarLivro(documento, lerBanco().perfil.empresa || {});
+        return { __blob: blobPlanilha(livro), __nome: window.PlanilhaAuxiliar.nomeArquivo(documento) };
       }
 
       if (acao === '/planilha' && metodo === 'GET') {

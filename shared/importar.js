@@ -41,7 +41,7 @@
   function escolherAba(livro) {
     let melhor = null;
     for (const nome of livro.SheetNames) {
-      if (/instru|exemplo|leia|orienta/i.test(nome)) continue;
+      if (/instru|exemplo|leia|orienta|resumo|capa/i.test(nome)) continue;
       const aba = livro.Sheets[nome];
       const matriz = XLSX.utils.sheet_to_json(aba, { header: 1, blankrows: false, defval: '', raw: false });
       const recorte = matriz.slice(0, 10);
