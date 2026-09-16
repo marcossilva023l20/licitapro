@@ -56,6 +56,7 @@
   }
 
   async function atualizarSituacaoDados() {
+    if (!temTela()) return;
     const caixa = $('#situacao-dados');
     const texto = $('#situacao-dados-texto');
     const areaBanco = $('#conectar-banco');
@@ -757,6 +758,7 @@
 
   /** Escreve o estado da conta/nuvem no bloco "Conta e nuvem". */
   function mostrarStatusDaNuvem() {
+    if (!temTela()) return;
     const area = $('#nuvem-status');
     const nuvem = window.Nuvem ? window.Nuvem.situacao() : { ativa: false };
     const logado = Boolean(nuvem.ativa);
@@ -826,23 +828,43 @@
     const logo = $('#entrar-logo');
     if (logo && UI.caminhoBase) logo.src = UI.caminhoBase + 'marca/logo.png';
 
-    const doLink = window.Nuvem ? window.Nuvem.configDoEndereco() : null;
-    const config = window.Nuvem ? window.Nuvem.lerConfig() : null;
-    const url = (doLink && doLink.url) || (config && config.url) || $('#entrar-url').value || '';
-    const chave = (doLink && doLink.chave) || (config && config.chave) || $('#entrar-chave').value || '';
-    $('#entrar-url').value = url;
-    $('#entrar-chave').value = chave;
-    if (!url || !chave) $('#entrar-onde').open = true;
+    // o endereço do projeto e a chave pública já vêm gravados no site
+    // (config-nuvem.js): a tela pede só o e-mail e a senha
+    const gravado = window.Nuvem ? window.Nuvem.padrao() : { url: '', chave: '' };
+    const semProjeto = !gravado.url || !gravado.chave;
+    const rodape = $('#entrar-rodape');
+    if (rodape) rodape.classList.toggle('oculto', !semProjeto);
     trocarAbaEntrar(abaEntrar);
     const aviso = $('#entrar-aviso');
     if (aviso) {
-      aviso.textContent = url && chave
-        ? 'Para usar em outro computador, entre com o mesmo usuário e senha.'
-        : 'Preencha o endereço do projeto e a chave pública (ou abra o sistema pelo link que leva os dois).';
+      aviso.textContent = semProjeto
+        ? 'O banco da conta ainda não está configurado neste site — por enquanto os dados ficam só neste navegador.'
+        : '';
     }
+    const usuario = $('#entrar-usuario');
+    if (usuario && !usuario.value && window.Nuvem && window.Nuvem.usuario()) {
+      usuario.value = window.Nuvem.usuario();
+    }
+    if (usuario && !tela.classList.contains('oculto')) usuario.focus();
+  }
+
+  /** Mostra a saída "continuar sem conta" (só quando ela é necessária). */
+  function oferecerSemConta() {
+    const rodape = $('#entrar-rodape');
+    if (rodape) rodape.classList.remove('oculto');
+  }
+
+  /**
+   * A tela ainda está de pé? A janela pode ter sido fechada no meio de um
+   * pedido (o navegador descarta tudo): estas funções só desenham, então
+   * ficam quietas em vez de estourar um erro sem dono.
+   */
+  function temTela() {
+    return typeof document !== 'undefined' && Boolean(document) && Boolean(document.querySelector);
   }
 
   function escreverEntrar(texto, tipo) {
+    if (!temTela()) return;
     const mensagem = $('#entrar-mensagem');
     if (!mensagem) return;
     mensagem.textContent = texto || '';
@@ -874,12 +896,7 @@
     botao.disabled = true;
     escreverEntrar(criar ? 'Criando a conta...' : 'Entrando...');
     try {
-      const dados = {
-        url: $('#entrar-url').value,
-        chave: $('#entrar-chave').value,
-        usuario,
-        senha,
-      };
+      const dados = { usuario, senha };
       if (criar) await window.Nuvem.criar(dados);
       else await window.Nuvem.entrar(dados);
       marcarSemConta(false);
@@ -896,7 +913,11 @@
         window.history.replaceState(null, '', window.location.pathname + window.location.hash);
       }
     } catch (erro) {
+      if (!temTela()) return;
       escreverEntrar(erro.message, 'erro');
+      // se não deu para falar com o banco, quem quiser continua sem conta
+      // (os dados ficam só neste navegador) em vez de ficar preso na tela
+      if (!/senha|e-mail|iguais|já existe/i.test(erro.message)) oferecerSemConta();
       const tela = $('#tela-entrar');
       const app = $('#app');
       if (tela && !tela.classList.contains('oculto') && app) app.classList.add('oculto');
@@ -958,12 +979,6 @@
         marcarSemConta(true);
         await abrirSistema();
       });
-    }
-
-    const doLink = window.Nuvem.configDoEndereco();
-    if (doLink) {
-      $('#entrar-url').value = doLink.url;
-      $('#entrar-chave').value = doLink.chave;
     }
 
     const sincronizar = $('#nuvem-sincronizar');
@@ -1041,7 +1056,7 @@
         UI.toast('Dados atualizados da nuvem.', 'sucesso');
       }
     } catch (erro) {
-      UI.toast('Nuvem: ' + erro.message, 'erro', 12000);
+      if (temTela()) UI.toast('Nuvem: ' + erro.message, 'erro', 12000);
     }
     atualizarSituacaoDados();
   }

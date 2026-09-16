@@ -2,10 +2,12 @@
  * Conta e nuvem: guarda os dados no Supabase direto do navegador.
  *
  * Serve para o sistema publicado no GitHub Pages, onde não existe servidor.
- * Cada pessoa **cria uma conta** (usuário + senha) e, em qualquer computador,
- * entra com esse usuário e senha para continuar de onde parou.
+ * Cada pessoa **cria uma conta** (e-mail + senha) e, em qualquer computador,
+ * entra com esse e-mail e senha para continuar de onde parou. O endereço do
+ * projeto e a chave pública já vêm prontos em `config-nuvem.js`: a tela pede
+ * só o e-mail e a senha.
  *
- * O usuário identifica a linha no banco (u:<usuario>); a senha é a chave da
+ * O e-mail identifica a linha no banco (u:<email>); a senha é a chave da
  * cifra: tudo sai do navegador cifrado com AES-GCM (chave derivada da senha
  * por PBKDF2 com 150 mil iterações). No banco só existe texto cifrado — quem
  * abrir o Supabase sem a senha não lê nada — e a senha nunca é enviada a
@@ -29,6 +31,35 @@
   };
 
   // ------------------------------------------------------------- configuração
+
+  /** O que veio no link (?nuvem=...) tem prioridade sobre o padrão do site. */
+  function doEndereco() {
+    try {
+      const parametros = new URLSearchParams(window.location.search || '');
+      const bruto = parametros.get('nuvem');
+      if (!bruto) return null;
+      const dados = JSON.parse(bruto);
+      if (!dados || !dados.url || !dados.chave) return null;
+      return { url: String(dados.url), chave: String(dados.chave) };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Endereço e chave pública que este site usa, na ordem: o link `?nuvem=...`
+   * (quando alguém abriu o sistema por ele), o projeto da conta que já está
+   * ligada neste navegador e, por fim, o que está gravado em config-nuvem.js.
+   */
+  function padrao() {
+    const gravado = window.NuvemPadrao || {};
+    const doLink = doEndereco() || {};
+    const conta = lerConfig() || {};
+    return {
+      url: doLink.url || conta.url || gravado.url || '',
+      chave: doLink.chave || conta.chave || gravado.chave || '',
+    };
+  }
 
   function lerConfig() {
     try {
@@ -58,18 +89,22 @@
     return (config && config.usuario) || '';
   }
 
-  /** Nome de usuário aceito: 3 a 20 caracteres, sem acento e sem espaço. */
-  function usuarioValido(nome) {
-    return /^[a-z0-9][a-z0-9._-]{2,19}$/.test(String(nome || '').toLowerCase());
+  /** O login é um e-mail: é ele que identifica a conta (e a linha no banco). */
+  function emailValido(email) {
+    const texto = String(email || '').trim().toLowerCase();
+    return texto.length <= 80 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(texto);
   }
+
+  /** Compatível com o nome antigo (antes o login era um nome de usuário). */
+  const usuarioValido = emailValido;
 
   /** Cada conta tem a sua linha no banco (e as imagens dela). */
   function linhaPrincipal(config) {
-    return 'u:' + config.usuario;
+    return 'u:' + String(config.usuario || '').trim().toLowerCase();
   }
 
   function linhaImagem(config, id) {
-    return 'u:' + config.usuario + ':img:' + id;
+    return linhaPrincipal(config) + ':img:' + id;
   }
 
   function projetoDaUrl(url) {
@@ -80,7 +115,8 @@
   /** O que a tela mostra sobre a conta/nuvem. */
   function situacao() {
     const config = lerConfig();
-    if (!config) return { ativa: false, enviando: false, erro: '', sincronizadoEm: null, projeto: '', usuario: '' };
+    const vazia = { ativa: false, enviando: false, erro: '', sincronizadoEm: null, projeto: '', usuario: '' };
+    if (!config || !configurada()) return vazia;
     return {
       ativa: true,
       enviando: estado.enviando,
@@ -220,27 +256,32 @@
     return true;
   }
 
-  /** Confere endereço, chave, usuário e senha antes de falar com o banco. */
+  /**
+   * Confere o e-mail e a senha antes de falar com o banco. O endereço e a
+   * chave vêm prontos (config-nuvem.js ou link `?nuvem=...`); se vierem no
+   * pedido, valem esses.
+   */
   function conferirDados(dados, paraCriar) {
-    const url = String((dados && dados.url) || '').trim().replace(/\/+$/, '');
-    const chave = String((dados && dados.chave) || '').trim();
-    const nome = String((dados && dados.usuario) || '').trim().toLowerCase();
+    const gravado = padrao();
+    const url = String((dados && dados.url) || gravado.url || '').trim().replace(/\/+$/, '');
+    const chave = String((dados && dados.chave) || gravado.chave || '').trim();
+    const email = String((dados && (dados.usuario || dados.email)) || '').trim().toLowerCase();
     const senha = String((dados && dados.senha) || '');
     if (!/^https?:\/\/[^\s/]+\.[^\s/]+$/i.test(url)) {
-      throw new Error('Endereço do projeto inválido. Ele é assim: https://xxxxxxxx.supabase.co');
+      throw new Error('Endereço do projeto não configurado (veja public/js/config-nuvem.js).');
     }
     if (chave.length < 20) {
-      throw new Error('Cole a chave pública (anon/publishable): Project Settings → API Keys.');
+      throw new Error('Chave pública não configurada (veja public/js/config-nuvem.js).');
     }
-    if (!usuarioValido(nome)) {
-      throw new Error('Usuário de 3 a 20 caracteres, usando letras, números, ponto, hífen ou _ (sem espaço).');
+    if (!emailValido(email)) {
+      throw new Error('Informe um e-mail válido (ex.: nome@empresa.com.br) — é ele que identifica a sua conta.');
     }
     if (senha.length < 6) {
       throw new Error(
         (paraCriar ? 'Escolha uma senha' : 'Digite a sua senha') + ' com pelo menos 6 caracteres — é ela que cifra os dados.'
       );
     }
-    return { url, chave, usuario: nome, senha };
+    return { url, chave, usuario: email, senha };
   }
 
   function montarConfig(dados, anterior) {
@@ -274,7 +315,7 @@
     const config = montarConfig(limpos, lerConfig());
     const existente = await lerLinhaPrincipal(config);
     if (existente) {
-      throw new Error('Já existe uma conta com o usuário "' + config.usuario + '". Escolha outro nome ou entre com ele.');
+      throw new Error('Já existe uma conta com o e-mail "' + config.usuario + '". Use "Entrar" — ou escolha outro e-mail.');
     }
     await gravarLinha(config, linhaPrincipal(config), await cifrar({
       aplicativo: 'DEJ Solutions & Global',
@@ -297,8 +338,8 @@
     const cofre = await lerLinhaPrincipal(config);
     if (!cofre) {
       throw new Error(
-        'Não existe conta com o usuário "' + config.usuario + '" neste projeto. ' +
-        'Confira o nome ou use "Criar conta".'
+        'Não existe conta com o e-mail "' + config.usuario + '" neste projeto. ' +
+        'Confira o e-mail digitado ou use "Criar conta".'
       );
     }
     let conteudo;
@@ -306,7 +347,7 @@
       conteudo = await decifrar(cofre, config.senha);
     } catch (_) {
       throw new Error(
-        'A senha não confere para o usuário "' + config.usuario + '". ' +
+        'A senha não confere para o e-mail "' + config.usuario + '". ' +
         'Confira as letras maiúsculas/minúsculas e tente de novo.'
       );
     }
@@ -320,13 +361,20 @@
     return dados && dados.criar ? criar(dados) : entrar(dados);
   }
 
-  /** Sair da conta: esquece a senha e o usuário deste navegador. */
+  /**
+   * Sair da conta: este navegador esquece a senha (e a conta). O endereço do
+   * projeto fica guardado para a próxima entrada cair no mesmo lugar — o que
+   * já subiu para a conta continua lá.
+   */
   function sair() {
     const config = lerConfig() || {};
     try {
-      window.localStorage.removeItem(CHAVE_CONFIG);
+      window.localStorage.setItem(
+        CHAVE_CONFIG,
+        JSON.stringify({ url: config.url || '', chave: config.chave || '', projeto: config.projeto || '' })
+      );
     } catch (_) {
-      /* nada a fazer */
+      /* sem armazenamento: a próxima entrada usa o projeto gravado no site */
     }
     estado.ultimoErro = '';
     return config.usuario || '';
@@ -339,7 +387,7 @@
 
   async function enviar() {
     const config = lerConfig();
-    if (!config) throw new Error('A nuvem não está ligada.');
+    if (!config || !configurada()) throw new Error('Entre numa conta para enviar os dados.');
     if (!window.ModoEstatico || !window.ModoEstatico.montarBackup) {
       throw new Error('A nuvem funciona no sistema que roda sem servidor (GitHub Pages).');
     }
@@ -471,7 +519,7 @@
    */
   async function sincronizar() {
     const config = lerConfig();
-    if (!config) throw new Error('A nuvem não está ligada.');
+    if (!config || !configurada()) throw new Error('Entre numa conta para sincronizar.');
     estado.enviando = true;
     try {
       const remoto = await baixarPrincipal(config);
@@ -516,36 +564,36 @@
    * pública preenchidos (a senha nunca vai no link: ela é digitada lá).
    */
   function linkParaOutroComputador() {
-    const config = lerConfig();
-    if (!config) return '';
-    const dados = encodeURIComponent(JSON.stringify({ url: config.url, chave: config.chave }));
     const endereco = window.location.origin + window.location.pathname.replace(/index\.html$/, '');
+    const enderecado = endereco + '#/painel';
+    const gravado = padrao();
+    // o endereço e a chave já vão gravados no site: o link só precisa levá-los
+    // quando este navegador está usando outro projeto (link `?nuvem=...`)
+    if (gravado.url === (window.NuvemPadrao || {}).url && gravado.chave === (window.NuvemPadrao || {}).chave) {
+      return enderecado;
+    }
+    const dados = encodeURIComponent(JSON.stringify(gravado));
     return endereco + '?nuvem=' + dados + '#/painel';
   }
 
   /**
    * Endereço do projeto e chave que vierem no link (?nuvem=...): serve para
-   * levar a configuração de um computador para o outro sem digitar nada.
+   * trocar o projeto sem mexer no site inteiro (o padrão está em
+   * public/js/config-nuvem.js).
    */
   function configDoEndereco() {
-    try {
-      const parametros = new URLSearchParams(window.location.search || '');
-      const bruto = parametros.get('nuvem');
-      if (!bruto) return null;
-      const dados = JSON.parse(bruto);
-      if (!dados || !dados.url || !dados.chave) return null;
-      return { url: String(dados.url), chave: String(dados.chave) };
-    } catch (_) {
-      return null;
-    }
+    return doEndereco();
   }
 
   window.Nuvem = {
     configurada,
     lerConfig,
+    padrao,
     situacao,
     usuario,
+    emailValido,
     usuarioValido,
+    linhaPrincipal,
     entrar,
     criar,
     conectar,

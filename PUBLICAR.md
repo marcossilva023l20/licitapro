@@ -142,12 +142,12 @@ real, proteja o acesso (senha no serviço, *Access Control* do Render ou um prox
 Se preferir não pagar nada nem manter servidor, o site publicado
 <https://marcossilva023l20.github.io/licitapro> já faz o serviço:
 
-1. Abra o site e, na tela **Entrar / Criar conta**, abra *"Onde os dados ficam guardados"*.
-2. Informe o **Project URL** e a **chave pública** (*anon* / *publishable* — ela pode
-   circular, só abre o cofre), escolha **usuário** e **senha** e clique em **Criar conta**.
-3. Em qualquer outro computador, abra o mesmo endereço, informe usuário e senha e clique em
-   **Entrar**. Use o botão **"link para o outro computador"** (dentro de *Conta e nuvem*)
-   para não digitar o endereço nem a chave de novo.
+1. Abra o site e, na tela **Entrar / Criar conta**, escolha um **e-mail** e uma **senha**
+   (mínimo 6 caracteres) e clique em **Criar conta**. O endereço do projeto e a chave pública
+   já vêm gravados no site (`public/js/config-nuvem.js`).
+2. Em qualquer outro computador, abra o mesmo endereço, informe o mesmo e-mail e a mesma senha
+   e clique em **Entrar**. Use o botão **"link para o outro computador"** (dentro de
+   *Conta e nuvem*) quando o projeto não for o do site — ele leva o endereço e a chave.
 
 Aí tudo (documentos, empresa, numeração e fotos) viaja cifrado com a **sua senha**: no banco
 só existe texto ilegível, e a senha nunca é enviada. A diferença para o Render é o que roda

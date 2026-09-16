@@ -241,23 +241,23 @@ guarda tudo no seu projeto Supabase — cifrado com a **sua senha**:
 1. No SQL Editor do projeto, rode uma vez o arquivo [`supabase/nuvem.sql`](supabase/nuvem.sql)
    (no terminal, `npm run banco -- nuvem` mostra o SQL). Ele cria a tabela `licitapro_cofre` e
    libera só ela para a chave pública.
-2. Abra o site publicado: na primeira visita aparece a tela **Entrar / Criar conta**. Abra
-   *“Onde os dados ficam guardados”*, informe o **Project URL** e a **chave pública**
-   (*anon*/*publishable* — pode circular, ela só abre o cofre), escolha um **usuário** (ex.:
-   `dej.solutions`) e uma **senha** (mínimo 6 caracteres) e use **Criar conta**.
-   Quem não quiser conta nenhuma clica em **“Continuar sem conta”** e segue com os dados só neste
-   navegador (a tela não volta a incomodar).
-3. Em qualquer outro computador, abra o mesmo endereço, informe usuário e senha e use **Entrar**.
-   Para não digitar o endereço nem a chave de novo, use o botão **“link para o outro computador”**
-   (dentro de *Conta e nuvem*): ele copia um endereço que já leva o Project URL e a chave pública —
-   lá só faltam o usuário e a senha.
+2. O endereço do projeto e a **chave pública** (*anon*/*publishable*) ficam gravados no site, em
+   [`public/js/config-nuvem.js`](public/js/config-nuvem.js) — é o que o navegador usa para falar
+   com o cofre. Quem for usar **outro** projeto troca os dois valores nesse arquivo.
+3. Abra o site publicado: na primeira visita aparece a tela **Entrar / Criar conta**. Escolha um
+   **e-mail** (é ele que identifica a conta, ex.: `dej@empresa.com.br`) e uma **senha** (mínimo 6
+   caracteres) e use **Criar conta**. Se preferir não ter conta nenhuma, clique em
+   **“Continuar sem conta”** — os dados ficam só neste navegador (com a opção de backup em arquivo).
+4. Em qualquer outro computador, abra o mesmo endereço, informe o mesmo e-mail e a mesma senha e
+   use **Entrar**. O botão **“link para o outro computador”** (dentro de *Conta e nuvem*) copia um
+   endereço que já leva o projeto quando ele não é o do site — lá só faltam o e-mail e a senha.
 
 Como funciona: antes de sair do navegador, documentos, empresa, padrões e numeração são cifrados
 com a **sua senha** (**AES-256-GCM**, chave derivada por PBKDF2 com 150 mil iterações) e só então
-enviados. No banco existe apenas texto cifrado, cada conta na sua própria linha (`u:<usuário>`) —
+enviados. No banco existe apenas texto cifrado, cada conta na sua própria linha (`u:<e-mail>`) —
 sem a senha, ninguém lê nada (nem quem tem a chave pública do projeto). A senha **nunca é enviada a
 lugar nenhum** e **não tem recuperação**: se esquecer, os dados da nuvem não têm volta (a cópia do
-navegador e os backups em arquivo continuam). Usuário errado não acha nada; senha errada não abre
+navegador e os backups em arquivo continuam). E-mail sem conta não acha nada; senha errada não abre
 nada. **Sair da conta** (no menu do usuário) manda o que faltar, limpa este navegador e deixa tudo
 guardado na conta. Cada foto enviada vira uma linha própria e é baixada só quando o PDF precisa
 dela. Enquanto a conta estiver ligada, cada alteração é enviada pouco depois de salvar, e abrir o

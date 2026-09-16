@@ -413,6 +413,7 @@ input[type="search"] { padding-left: 12px; }
 .onde-guardar summary { cursor: pointer; font-weight: 600; color: var(--dourado-600, #a8873f); }
 .onde-guardar .campo-entrar { margin-top: 10px; }
 .onde-guardar .texto-suave { margin: 10px 0 0; }
+.entrar-nota { margin: 0; font-size: 0.8rem; line-height: 1.45; }
 .entrar-rodape { margin: 0; text-align: center; }
 #entrar-aviso:empty { display: none; }
 
