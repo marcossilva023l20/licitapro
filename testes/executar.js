@@ -464,6 +464,55 @@ teste('PDF: paleta da marca (azul-marinho e dourado nos títulos)', async () => 
   assert.ok(desenhoClaro.includes('#1C2B3A'), 'sobre cor clara o texto da faixa fica escuro (legível)');
 });
 
+teste('PDF: cabeçalho com os dados da empresa e a linha de identificação', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const documento = documentoExemplo();
+  documento.proponente = Object.assign({}, documento.proponente, {
+    razaoSocial: 'DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA',
+    nomeFantasia: 'DEJ Solutions & Global',
+    cnpj: '12.345.678/0001-90',
+    inscricaoEstadual: '987.654.32-10',
+    telefone: '(41) 99999-4040',
+    email: 'comercial@dejsolutions.com.br',
+    endereco: 'Av. Sete de Setembro, 4500 — Batel',
+    cidade: 'Curitiba',
+    uf: 'PR',
+    cep: '80000-000',
+  });
+  documento.orgao.modalidade = 'Pregão Eletrônico';
+  documento.condicoes.local = 'Curitiba/PR';
+
+  const definicao = await Pdf.montarDefinicao(documento, documento.proponente);
+  const faixa = JSON.stringify(definicao.header());
+  const conteudo = JSON.stringify(definicao.content);
+
+  // razão social e nome fantasia no topo, com o CNPJ e a inscrição estadual
+  assert.ok(faixa.includes('DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA'), 'razão social no cabeçalho');
+  assert.ok(faixa.includes('DEJ Solutions & Global'), 'nome fantasia no cabeçalho');
+  assert.ok(/CNPJ 12\.345\.678\/0001-90/.test(faixa), 'CNPJ no cabeçalho');
+  assert.ok(/IE 987\.654\.32-10/.test(faixa), 'inscrição estadual no cabeçalho');
+  assert.ok(faixa.includes('Curitiba/PR'), 'cidade/UF no cabeçalho');
+  assert.ok(faixa.includes('80000-000'), 'CEP no cabeçalho');
+  assert.ok(faixa.includes('Av. Sete de Setembro, 4500 — Batel'), 'endereço no cabeçalho');
+  assert.ok(faixa.includes('(41) 99999-4040'), 'telefone no cabeçalho');
+  assert.ok(faixa.includes('comercial@dejsolutions.com.br'), 'e-mail no cabeçalho');
+
+  // título e a linha de identificação logo abaixo, como no modelo do usuário
+  const numeracao = String(documento.numero.sequencial).padStart(3, '0') + '/' + documento.numero.ano;
+  assert.ok(conteudo.includes('PROPOSTA DE FORNECIMENTO Nº ' + numeracao), 'título com a numeração');
+  assert.ok(conteudo.includes('Pregão Eletrônico'), 'modalidade na linha de identificação');
+  assert.ok(/Pregão Eletrônico\s+•\s+\d{2}\/\d{2}\/\d{4}/.test(conteudo), 'data na linha de identificação');
+  assert.ok(conteudo.includes('Curitiba/PR'), 'local na linha de identificação');
+
+  // no orçamento não há modalidade de licitação: fica data e local
+  const orcamento = Object.assign({}, documento, { tipo: 'orcamento' });
+  const defOrcamento = await Pdf.montarDefinicao(orcamento, orcamento.proponente);
+  const conteudoOrcamento = JSON.stringify(defOrcamento.content);
+  assert.ok(conteudoOrcamento.includes('ORÇAMENTO Nº ' + numeracao), 'título do orçamento com a numeração');
+  assert.ok(!conteudoOrcamento.includes('Pregão Eletrônico'), 'sem modalidade no orçamento');
+  assert.ok(conteudoOrcamento.includes('Curitiba/PR'), 'local no orçamento');
+});
+
 teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as páginas", async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));

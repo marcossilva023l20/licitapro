@@ -373,10 +373,33 @@ async function montarDefinicao(doc, empresa, contexto) {
   // Faixa azul-marinho com a logo em um selo branco: a mesma identidade do
   // site (topo escuro, destaques dourados). O corpo do documento continua
   // claro, porque é papel — e vai ser impresso.
-  const nomeEmpresa = proponente.nomeFantasia || proponente.razaoSocial || '';
-  const documentoEmpresa = proponente.cnpj ? 'CNPJ: ' + Formato.cnpj(proponente.cnpj) : '';
-  const telefoneEmpresa = proponente.telefone ? Formato.telefone(proponente.telefone) : '';
-  const contatoEmpresa = [documentoEmpresa, telefoneEmpresa, proponente.email].filter(Boolean).join('  •  ');
+  const nomeEmpresa = proponente.razaoSocial || proponente.nomeFantasia || '';
+  const fantasiaEmpresa = proponente.nomeFantasia && proponente.nomeFantasia !== nomeEmpresa
+    ? proponente.nomeFantasia
+    : '';
+  const documentoEmpresa = proponente.cnpj ? 'CNPJ ' + Formato.cnpj(proponente.cnpj) : '';
+
+  // Linhas da empresa no cabeçalho, no formato de papel timbrado:
+  //   DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA
+  //   CNPJ 12.345.678/0001-90 • IE 987.654.32-10
+  //   Av. Sete de Setembro, 4500 — Batel — Curitiba/PR — 80000-000
+  //   (41) 99999-4040 • comercial@dejsolutions.com.br
+  const registroEmpresa = [
+    documentoEmpresa,
+    proponente.inscricaoEstadual ? 'IE ' + proponente.inscricaoEstadual : '',
+  ].filter(Boolean).join('  •  ');
+
+  const localEmpresa = [proponente.cidade, proponente.uf].filter(Boolean).join('/');
+  const enderecoEmpresa = [
+    proponente.endereco,
+    localEmpresa,
+    proponente.cep ? Formato.cep(proponente.cep) : '',
+  ].filter(Boolean).join(' — ');
+
+  const contatoEmpresa = [
+    proponente.telefone ? Formato.telefone(proponente.telefone) : '',
+    proponente.email,
+  ].filter(Boolean).join('  •  ');
 
   // Quando o usuário escolhe uma cor muito clara, a faixa recebe texto escuro
   // para continuar legível (o dourado da marca só vale sobre fundo escuro).
@@ -398,27 +421,32 @@ async function montarDefinicao(doc, empresa, contexto) {
     });
   }
   largurasCabecalho.push('*');
+  const linhasEmpresa = [];
+  if (nomeEmpresa) {
+    linhasEmpresa.push({ text: nomeEmpresa, bold: true, fontSize: 13.2, color: tintaFaixa });
+  }
+  if (fantasiaEmpresa) {
+    linhasEmpresa.push({ text: fantasiaEmpresa, fontSize: 9.2, color: douradoFaixa, margin: [0, 2, 0, 0] });
+  }
+  const linhaDocumento = [registroEmpresa, localEmpresa].filter(Boolean).join('  •  ');
+  if (linhaDocumento) {
+    linhasEmpresa.push({
+      text: linhaDocumento,
+      fontSize: 8.6,
+      color: apoioFaixa,
+      margin: [0, linhasEmpresa.length ? 3 : 0, 0, 0],
+    });
+  }
+  if (enderecoEmpresa) {
+    linhasEmpresa.push({ text: enderecoEmpresa, fontSize: 8.6, color: apoioFaixa, margin: [0, 2, 0, 0] });
+  }
+  if (contatoEmpresa) {
+    linhasEmpresa.push({ text: contatoEmpresa, fontSize: 8.6, color: apoioFaixa, margin: [0, 2, 0, 0] });
+  }
   celulasCabecalho.push({
     fillColor: corBase,
-    margin: [logo ? 14 : 16, 12, 10, 12],
-    stack: [
-      // sem empresa cadastrada o título não se repete aqui: o nome da empresa
-      // é o dado deste espaço, e o título já aparece à direita.
-      ...(nomeEmpresa ? [{ text: nomeEmpresa, bold: true, fontSize: 13.4, color: tintaFaixa }] : []),
-      ...(contatoEmpresa
-        ? [{ text: contatoEmpresa, fontSize: 8.8, color: apoioFaixa, margin: [0, nomeEmpresa ? 3 : 0, 0, 0] }]
-        : []),
-    ],
-  });
-  largurasCabecalho.push('auto');
-  celulasCabecalho.push({
-    fillColor: corBase,
-    margin: [10, 12, 16, 12],
-    stack: [
-      { text: titulo, bold: true, fontSize: 10.6, alignment: 'right', color: tintaFaixa },
-      { text: 'Nº ' + numero, bold: true, fontSize: 9.8, alignment: 'right', color: douradoFaixa, margin: [0, 2, 0, 0] },
-      { text: Formato.dataBR(dataDoc), fontSize: 8.8, alignment: 'right', color: apoioFaixa, margin: [0, 2, 0, 0] },
-    ],
+    margin: [logo ? 14 : 16, 11, 16, 11],
+    stack: linhasEmpresa,
   });
 
   const cabecalho = {
@@ -485,6 +513,16 @@ async function montarDefinicao(doc, empresa, contexto) {
   }
   identificacao.push(['Data de Emissão', Formato.dataBR(dataDoc)]);
 
+  // Linha de identificação do documento, como no modelo do usuário:
+  //   Pregão Eletrônico • 15/09/2026 • Curitiba/PR
+  // No orçamento não há modalidade de licitação: entram data e local.
+  const localDocumento = (doc.condicoes && doc.condicoes.local) || localEmpresa || '';
+  const linhaIdentificacao = [
+    doc.tipo === 'orcamento' ? '' : ((doc.orgao && doc.orgao.modalidade) || ''),
+    Formato.dataBR(dataDoc),
+    localDocumento.replace(/\s*-\s*/, '/'),
+  ].filter(Boolean).join('  •  ');
+
   conteudo.push({
     table: {
       widths: ['*'],
@@ -494,10 +532,7 @@ async function montarDefinicao(doc, empresa, contexto) {
             stack: [
               { text: titulo + ' Nº ' + numero, style: 'tituloPrincipal', color: corBase },
               {
-                text:
-                  doc.tipo === 'orcamento'
-                    ? 'Proposta comercial de fornecimento de materiais e/ou serviços'
-                    : 'Resposta ao instrumento convocatório — ' + (doc.orgao && doc.orgao.processo ? 'Processo nº ' + doc.orgao.processo : 'conforme edital'),
+                text: linhaIdentificacao,
                 fontSize: 9.8,
                 color: '#5B6670',
                 margin: [0, 2, 0, 0],
@@ -742,7 +777,10 @@ async function montarDefinicao(doc, empresa, contexto) {
 
   return {
     pageSize: 'A4',
-    pageMargins: [42, 88, 42, 52],
+    // topo: espaço para a faixa da empresa (o timbre ocupa ~87 pt a partir de
+    // 22 pt do topo; a margem reserva isso e ainda deixa um respiro antes do
+    // conteúdo — se a faixa crescer, esta margem precisa acompanhar)
+    pageMargins: [42, 124, 42, 52],
     ...(marcaDagua
       ? {
           background: () => ({
