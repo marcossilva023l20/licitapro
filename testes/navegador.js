@@ -69,7 +69,7 @@ async function abrirNavegador(porta) {
   if (!window.HTMLElement.prototype.scrollTo) window.HTMLElement.prototype.scrollTo = function () {};
   window.addEventListener('error', () => {});
 
-  ['shared/format.js', 'js/api.js', 'js/ui.js', 'js/certificado.js', 'js/editar.js', 'js/app.js', 'js/modo-estatico.js'].forEach((relativo) => {
+  ['shared/format.js', 'js/api.js', 'js/ui.js', 'js/editar.js', 'js/app.js', 'js/modo-estatico.js'].forEach((relativo) => {
     // a pasta shared/ fica na raiz do projeto e é servida em /shared
     const caminho = relativo.startsWith('shared/')
       ? path.join(RAIZ, relativo)

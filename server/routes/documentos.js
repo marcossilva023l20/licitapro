@@ -27,7 +27,6 @@ function resumo(doc) {
     processo: (doc.orgao && doc.orgao.processo) || '',
     quantidadeItens: (doc.itens || []).length,
     total: totais.total,
-    assinadoEm: (doc.assinatura && doc.assinatura.em) || '',
     atualizadoEm: doc.atualizadoEm,
     criadoEm: doc.criadoEm,
   };

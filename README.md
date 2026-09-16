@@ -535,56 +535,7 @@ fica desligado.
 
 ---
 
-## 9. Assinatura digital (certificado A1)
-
-Ao finalizar uma proposta ou um orçamento, o botão **Assinar PDF** (ao lado de
-*Gerar PDF*) assina o arquivo com o **certificado A1 da empresa** — o mesmo que
-se usa nos portais de licitação.
-
-**Como preparar (uma vez por computador):** *Minha empresa* → bloco **Assinatura
-digital (certificado A1)** → escolha o arquivo `.pfx`/`.p12` e digite a senha do
-certificado → **Importar certificado**. A tela mostra o titular, o CNPJ, a
-autoridade certificadora e a validade, e avisa quando o certificado está perto
-de vencer.
-
-**Como assinar:** abra o documento no editor → **Assinar PDF** → digite a senha
-do certificado na janela que abre (ela **não** é guardada) → o sistema gera o
-PDF, assina e baixa o arquivo `..._assinado.pdf`. O documento passa a mostrar a
-etiqueta *Assinado em ...* no editor e na lista.
-
-O que a assinatura faz tecnicamente:
-
-- acrescenta ao PDF uma **folha de assinatura em Times New Roman** com titular,
-  CNPJ, emissor, série, validade, data/hora, motivo, local e a impressão
-  SHA-256 do arquivo;
-- grava um **campo de assinatura** no AcroForm do PDF (`/Type /Sig`,
-  `/SubFilter /adbe.pkcs7.detached`) com **ByteRange** — é o formato que o Adobe
-  Reader confere;
-- monta o **CMS/PKCS#7 detached** com RSA-SHA256 e os atributos assinados do
-  perfil PAdES do ICP-Brasil (DOC-ICP-15): *content-type*, *message-digest*,
-  *signing-time* e *signing-certificate-v2* (ESSCertIDv2).
-
-Onde o arquivo e a senha ficam: **só no seu navegador** (o `.pfx` em base64 no
-armazenamento local; a senha nunca é guardada e a chave privada nunca sai do
-computador). Por isso o certificado **não** vai para a conta/nuvem — em outro
-computador é preciso importar de novo.
-
-**Não funciona com token ou cartão (A3)**: nesses casos a chave privada vive no
-hardware e só programas específicos (com o driver do token) alcançam. Para A3, o
-caminho é assinar pelo portal da licitação.
-
-**Carimbo de tempo:** a assinatura sai com a data/hora do computador no atributo
-*signing-time* (é o padrão PAdES-BES). Para assinatura qualificada completa, o
-carimbo de tempo de uma ACT (autoridade de carimbo do tempo) pode ser acrescentado
-depois — o sistema não faz isso hoje.
-
-O pacote com as bibliotecas de assinatura (`pdf-lib`, `node-forge` e `@signpdf`)
-é gerado por `npm run pacote-assinatura` para `public/vendor/assinatura.min.js` e
-baixado pelo navegador **apenas** quando alguém importa ou usa um certificado.
-
----
-
-## 10. Testes
+## 9. Estrutura do projeto
 
 ```
 server/
@@ -625,7 +576,7 @@ data/                   → dados gerados em execução (não versionado)
 
 ---
 
-## 11. Problemas comuns
+## 10. Problemas comuns
 
 | Sintoma | O que fazer |
 |---|---|
@@ -654,7 +605,7 @@ data/                   → dados gerados em execução (não versionado)
 
 ---
 
-## 12. Observação sobre links de imagem
+## 11. Observação sobre links de imagem
 
 Links de imagem (Google Drive, site do fabricante) são baixados no momento do uso e ficam
 em cache. Em ambientes **sem acesso à internet** (por exemplo, um servidor isolado), esses
@@ -686,7 +637,7 @@ Para links do Google Drive, o arquivo precisa estar compartilhado como
 
 ---
 
-## 13. Identidade visual: logo, cores e marca d'água
+## 12. Identidade visual: logo, cores e marca d'água
 
 O sistema já sai com a **paleta da marca** (azul-marinho `#0B1F33`, dourado `#C6A15B`,
 fundo creme) tanto no site quanto no PDF — títulos das seções em dourado, filetes e o selo

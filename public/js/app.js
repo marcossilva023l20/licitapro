@@ -374,7 +374,6 @@
       mostrarVista('empresa');
       marcarNavegacao('empresa');
       carregarEmpresa();
-      mostrarCertificado();
       return;
     }
     if (primeira === 'documentos') {
@@ -406,7 +405,6 @@
     const destinatario = doc.destinatario || (doc.tipo === 'orcamento' ? 'Cliente não informado' : 'Órgão não informado');
     const meta = [];
     if (doc.processo) meta.push('Processo ' + UI.escaparHtml(doc.processo));
-    if (doc.assinadoEm) meta.push('✔ assinado em ' + F.dataHora(doc.assinadoEm));
     meta.push(doc.quantidadeItens + (doc.quantidadeItens === 1 ? ' item' : ' itens'));
     meta.push('atualizado em ' + F.dataHora(doc.atualizadoEm));
     if (doc.data) meta.push('data do documento: ' + F.dataBR(doc.data));
@@ -420,7 +418,6 @@
         <div class="doc-titulo">${UI.escaparHtml(destinatario)}</div>
         <div class="doc-meta">
           <span class="etiqueta-status ${etiqueta}">${UI.rotuloStatus(doc.status)}</span>
-          ${doc.assinadoEm ? '<span class="etiqueta-status assinado">Assinado</span>' : ''}
           ${meta.map((m) => `<span>${m}</span>`).join('')}
         </div>
         <div class="doc-acoes">
@@ -1401,97 +1398,6 @@
     return true;
   }
 
-  // ------------------------------------------------------- certificado digital
-
-  /** Mostra o certificado importado (ou o que fazer para importar). */
-  function mostrarCertificado() {
-    const area = $('#emp-certificado-info');
-    const remover = $('#emp-certificado-remover');
-    if (!area) return;
-    const info = window.Certificado ? window.Certificado.info() : null;
-    if (remover) remover.classList.toggle('oculto', !info);
-    if (!info) {
-      area.textContent = 'Nenhum certificado importado neste navegador.';
-      return;
-    }
-    const data = (iso) => {
-      const d = new Date(iso);
-      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
-    };
-    const linhas = [
-      'Certificado de ' + (info.titular || '—') +
-        (info.documentoFormatado ? ' — ' + (info.tipoDocumento || '') + ' ' + info.documentoFormatado : ''),
-      'Emitido por ' + (info.emissor || '—') + ' • série ' + (info.serie || '—'),
-      'Válido de ' + data(info.validoDe) + ' a ' + data(info.validoAte) + ' (' + (info.algoritmo || 'RSA-SHA256') + ')',
-    ];
-    if (info.expirado) {
-      linhas.push('ATENÇÃO: este certificado venceu — importe o novo para poder assinar.');
-    } else {
-      const dias = Math.ceil((new Date(info.validoAte) - new Date()) / 86400000);
-      if (dias <= 30) linhas.push('Atenção: este certificado vence em ' + dias + ' dia(s).');
-    }
-    area.textContent = linhas.join('\n');
-  }
-
-  async function importarCertificado() {
-    const botao = $('#emp-certificado-importar');
-    const arquivo = $('#emp-arquivo-certificado');
-    const campo = $('#emp-certificado-senha');
-    if (!botao || !arquivo) return;
-    const escolhido = arquivo.files && arquivo.files[0];
-    const senha = campo ? campo.value : '';
-    if (!escolhido) {
-      UI.toast('Escolha o arquivo do certificado (.pfx ou .p12).', 'aviso');
-      return;
-    }
-    botao.disabled = true;
-    const textoOriginal = botao.textContent;
-    botao.textContent = 'Lendo o certificado...';
-    try {
-      const bytes = await window.Certificado.bytesDoArquivo(escolhido);
-      const lib = await window.Certificado.biblioteca();
-      const lido = lib.lerCertificado(bytes, senha);
-      window.Certificado.guardar(bytes, lido.certificado);
-      if (campo) campo.value = '';
-      mostrarCertificado();
-      UI.toast(
-        'Certificado de ' + (lido.certificado.titular || 'titular') + ' importado. Agora o botão "Assinar PDF" ' +
-          'assina as suas propostas e orçamentos.',
-        'sucesso',
-        10000
-      );
-    } catch (erro) {
-      UI.toast(erro.message, 'erro', 12000);
-    } finally {
-      botao.disabled = false;
-      botao.textContent = textoOriginal;
-    }
-  }
-
-  async function removerCertificado() {
-    const confirmado = await UI.confirmar({
-      titulo: 'Remover o certificado',
-      texto:
-        'O arquivo do certificado será apagado deste navegador. Você poderá importá-lo de novo quando quiser. ' +
-        'Os documentos que já foram assinados continuam assinados. Remover?',
-      textoConfirmar: 'Remover',
-      perigo: true,
-    });
-    if (!confirmado) return;
-    window.Certificado.remover();
-    mostrarCertificado();
-    UI.toast('Certificado removido deste navegador.', 'sucesso');
-  }
-
-  function ligarCertificado() {
-    if (!window.Certificado) return;
-    const importar = $('#emp-certificado-importar');
-    const remover = $('#emp-certificado-remover');
-    if (importar) importar.addEventListener('click', importarCertificado);
-    if (remover) remover.addEventListener('click', removerCertificado);
-    mostrarCertificado();
-  }
-
   function ligarEmpresa() {
     $('#emp-salvar').addEventListener('click', async () => {
       const empresa = Object.assign({}, estado.empresa);
@@ -1604,7 +1510,6 @@
     window.Editor.iniciar();
     ligarConexaoBanco();
     ligarNuvem();
-    ligarCertificado();
     ligarNavegacao();
     ligarAcoesDocumentos();
     ligarImportacao();

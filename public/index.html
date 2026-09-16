@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=25" />
+  <link rel="stylesheet" href="css/estilos.css?v=24" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -297,12 +297,10 @@
           </div>
           <div class="editor-topo-acoes">
             <span class="etiqueta-estado" id="editor-estado">Não salvo</span>
-            <span class="etiqueta-estado assinado oculto" id="editor-assinatura"></span>
             <button class="botao" id="editor-importar" type="button">Importar planilha</button>
             <button class="botao" id="editor-exportar" type="button">Exportar itens</button>
             <button class="botao" id="editor-salvar" type="button">Salvar</button>
             <button class="botao botao-primario" id="editor-gerar-pdf" type="button">Gerar PDF</button>
-            <button class="botao botao-dourado" id="editor-assinar" type="button">Assinar PDF</button>
           </div>
         </div>
 
@@ -703,35 +701,6 @@
           <button class="botao botao-primario" id="emp-salvar" type="button">Salvar dados da empresa</button>
         </div>
 
-        <div class="bloco" id="bloco-certificado">
-          <div class="bloco-cabecalho"><h3>Assinatura digital (certificado A1)</h3></div>
-          <p class="ajuda-banco">
-            Importe aqui o arquivo do seu certificado (<strong>.pfx</strong> ou <strong>.p12</strong>, o
-            certificado A1 da sua empresa). Ao finalizar uma proposta ou orçamento, o botão
-            <strong>Assinar PDF</strong> assina o arquivo com ele — a assinatura fica dentro do PDF e pode ser
-            conferida no Adobe Reader ou em validar.iti.gov.br.
-          </p>
-          <div class="grade-2">
-            <label class="campo campo-largo">Arquivo do certificado (.pfx / .p12)
-              <input type="file" id="emp-arquivo-certificado" accept=".pfx,.p12,.p7b,application/x-pkcs12" />
-            </label>
-            <label class="campo">Senha do certificado
-              <input type="password" id="emp-certificado-senha" autocomplete="off" placeholder="a senha do arquivo" />
-            </label>
-          </div>
-          <div class="linha-botoes">
-            <button class="botao botao-primario" id="emp-certificado-importar" type="button">Importar certificado</button>
-            <button class="botao oculto" id="emp-certificado-remover" type="button">Remover certificado</button>
-          </div>
-          <p class="ajuda-banco" id="emp-certificado-info"></p>
-          <p class="ajuda-banco">
-            O arquivo e a senha ficam <strong>só neste computador</strong> e nunca são enviados para a conta na
-            nuvem — a senha é pedida na hora de assinar e nem ela é guardada. Em outro computador, importe o
-            certificado de novo. <strong>Token ou cartão (A3) não funciona por aqui</strong>: a chave fica no
-            aparelho e só programas próprios alcançam — nesse caso assine pelo portal.
-          </p>
-        </div>
-
         <div class="bloco">
           <div class="bloco-cabecalho"><h3>Padrões para novos documentos</h3></div>
           <div class="grade-2">
@@ -764,14 +733,13 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=25"></script>
-  <script src="js/api.js?v=25"></script>
-  <script src="js/ui.js?v=25"></script>
-  <script src="js/certificado.js?v=25"></script>
-  <script src="js/editar.js?v=25"></script>
-  <script src="js/app.js?v=25"></script>
-  <script src="js/config-nuvem.js?v=25"></script>
-  <script src="js/modo-estatico.js?v=25"></script>
-  <script src="js/nuvem.js?v=25"></script>
+  <script src="../shared/format.js?v=24"></script>
+  <script src="js/api.js?v=24"></script>
+  <script src="js/ui.js?v=24"></script>
+  <script src="js/editar.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
+  <script src="js/config-nuvem.js?v=24"></script>
+  <script src="js/modo-estatico.js?v=24"></script>
+  <script src="js/nuvem.js?v=24"></script>
 </body>
 </html>

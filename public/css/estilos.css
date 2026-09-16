@@ -453,25 +453,6 @@ input[type="search"] { padding-left: 12px; }
 .mensagem-banco.erro { color: #fca5a5; }
 
 .texto-suave { color: var(--texto-suave); font-size: 0.85rem; }
-
-/* assinatura digital: etiqueta do documento assinado e botão dourado */
-.etiqueta-estado.assinado {
-  background: rgba(198, 161, 91, 0.16);
-  color: var(--dourado-claro, #d8b873);
-  border: 1px solid rgba(198, 161, 91, 0.5);
-}
-.botao-dourado {
-  background: transparent;
-  border: 1px solid var(--dourado, #c6a15b);
-  color: var(--dourado-claro, #d8b873);
-}
-.botao-dourado:hover { background: rgba(198, 161, 91, 0.14); }
-.linha-botoes { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.75rem 0 0.25rem; }
-#emp-certificado-info { margin-top: 0.5rem; white-space: pre-line; }
-@media (prefers-color-scheme: light) {
-  .etiqueta-estado.assinado { color: #7a5a20; }
-  .botao-dourado { color: #7a5a20; }
-}
 .link { font-weight: 600; font-size: 0.85rem; }
 .divisor { border: 0; border-top: 1px solid var(--borda); margin: 20px 0; }
 .so-mobile { display: none; }

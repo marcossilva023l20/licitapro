@@ -681,211 +681,6 @@
     }
   }
 
-  // ---------------------------------------------------------- assinar PDF
-
-  /** Quem assina (o certificado importado neste navegador), ou null. */
-  function certificadoAtual() {
-    return window.Certificado ? window.Certificado.info() : null;
-  }
-
-  /** Mostra (ou esconde) a etiqueta "Assinado ..." no topo do editor. */
-  function mostrarAssinatura() {
-    const etiqueta = $('#editor-assinatura');
-    if (!etiqueta) return;
-    const assinatura = estado.doc && estado.doc.assinatura;
-    if (!assinatura || !assinatura.em) {
-      etiqueta.classList.add('oculto');
-      etiqueta.textContent = '';
-      return;
-    }
-    const quando = F.dataHora(assinatura.em);
-    etiqueta.textContent = 'Assinado em ' + quando;
-    etiqueta.title =
-      'Assinado digitalmente por ' + (assinatura.titular || '') +
-      (assinatura.documento ? ' (' + assinatura.documento + ')' : '') +
-      (assinatura.emissor ? ' — certificado de ' + assinatura.emissor : '');
-    etiqueta.classList.remove('oculto');
-  }
-
-  /** Explica como importar o certificado quando ainda não há nenhum. */
-  function explicarCertificado() {
-    const abrirEmpresa = document.createElement('div');
-    abrirEmpresa.innerHTML =
-      '<p>Para assinar uma proposta ou um orçamento, o sistema precisa do seu ' +
-      '<strong>certificado A1</strong> (arquivo <code>.pfx</code> ou <code>.p12</code>).</p>' +
-      '<ol>' +
-      '<li>Abra <strong>Minha empresa</strong>.</li>' +
-      '<li>No bloco <em>Assinatura digital (certificado A1)</em>, escolha o arquivo do certificado e ' +
-      'digite a senha dele.</li>' +
-      '<li>Clique em <strong>Importar certificado</strong> — pronto, o certificado fica guardado neste navegador.</li>' +
-      '</ol>' +
-      '<p class="texto-suave">O arquivo e a senha ficam só neste computador. Token ou cartão (A3) não funciona ' +
-      'por aqui: nesse caso assine pelo portal da licitação.</p>';
-    UI.abrirModal({
-      titulo: 'Como assinar com certificado digital',
-      corpo: abrirEmpresa,
-      botoes: [
-        {
-          texto: 'Ir para Minha empresa',
-          classe: 'botao-primario',
-          acao: () => {
-            UI.fecharModal();
-            window.location.hash = '#/empresa';
-          },
-        },
-        { texto: 'Agora não', acao: () => UI.fecharModal() },
-      ],
-    });
-  }
-
-  /**
-   * Pede a senha do certificado (nunca guardada), o motivo e o local.
-   * Devolve os dados ou null quando a pessoa cancela.
-   */
-  function pedirDadosDaAssinatura(info) {
-    return new Promise((resolver) => {
-      const corpo = document.createElement('div');
-      const titulo = document.createElement('p');
-      titulo.innerHTML =
-        'Assinando com o certificado de <strong>' + UI.escaparHtml(info.titular || '') + '</strong>' +
-        (info.documentoFormatado ? ' (' + info.tipoDocumento + ' ' + info.documentoFormatado + ')' : '') + '.';
-      corpo.appendChild(titulo);
-
-      const campo = document.createElement('label');
-      campo.className = 'campo campo-largo';
-      campo.textContent = 'Senha do certificado';
-      const senha = document.createElement('input');
-      senha.type = 'password';
-      senha.id = 'assinar-senha';
-      senha.autocomplete = 'off';
-      senha.placeholder = 'a senha do arquivo .pfx/.p12';
-      campo.appendChild(senha);
-      corpo.appendChild(campo);
-
-      const local = document.createElement('label');
-      local.className = 'campo campo-largo';
-      local.textContent = 'Local da assinatura (opcional)';
-      const localCampo = document.createElement('input');
-      localCampo.type = 'text';
-      localCampo.id = 'assinar-local';
-      localCampo.value = (estado.doc && estado.doc.condicoes && estado.doc.condicoes.local) || '';
-      local.appendChild(localCampo);
-      corpo.appendChild(local);
-
-      const motivo = document.createElement('label');
-      motivo.className = 'campo campo-largo';
-      motivo.textContent = 'Motivo (opcional)';
-      const motivoCampo = document.createElement('input');
-      motivoCampo.type = 'text';
-      motivoCampo.id = 'assinar-motivo';
-      motivoCampo.value = 'Assinatura do documento ' + numeroDoDocumento();
-      motivo.appendChild(motivoCampo);
-      corpo.appendChild(motivo);
-
-      const dica = document.createElement('p');
-      dica.className = 'texto-suave';
-      dica.textContent =
-        'A senha do certificado não é guardada: ela é usada agora, para abrir a chave privada, e descartada ' +
-        'em seguida. O PDF assinado é baixado no seu computador.';
-      corpo.appendChild(dica);
-
-      const enviar = () => {
-        const valor = senha.value;
-        if (!valor) {
-          senha.focus();
-          UI.toast('Digite a senha do certificado.', 'aviso');
-          return;
-        }
-        UI.fecharModal();
-        resolver({ senha: valor, local: localCampo.value.trim(), motivo: motivoCampo.value.trim() });
-      };
-
-      UI.abrirModal({
-        titulo: 'Assinar o PDF',
-        corpo,
-        botoes: [
-          { texto: 'Assinar', classe: 'botao-primario', acao: enviar },
-          {
-            texto: 'Cancelar',
-            acao: () => {
-              UI.fecharModal();
-              resolver(null);
-            },
-          },
-        ],
-      });
-      senha.addEventListener('keydown', (evento) => {
-        if (evento.key === 'Enter') {
-          evento.preventDefault();
-          enviar();
-        }
-      });
-      setTimeout(() => senha.focus(), 80);
-    });
-  }
-
-  function numeroDoDocumento() {
-    const numero = estado.doc && estado.doc.numero ? estado.doc.numero : {};
-    return F.numeroDocumento(numero.sequencial || 1, numero.ano || new Date().getFullYear());
-  }
-
-  /**
-   * Assina o PDF do documento que está na tela: baixa o PDF do sistema, assina
-   * com o certificado importado e devolve o arquivo assinado ao computador.
-   */
-  async function assinarPdf() {
-    const botao = $('#editor-assinar');
-    const info = certificadoAtual();
-    if (!info) {
-      explicarCertificado();
-      return;
-    }
-    if (info.expirado) {
-      UI.toast('O certificado de ' + info.titular + ' venceu — importe o certificado novo em Minha empresa.', 'erro', 12000);
-      return;
-    }
-    const dados = await pedirDadosDaAssinatura(info);
-    if (!dados) return;
-
-    botao.disabled = true;
-    const original = botao.textContent;
-    botao.textContent = 'Assinando...';
-    try {
-      // o PDF é gerado a partir do que está salvo: garante que é esta versão
-      let salvo = estado.doc;
-      if (estado.sujo || estado.novo || !estado.doc.id) salvo = await salvar(true);
-      const arquivo = await window.API.baixar('/api/documentos/' + salvo.id + '/pdf?download=1');
-      const bytes = new Uint8Array(await arquivo.blob.arrayBuffer());
-      const lib = await window.Certificado.biblioteca();
-      const pronto = await lib.assinarPdf(bytes, {
-        p12: window.Certificado.arquivo(),
-        senha: dados.senha,
-        nome: info.titular,
-        motivo: dados.motivo,
-        local: dados.local,
-      });
-      const nome = lib.nomeArquivoAssinado(arquivo.nomeArquivo || 'documento.pdf');
-      window.API.baixarBlob(new Blob([pronto.pdf], { type: 'application/pdf' }), nome);
-
-      // guarda a marcação no documento (aparece "Assinado ..." na lista)
-      estado.doc.assinatura = pronto.assinatura;
-      await salvar(true);
-      mostrarAssinatura();
-      const conferencia = lib.conferirPdf(pronto.pdf);
-      UI.toast(
-        'PDF assinado por ' + pronto.assinatura.titular + ' e baixado como ' + nome +
-          (conferencia.integro ? ' (assinatura conferida).' : '.'),
-        'sucesso',
-        15000
-      );
-    } catch (erro) {
-      UI.toast('Não consegui assinar: ' + erro.message, 'erro', 15000);
-    } finally {
-      botao.disabled = false;
-      botao.textContent = original;
-    }
-  }
-
   // ------------------------------------------------------------- importar
 
   function montarModalImportacao() {
@@ -1254,8 +1049,6 @@
     $('#previa-atualizar').addEventListener('click', () => atualizarPrevia(false));
     $('#previa-baixar').addEventListener('click', gerarPdf);
     $('#editor-gerar-pdf').addEventListener('click', gerarPdf);
-    const assinar = $('#editor-assinar');
-    if (assinar) assinar.addEventListener('click', assinarPdf);
     $('#editor-salvar').addEventListener('click', () => salvar(false));
     $('#editor-voltar').addEventListener('click', () => {
       window.location.hash = '#/documentos';
@@ -1350,7 +1143,6 @@
 
   function prepararTela() {
     preencherFormulario();
-    mostrarAssinatura();
     liberarPrevia();
     $('#previa-iframe').classList.add('oculto');
     $('#previa-aviso').classList.remove('oculto');
@@ -1383,7 +1175,6 @@
   }
 
   window.Editor = {
-    assinarPdf,
     iniciar,
     novo,
     novoComItens,

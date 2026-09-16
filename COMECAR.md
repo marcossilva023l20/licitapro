@@ -132,19 +132,6 @@ no menu do usuário, é a **cópia em arquivo**:
 Quem faz o papel de "abrir em qualquer computador" é a **conta** (Supabase), não o Drive — e o menu
 explica isso em **Guardar uma cópia no Drive**.
 
-## Assinar as propostas e orçamentos (certificado A1)
-
-1. No menu, abra **Minha empresa**.
-2. No bloco **Assinatura digital (certificado A1)**, escolha o arquivo do seu
-   certificado (`.pfx` ou `.p12`) e digite a senha dele.
-3. Clique em **Importar certificado**. Se aparecer o nome, o CNPJ e a validade, está pronto.
-4. Na proposta/orçamento, clique em **Assinar PDF**, digite a senha do certificado e
-   o arquivo `..._assinado.pdf` é baixado já assinado.
-
-O certificado fica **só neste computador** (o arquivo e a senha nunca sobem para a
-conta na nuvem) — em outro computador, importe o arquivo de novo. **Token ou cartão
-(A3) não funciona por aqui**: nesse caso, assine pelo portal da licitação.
-
 ## Se alguma etapa falhar
 
 O próprio **Testar a conexão** diz onde parou. Traduzindo:
