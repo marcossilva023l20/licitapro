@@ -1959,6 +1959,60 @@ teste('Supabase: falha no banco é avisada e o arquivo local continua salvando',
   });
 });
 
+teste('Supabase: "configurar" grava o .env e já confere a conexão', async () => {
+  const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
+  const { execFile } = require('child_process');
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-env-'));
+  const arquivoEnv = path.join(pasta, '.env');
+  fs.writeFileSync(arquivoEnv, '# comentário que deve sobreviver\nPORT=3000\nSUPABASE_URL=https://antigo.supabase.co\n');
+
+  const falso = await criarServidorDeMentira();
+  try {
+    const saida = await new Promise((resolver) => {
+      const filho = execFile(
+        process.execPath,
+        [path.join(RAIZ, 'scripts', 'supabase.js'), 'configurar'],
+        { env: Object.assign({}, process.env, { LICITAPRO_ENV_FILE: arquivoEnv, LICITAPRO_DATA_DIR: pasta }) }
+      );
+      let texto = '';
+      filho.stdout.on('data', (d) => { texto += d; });
+      filho.stderr.on('data', (d) => { texto += d; });
+      filho.on('close', () => resolver(texto));
+      // responde as duas perguntas: endereço e chave (a chave vem oculta)
+      filho.stdin.write(falso.url + '\n' + CHAVE_ESPERADA + '\n');
+      filho.stdin.end();
+    });
+
+    const gravado = fs.readFileSync(arquivoEnv, 'utf8');
+    assert.ok(gravado.includes('# comentário que deve sobreviver'), 'preserva os comentários do .env');
+    assert.ok(gravado.includes('PORT=3000'), 'preserva as outras variáveis');
+    assert.ok(gravado.includes('SUPABASE_URL=' + falso.url), 'grava o endereço informado');
+    assert.ok(gravado.includes('SUPABASE_SERVICE_KEY=' + CHAVE_ESPERADA), 'grava a chave');
+    assert.strictEqual(gravado.includes('antigo.supabase.co'), false, 'substitui o endereço antigo');
+    assert.ok(/Credenciais gravadas/.test(saida), 'avisa que gravou');
+    assert.ok(/tudo certo/.test(saida), 'já confere a conexão depois de gravar:\n' + saida);
+
+    // sem chave informada (só ENTER), nada é alterado
+    const saidaVazia = await new Promise((resolver) => {
+      const filho = execFile(
+        process.execPath,
+        [path.join(RAIZ, 'scripts', 'supabase.js'), 'configurar'],
+        { env: Object.assign({}, process.env, { LICITAPRO_ENV_FILE: arquivoEnv, LICITAPRO_DATA_DIR: pasta, SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '' }) }
+      );
+      let texto = '';
+      filho.stdout.on('data', (d) => { texto += d; });
+      filho.stderr.on('data', (d) => { texto += d; });
+      filho.on('close', () => resolver(texto));
+      filho.stdin.write('\n\n');
+      filho.stdin.end();
+    });
+    assert.ok(/Nenhuma chave informada/.test(saidaVazia), 'avisa quando não há chave: ' + saidaVazia.slice(0, 120));
+  } finally {
+    await falso.fechar();
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
 teste('Supabase: o diagnóstico diz passo a passo onde está o problema', async () => {
   const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
   const { execFile } = require('child_process');

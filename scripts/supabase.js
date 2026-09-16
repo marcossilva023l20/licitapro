@@ -5,10 +5,11 @@
  * Ferramenta de linha de comando do banco (Supabase).
  *
  * Uso:
- *   npm run supabase              → confere a conexão e mostra o que está no banco
- *   npm run supabase -- sql       → mostra o SQL que cria as tabelas
- *   npm run supabase -- politicas → mostra o SQL (opcional) de liberar a chave pública
- *   npm run supabase -- enviar    → envia o data/db.json local para o banco
+ *   npm run supabase                → confere a conexão e mostra o que está no banco
+ *   npm run supabase -- configurar  → pergunta as credenciais e grava o arquivo .env
+ *   npm run supabase -- sql         → mostra o SQL que cria as tabelas
+ *   npm run supabase -- politicas   → mostra o SQL (opcional) de liberar a chave pública
+ *   npm run supabase -- enviar      → envia o data/db.json local para o banco
  *
  * As credenciais vêm do ambiente (ou do arquivo .env na raiz):
  *   SUPABASE_URL=...  SUPABASE_SERVICE_KEY=...
@@ -16,6 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 
 const RAIZ = path.join(__dirname, '..');
 require(path.join(RAIZ, 'server', 'config')).carregarEnv();
@@ -24,6 +26,121 @@ const store = require(path.join(RAIZ, 'server', 'store'));
 
 const CAMINHO_SQL = path.join(RAIZ, 'supabase', 'esquema.sql');
 const CAMINHO_POLITICAS = path.join(RAIZ, 'supabase', 'politicas-anon.sql');
+// onde ficam as credenciais (o ambiente pode apontar para outro arquivo: testes)
+const CAMINHO_ENV = process.env.LICITAPRO_ENV_FILE || path.join(RAIZ, '.env');
+
+/**
+ * Grava (ou atualiza) as credenciais no arquivo .env, preservando o resto do
+ * arquivo e os comentários. Só as chaves informadas são tocadas.
+ */
+function atualizarEnv(valores) {
+  const existentes = fs.existsSync(CAMINHO_ENV)
+    ? fs.readFileSync(CAMINHO_ENV, 'utf8').split(/\r?\n/)
+    : [];
+  const pendentes = Object.assign({}, valores);
+  const saida = [];
+
+  existentes.forEach((linha) => {
+    const texto = linha.trim();
+    const igual = texto.indexOf('=');
+    const chave = igual > 0 ? texto.slice(0, igual).trim() : '';
+    const comentada = texto.startsWith('#');
+    if (!comentada && chave && Object.prototype.hasOwnProperty.call(pendentes, chave)) {
+      saida.push(chave + '=' + pendentes[chave]);
+      delete pendentes[chave];
+      return;
+    }
+    saida.push(linha);
+  });
+
+  const restantes = Object.keys(pendentes);
+  if (restantes.length) {
+    while (saida.length && saida[saida.length - 1].trim() === '') saida.pop();
+    if (saida.length) saida.push('');
+    saida.push('# Banco de dados (Supabase) — veja o README, seção 4');
+    restantes.forEach((chave) => saida.push(chave + '=' + pendentes[chave]));
+  }
+
+  const conteudo = saida.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  fs.writeFileSync(CAMINHO_ENV, conteudo, { mode: 0o600 }); // só o dono lê
+  return conteudo;
+}
+
+/**
+ * Faz as perguntas de uma vez só (uma única sessão de leitura: fechar e abrir
+ * de novo perderia o que já foi digitado quando a entrada vem por pipe).
+ * Respostas com `oculto: true` não aparecem na tela — é o caso da chave.
+ */
+function perguntarTudo(perguntas) {
+  return new Promise((resolver) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const escreverOriginal = process.stdout.write.bind(process.stdout);
+    const respostas = [];
+    let indice = 0;
+
+    const proxima = () => {
+      if (indice >= perguntas.length) {
+        process.stdout.write = escreverOriginal;
+        rl.close();
+        resolver(respostas);
+        return;
+      }
+      const pergunta = perguntas[indice];
+      if (pergunta.oculto) {
+        process.stdout.write(pergunta.texto);
+        process.stdout.write = () => true; // silencia o eco do que é digitado
+      }
+      rl.question(pergunta.oculto ? '' : pergunta.texto, (resposta) => {
+        process.stdout.write = escreverOriginal;
+        if (pergunta.oculto) process.stdout.write('\n');
+        respostas.push(String(resposta || '').trim());
+        indice += 1;
+        proxima();
+      });
+    };
+
+    proxima();
+  });
+}
+
+/** Pergunta as credenciais, grava o .env e já confere a conexão. */
+async function configurar() {
+  const atual = Supabase.lerConfiguracao();
+  console.log('\nConfigurando o banco de dados (Supabase)');
+  console.log('-'.repeat(52));
+  console.log('As credenciais ficam no arquivo ' + CAMINHO_ENV + ' (fora do Git).');
+  console.log('Elas estão em: Supabase → Project Settings → Data API e API keys.');
+  console.log('Deixe em branco para manter o que já está configurado.\n');
+
+  const [endereco, segredo] = await perguntarTudo([
+    { texto: 'Endereço do projeto [' + (atual.url || Supabase.URL_PADRAO) + ']: ' },
+    { texto: 'Chave service_role (não aparece na tela): ', oculto: true },
+  ]);
+  const url = endereco || atual.url || Supabase.URL_PADRAO;
+  const chave = segredo || atual.chave;
+
+  if (!chave) {
+    console.log('\nNenhuma chave informada — nada foi alterado.');
+    console.log('Pegue a chave em Supabase → Project Settings → API keys → service_role (Reveal).\n');
+    process.exitCode = 1;
+    return;
+  }
+
+  atualizarEnv({ SUPABASE_URL: url, SUPABASE_SERVICE_KEY: chave });
+  // a conferência logo abaixo já usa o que acabou de ser gravado
+  process.env.SUPABASE_URL = url;
+  process.env.SUPABASE_SERVICE_KEY = chave;
+  console.log('\nCredenciais gravadas em ' + CAMINHO_ENV + '.');
+
+  const tipo = Supabase.classificarChave(chave);
+  if (!Supabase.chaveDeServidor(chave)) {
+    console.log('\nAtenção: essa é a chave pública (' + tipo + '). Ela só funciona se as');
+    console.log('políticas estiverem abertas (supabase/politicas-anon.sql). O recomendado é');
+    console.log('usar a service_role — ela fica só aqui no servidor.');
+  }
+
+  await conferir();
+}
 
 function mostrarSql(arquivo) {
   console.log(fs.readFileSync(arquivo || CAMINHO_SQL, 'utf8'));
@@ -198,7 +315,11 @@ const acao = (process.argv[2] || 'conferir').toLowerCase();
     mostrarSql(CAMINHO_POLITICAS);
     return;
   }
-  if (!Supabase.configurado()) {
+  if (acao === 'configurar') {
+    await configurar();
+    return;
+  }
+  if (!Supabase.configurado() && acao !== 'configurar') {
     semCredenciais();
     process.exitCode = 1;
     return;
@@ -207,7 +328,7 @@ const acao = (process.argv[2] || 'conferir').toLowerCase();
     if (acao === 'enviar') await enviar();
     else if (acao === 'conferir') await conferir();
     else {
-      console.error('Ação desconhecida: ' + acao + ' (use: conferir, sql ou enviar)');
+      console.error('Ação desconhecida: ' + acao + ' (use: conferir, configurar, sql, politicas ou enviar)');
       process.exitCode = 1;
     }
   } catch (erro) {

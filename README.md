@@ -152,6 +152,12 @@ data/
   cache-imagens/   → imagens baixadas de links externos
 ```
 
+**Onde os dados estão agora?** O painel do sistema mostra uma linha embaixo do título:
+*"Banco de dados conectado (Supabase)"*, *"Supabase não configurado: os dados estão sendo
+salvos no arquivo do servidor"* ou o motivo, quando o banco está configurado mas não responde.
+No GitHub Pages (modo local) ela diz que os dados ficam no próprio navegador — nesse endereço
+**não existe servidor**, então o banco não é usado ali.
+
 **Backup:** copie a pasta `data/` (ou apenas `db.json` + `uploads/`).
 Pode ser feito com o sistema em execução; para garantir a consistência, copie primeiro `db.json`.
 
@@ -175,9 +181,17 @@ deploy, reinício e mudança de servidor.
    - **Project Settings → API keys → service_role** (clique em *Reveal*) → `SUPABASE_SERVICE_KEY`
      — é a chave de servidor, que ignora o RLS; pode usar também a *secret key*
      (`sb_secret_...`) do formato novo
-4. Informe as duas no serviço:
-   - **na sua máquina:** crie um arquivo `.env` na raiz (veja `.env.example`);
-   - **no Render/Railway/Docker:** cadastre as duas variáveis de ambiente.
+4. Informe as duas credenciais:
+   - **na sua máquina (jeito mais fácil):** rode
+     ```bash
+     npm run supabase -- configurar
+     ```
+     Ele pergunta o endereço do projeto e a chave (a chave não aparece na tela ao
+     digitar), grava o arquivo `.env` sem mexer no resto do que já está lá e, em
+     seguida, já faz a conferência da conexão. Para editar à mão, use o modelo em
+     `.env.example`.
+   - **no Render/Railway/Docker:** cadastre `SUPABASE_URL` e `SUPABASE_SERVICE_KEY`
+     nas variáveis de ambiente do serviço (o `render.yaml` já tem os campos).
 5. Suba o sistema e confira: **`npm run supabase`** — ele faz uma conferência passo a
    passo (arquivo `.env`, endereço, tipo de chave, conexão, tabelas, **gravação de
    verdade**, conteúdo e cópia local) e diz exatamente onde está o problema, se houver.
