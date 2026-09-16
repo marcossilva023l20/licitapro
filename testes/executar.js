@@ -1296,6 +1296,68 @@ teste('Planilha auxiliar: no modo local (GitHub Pages) o navegador gera o arquiv
   window.close();
 });
 
+teste('Pré-visualização: o botão no topo do editor mostra e oculta o quadro', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const botao = $('#editor-previa');
+  const quadro = $('.editor-previa');
+  const corpo = $('.editor-corpo');
+  assert.ok(botao && quadro && corpo, 'o botão e o quadro da pré-visualização existem');
+  assert.strictEqual(botao.getAttribute('aria-pressed'), 'true', 'a pré-visualização começa à vista');
+  assert.ok(!quadro.classList.contains('oculto'), 'o quadro está visível');
+  assert.ok(!corpo.classList.contains('sem-previa'), 'o formulário divide a tela com a prévia');
+
+  // 1) primeiro clique: oculta (e o formulário usa a largura toda)
+  botao.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok(quadro.classList.contains('oculto'), 'o quadro foi ocultado');
+  assert.ok(corpo.classList.contains('sem-previa'), 'o formulário passa a usar a largura toda');
+  assert.strictEqual(botao.getAttribute('aria-pressed'), 'false', 'o botão indica que está oculta');
+  assert.strictEqual(window.localStorage.getItem('licitapro.previa.v1'), 'oculta', 'a escolha foi guardada');
+
+  // 2) segundo clique: mostra de novo
+  botao.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok(!quadro.classList.contains('oculto'), 'o quadro voltou');
+  assert.ok(!corpo.classList.contains('sem-previa'), 'volta a dividir a tela');
+  assert.strictEqual(botao.getAttribute('aria-pressed'), 'true', 'o botão indica que está à vista');
+  assert.strictEqual(window.localStorage.getItem('licitapro.previa.v1'), 'aberta', 'a escolha foi atualizada');
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+
+  // 3) em outra visita neste navegador, a pré-visualização já vem oculta
+  const segunda = await abrirNoModoLocal({ armazenamento: { 'licitapro.previa.v1': 'oculta' } });
+  await ModoLocal.esperar(() => !segunda.$('#app').classList.contains('oculto'), 'sistema aberto de novo', 20000);
+  assert.strictEqual(segunda.$('#editor-previa').getAttribute('aria-pressed'), 'false', 'a escolha foi lembrada');
+  assert.ok(segunda.$('.editor-previa').classList.contains('oculto'), 'o quadro começa oculto');
+
+  // 4) com a prévia oculta o PDF nem é gerado ao abrir o documento; ao mostrar,
+  //    ele é gerado na hora (é o que o usuário espera do botão)
+  const documento = segunda.window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = [
+    {
+      numeroItem: '1', descricao: 'ITEM DA PRÉVIA', unidade: 'UND', quantidade: 1,
+      valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+      descricaoCatalogo: '', linkCompra: '',
+    },
+  ];
+  const salvo = await segunda.window.API.post('/api/documentos', documento);
+  segunda.window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !segunda.$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => segunda.$('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+  assert.ok(!segunda.$('#previa-iframe').src, 'oculta: o PDF da prévia não é gerado à toa');
+
+  segunda.$('#editor-previa').dispatchEvent(new segunda.window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => segunda.$('#previa-iframe').src.includes('blob:'),
+    'a pré-visualização é gerada ao mostrar',
+    30000
+  );
+  assert.strictEqual(segunda.$('#editor-previa').getAttribute('aria-pressed'), 'true', 'o botão voltou a marcar');
+  assert.strictEqual(segunda.erros.length, 0, 'sem erros de script: ' + segunda.erros.join(' | '));
+  segunda.window.close();
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);

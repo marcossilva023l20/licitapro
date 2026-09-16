@@ -876,6 +876,15 @@ input[type="search"] { padding-left: 12px; }
 .abas-editor .aba.ativa { background: #1e4b77; color: #ffffff; box-shadow: var(--sombra-1); }
 
 .editor-corpo { display: grid; grid-template-columns: minmax(0, 1fr) 470px; gap: 20px; align-items: start; }
+/* pré-visualização oculta (botão "Pré-visualização" no topo): o formulário usa a largura toda */
+.editor-corpo.sem-previa { grid-template-columns: minmax(0, 1fr); }
+.editor-corpo.sem-previa .editor-previa { display: none; }
+
+/* o botão fica marcado enquanto a pré-visualização está à vista */
+#editor-previa[aria-pressed="true"] {
+  border-color: var(--dourado-500);
+  box-shadow: inset 0 0 0 1px rgba(198, 161, 91, 0.5);
+}
 .editor-formulario { min-width: 0; }
 .painel-aba {
   background: var(--superficie);

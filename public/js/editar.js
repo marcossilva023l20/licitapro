@@ -14,6 +14,7 @@
     timerAutosave: null,
     timerPrevia: null,
     urlPrevia: null,
+    previaAberta: true,
     avisosImportacao: [],
     itensImportados: null,
   };
@@ -253,8 +254,50 @@
   function agendarPrevia() {
     clearTimeout(estado.timerPrevia);
     estado.timerPrevia = setTimeout(() => {
-      if (!$('#view-editor').classList.contains('oculto')) atualizarPrevia(true);
+      // com a pré-visualização oculta não há por que gerar o PDF
+      if (estado.previaAberta && !$('#view-editor').classList.contains('oculto')) atualizarPrevia(true);
     }, 2500);
+  }
+
+  // ------------------------------------- mostrar/ocultar a pré-visualização
+
+  const CHAVE_PREVIA = 'licitapro.previa.v1';
+
+  /** A pré-visualização estava à vista na última visita? (escolha do usuário) */
+  function lerPreviaAberta() {
+    try {
+      return window.localStorage.getItem(CHAVE_PREVIA) !== 'oculta';
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function guardarPreviaAberta(aberta) {
+    try {
+      window.localStorage.setItem(CHAVE_PREVIA, aberta ? 'aberta' : 'oculta');
+    } catch (_) { /* sem armazenamento: a escolha vale só nesta tela */ }
+  }
+
+  /**
+   * Mostra ou oculta a pré-visualização (botão "Pré-visualização" no topo do
+   * editor). A escolha fica guardada no navegador — quem prefere trabalhar só
+   * com o formulário não precisa fechar a prévia a cada documento.
+   */
+  function definirPrevia(aberta, guardar) {
+    estado.previaAberta = !!aberta;
+    const quadro = $('.editor-previa');
+    const corpo = $('.editor-corpo');
+    if (quadro) quadro.classList.toggle('oculto', !estado.previaAberta);
+    if (corpo) corpo.classList.toggle('sem-previa', !estado.previaAberta);
+
+    const botao = $('#editor-previa');
+    if (botao) {
+      botao.setAttribute('aria-pressed', estado.previaAberta ? 'true' : 'false');
+      botao.title = estado.previaAberta ? 'Ocultar a pré-visualização' : 'Mostrar a pré-visualização';
+    }
+    if (guardar) guardarPreviaAberta(estado.previaAberta);
+    // ao reabrir a prévia, o PDF é gerado se ainda não houver um carregado
+    if (estado.previaAberta && estado.doc && !estado.urlPrevia) atualizarPrevia(false);
   }
 
   // ------------------------------------------------------------ formulário
@@ -1048,6 +1091,7 @@
     // ------------------------------------------------------------ prévia
     $('#previa-atualizar').addEventListener('click', () => atualizarPrevia(false));
     $('#previa-baixar').addEventListener('click', gerarPdf);
+    $('#editor-previa').addEventListener('click', () => definirPrevia(!estado.previaAberta, true));
     $('#editor-gerar-pdf').addEventListener('click', gerarPdf);
     $('#editor-salvar').addEventListener('click', () => salvar(false));
     $('#editor-voltar').addEventListener('click', () => {
@@ -1177,7 +1221,7 @@
     $('#previa-iframe').classList.add('oculto');
     $('#previa-aviso').classList.remove('oculto');
     $('#previa-aviso').textContent = 'Clique em Atualizar (ou aguarde) para ver o PDF.';
-    atualizarPrevia(false);
+    if (estado.previaAberta) atualizarPrevia(false);
   }
 
   async function abrir(id) {
@@ -1202,6 +1246,8 @@
 
   function iniciar() {
     ligarEventos();
+    // a pré-visualização começa como o usuário deixou da última vez
+    definirPrevia(lerPreviaAberta(), false);
   }
 
   window.Editor = {

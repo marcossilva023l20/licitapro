@@ -97,6 +97,11 @@ Desenvolvimento com recarga automática: `npm run dev`.
    Recursos úteis: **margem sobre o custo** (aplica custo + X% em todos os itens),
    **duplicar item**, **reordenar**, **pré-visualização** do PDF lado a lado e salvamento automático.
 
+   O botão **Pré-visualização**, no topo do editor, **oculta ou mostra** o quadro da prévia
+   quando quiser mais espaço para o formulário (fica marcado enquanto a prévia está à vista).
+   Com ela oculta o PDF nem é gerado; ao mostrar, ele é gerado na hora. A escolha fica
+   guardada neste navegador (`licitapro.previa.v1`).
+
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.
 
