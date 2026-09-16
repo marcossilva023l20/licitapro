@@ -12,7 +12,8 @@
     "paginas": "node scripts/paginas.js",
     "fontes": "node scripts/fontes-padrao.js",
     "supabase": "node scripts/banco.js",
-    "banco": "node scripts/banco.js"
+    "banco": "node scripts/banco.js",
+    "pacote-assinatura": "node scripts/vendor-assinatura.js"
   },
   "engines": {
     "node": ">=18"
@@ -31,6 +32,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "jsdom": "^30.0.1"
+    "@signpdf/placeholder-pdf-lib": "^3.3.0",
+    "@signpdf/signer-p12": "^3.3.0",
+    "@signpdf/signpdf": "^3.3.0",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "node-forge": "^1.4.0",
+    "pdf-lib": "^1.17.1"
   }
 }

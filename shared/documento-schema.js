@@ -108,6 +108,29 @@ function documentoBase(perfil, tipo, extras) {
   );
 }
 
+/**
+ * A marcação da assinatura digital que fica gravada no documento (para a lista
+ * mostrar "Assinado" e para o PDF assinado poder ser conferido depois).
+ */
+function sanearAssinatura(entrada) {
+  if (!entrada || typeof entrada !== 'object' || !entrada.em) return null;
+  const limitado = (valor, tamanho) => String(valor == null ? '' : valor).slice(0, tamanho);
+  return {
+    em: texto(entrada.em, 40),
+    titular: texto(entrada.titular, 200),
+    documento: texto(entrada.documento, 30),
+    tipoDocumento: texto(entrada.tipoDocumento, 10),
+    emissor: texto(entrada.emissor, 300),
+    serie: texto(entrada.serie, 60),
+    validoDe: texto(entrada.validoDe, 40),
+    validoAte: texto(entrada.validoAte, 40),
+    motivo: texto(entrada.motivo, 200),
+    local: texto(entrada.local, 200),
+    algoritmo: texto(entrada.algoritmo, 40),
+    sha256: limitado(entrada.sha256, 95),
+  };
+}
+
 /** Junta os dados enviados pelo site com um documento base (ou com o documento anterior). */
 function sanear(payload, perfil, tipoSugerido, anterior) {
   const p = payload || {};
@@ -138,6 +161,8 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
     },
     status: STATUS.includes(p.status) ? p.status : atual.status || 'rascunho',
     data: Formato.dataISO(p.data || atual.data) || Formato.dataISO(new Date()),
+    // marca da assinatura digital (quando o PDF foi assinado com certificado)
+    assinatura: sanearAssinatura((p.assinatura || (anterior && anterior.assinatura)) || null),
     orgao: {
       nome: texto(orgao.nome, 300),
       uasg: texto(orgao.uasg, 60),

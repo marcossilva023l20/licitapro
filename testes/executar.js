@@ -1024,6 +1024,282 @@ teste('Editor: modalidade é uma lista (com opção nova) e sem Série/grupo nem
   }
 });
 
+// --------------------------------------------------------- assinatura digital
+
+const { criarCertificado } = require('./certificado-teste.js');
+const Assinatura = require(path.join(RAIZ, 'shared', 'assinatura-deps.js'));
+
+/** Junta o texto desenhado num PDF (descomprime os fluxos e lê os Tj). */
+function textoDoPdf(bytes) {
+  const zlib = require('zlib');
+  const bruto = Buffer.from(bytes);
+  const texto = bruto.toString('latin1');
+  const pedacos = [];
+  const re = /stream\r?\n/g;
+  let achado;
+  while ((achado = re.exec(texto))) {
+    const inicio = achado.index + achado[0].length;
+    const fim = texto.indexOf('endstream', inicio);
+    if (fim < 0) continue;
+    let conteudo = '';
+    try {
+      conteudo = zlib.inflateSync(Buffer.from(texto.slice(inicio, fim), 'latin1')).toString('latin1');
+    } catch (_) {
+      conteudo = texto.slice(inicio, fim);
+    }
+    conteudo.replace(/<([0-9a-fA-F]{2,})>\s*Tj/g, (todo, hex) => {
+      pedacos.push(Buffer.from(hex, 'hex').toString('latin1'));
+      return todo;
+    });
+    conteudo.replace(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g, (todo, valor) => {
+      pedacos.push(valor);
+      return todo;
+    });
+  }
+  return pedacos.join('\n');
+}
+
+/** Um PDF do sistema, como o que a tela gera. */
+async function pdfDeExemplo() {
+  const { gerarPdf } = require(path.join(RAIZ, 'server', 'pdf.js'));
+  const esquema = require(path.join(RAIZ, 'shared', 'documento-schema.js'));
+  const doc = esquema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  doc.numero.sequencial = 45;
+  doc.orgao.nome = 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA';
+  doc.orgao.modalidade = 'Dispensa de Licitação';
+  doc.itens = [{ descricao: 'RÁDIO TRANSCEPTOR DIGITAL', quantidade: 2, precoVenda: 1490 }];
+  const empresa = { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL LTDA', cnpj: '65.180.352/0001-11' };
+  return new Uint8Array(await gerarPdf(doc, empresa, {}));
+}
+
+teste('Assinatura: o .pfx assina o PDF, a assinatura confere e a folha sai no arquivo', async () => {
+  const { p12, senha } = criarCertificado();
+  const pdf = await pdfDeExemplo();
+
+  // 1. leitura do certificado (é o que a tela mostra depois de importar)
+  const lido = Assinatura.lerCertificado(p12, senha);
+  assert.strictEqual(lido.certificado.titular, 'JOAO DA SILVA', 'nome do titular');
+  assert.strictEqual(lido.certificado.documentoFormatado, '65.180.352/0001-11', 'CNPJ formatado');
+  assert.strictEqual(lido.certificado.tipoDocumento, 'CNPJ', 'tipo do documento');
+  assert.match(lido.certificado.emissor, /AC Certisign/, 'nome da autoridade certificadora');
+  assert.strictEqual(lido.certificado.expirado, false, 'certificado dentro da validade');
+  assert.strictEqual(lido.certificado.algoritmo, 'RSA-SHA256', 'algoritmo');
+
+  // 2. senha errada diz o que aconteceu (sem falar em ASN.1 para o usuário)
+  assert.throws(() => Assinatura.lerCertificado(p12, 'senha-errada'), /senha do arquivo/i, 'senha errada é explicada');
+
+  // 3. arquivo que não é certificado
+  assert.throws(() => Assinatura.lerCertificado(new Uint8Array([1, 2, 3, 4, 5]), 'x'), /não parece um certificado/i);
+
+  // 4. assinatura
+  const assinado = await Assinatura.assinarPdf(pdf, {
+    p12,
+    senha,
+    nome: 'JOAO DA SILVA',
+    motivo: 'Proposta 045/2026',
+    local: 'Imperatriz - MA',
+    quando: new Date('2026-09-16T15:04:00Z'),
+  });
+  assert.ok(assinado.pdf.length > pdf.length, 'o PDF assinado é maior que o original');
+  assert.strictEqual(assinado.assinatura.titular, 'JOAO DA SILVA', 'titular na marcação');
+  assert.strictEqual(assinado.assinatura.documento, '65.180.352/0001-11');
+  assert.match(assinado.assinatura.sha256, /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/, 'impressão SHA-256 do arquivo');
+
+  // 5. estrutura que o Adobe Reader espera
+  const bruto = Buffer.from(assinado.pdf).toString('latin1');
+  assert.ok(bruto.includes('/AcroForm'), 'tem AcroForm');
+  assert.ok(/\/Type\s*\/Sig/.test(bruto), 'tem campo de assinatura (/Sig)');
+  assert.ok(bruto.includes('/SubFilter /adbe.pkcs7.detached'), 'perfil PKCS#7 detached');
+  assert.match(bruto, /\/ByteRange \[\s*0\s+\d+\s+\d+\s+\d+\s*\]/, 'ByteRange gravado no arquivo');
+
+  // 6. a folha de assinatura (Times New Roman) conta quem assinou
+  const desenhado = textoDoPdf(assinado.pdf);
+  assert.match(desenhado, /ASSINATURA DIGITAL/, 'a folha de assinatura está no PDF');
+  assert.match(desenhado, /Documento assinado digitalmente por JOAO DA SILVA/, 'nome do titular na folha');
+  assert.match(desenhado, /65\.180\.352\/0001-11/, 'CNPJ na folha');
+  assert.match(desenhado, /imperatriz/i, 'local na folha');
+  assert.match(desenhado, /16\/09\/2026/, 'data da assinatura na folha');
+
+  // 7. conferência: refaz o digest e valida a assinatura RSA com o certificado
+  const conferido = Assinatura.conferirPdf(assinado.pdf);
+  assert.strictEqual(conferido.assinado, true, 'o PDF está assinado');
+  assert.deepStrictEqual(conferido.problemas, [], 'sem problemas na conferência');
+  assert.strictEqual(conferido.integro, true, 'assinatura íntegra');
+  assert.strictEqual(conferido.titular, 'JOAO DA SILVA', 'titular reconhecido na conferência');
+  assert.strictEqual(conferido.documento, '65.180.352/0001-11', 'CNPJ reconhecido');
+  assert.strictEqual(conferido.quando, '2026-09-16T15:04:00.000Z', 'data do atributo signing-time');
+
+  // 8. mexer no arquivo depois de assinado é detectado
+  const mexido = new Uint8Array(assinado.pdf);
+  mexido[Math.floor(mexido.length / 2)] = mexido[Math.floor(mexido.length / 2)] ^ 0xff;
+  const depois = Assinatura.conferirPdf(mexido);
+  assert.strictEqual(depois.integro, false, 'arquivo alterado não passa na conferência');
+  assert.ok(
+    depois.problemas.some((p) => /mudou depois de assinado|não confere/i.test(p)),
+    'e o motivo é explicado: ' + depois.problemas.join(' | ')
+  );
+
+  // 9. certificado vencido não assina
+  const vencido = criarCertificado({ dias: -2 });
+  assert.throws(
+    () => Assinatura.lerCertificado(vencido.p12, vencido.senha) && (() => { throw new Error('x'); })(),
+    /x/,
+    'leitura de vencido funciona'
+  );
+  await assert.rejects(
+    () => Assinatura.assinarPdf(pdf, { p12: vencido.p12, senha: vencido.senha }),
+    /venceu/i,
+    'o sistema recusa assinar com certificado vencido'
+  );
+
+  // 10. sem /ByteRange não há assinatura para conferir
+  const conferidoOriginal = Assinatura.conferirPdf(pdf);
+  assert.strictEqual(conferidoOriginal.assinado, false, 'PDF sem assinatura é reconhecido');
+});
+
+teste('Assinatura: importar o certificado em Minha empresa e assinar pelo editor', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+
+    // a biblioteca do navegador é a mesma que o site publica no Pages
+    window.eval(fs.readFileSync(path.join(RAIZ, 'public', 'vendor', 'assinatura.min.js'), 'utf8'));
+    assert.ok(window.AssinaturaDigital, 'o pacote de assinatura se apresentou');
+
+    await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel visível');
+
+    // ------------------------------------------------- importar o certificado
+    const { p12, senha } = criarCertificado();
+    window.location.hash = '#/empresa';
+    await Navegador.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+    assert.match($('#emp-certificado-info').textContent, /Nenhum certificado importado/, 'começa sem certificado');
+
+    const arquivo = new window.File([p12], 'certificado.pfx', { type: 'application/x-pkcs12' });
+    Object.defineProperty($('#emp-arquivo-certificado'), 'files', { value: [arquivo], configurable: true });
+    $('#emp-certificado-senha').value = senha;
+    $('#emp-certificado-importar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(
+      () => window.Certificado && window.Certificado.info(),
+      'o certificado ficou guardado: ' + $('#emp-certificado-info').textContent
+    );
+    await Navegador.esperar(
+      () => /65\.180\.352\/0001-11/.test($('#emp-certificado-info').textContent),
+      'a tela mostra o certificado importado: ' + $('#emp-certificado-info').textContent
+    );
+    const guardado = window.Certificado.info();
+    assert.strictEqual(guardado.titular, 'JOAO DA SILVA', 'titular guardado');
+    assert.ok(!$('#emp-certificado-remover').classList.contains('oculto'), 'aparece o botão de remover');
+    assert.ok(
+      !JSON.stringify(window.localStorage.getItem('licitapro.certificado.v1')).includes(senha),
+      'a senha do certificado NÃO é guardada'
+    );
+
+    // ------------------------------------------------------- assinar um orçamento
+    const criado = await requisitar(servidor, '/api/documentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        tipo: 'orcamento',
+        cliente: { nome: 'CLIENTE DO TESTE' },
+        condicoes: { local: 'Imperatriz - MA' },
+        itens: [{ descricao: 'RÁDIO TRANSCEPTOR', quantidade: 1, precoVenda: 1490 }],
+      }),
+    });
+    assert.strictEqual(criado.status, 201, 'orçamento criado para assinar: ' + criado.texto);
+    const id = criado.json.documento.id;
+
+    window.location.hash = '#/documento/' + id;
+    await Navegador.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto');
+    await Navegador.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado');
+
+    let baixado = null;
+    const baixarOriginal = window.API.baixarBlob;
+    window.API.baixarBlob = (blob, nome) => { baixado = { blob, nome }; };
+
+    $('#editor-assinar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Navegador.esperar(() => !$('#modal').classList.contains('oculto'), 'pede a senha do certificado');
+    assert.match($('#modal-corpo').textContent, /JOAO DA SILVA/, 'a janela diz com qual certificado vai assinar');
+    assert.ok($('#assinar-senha'), 'tem o campo da senha');
+    assert.strictEqual($('#assinar-local').value, 'Imperatriz - MA', 'o local vem do documento');
+
+    $('#assinar-senha').value = senha;
+    const botaoAssinar = Array.from(doc.querySelectorAll('#modal-rodape button')).find(
+      (b) => b.textContent === 'Assinar'
+    );
+    assert.ok(botaoAssinar, 'tem o botão Assinar');
+    botaoAssinar.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(() => baixado, 'o PDF assinado foi baixado', 30000);
+    assert.match(baixado.nome, /_assinado\.pdf$/, 'o arquivo baixado diz que está assinado: ' + baixado.nome);
+
+    const bytes = new Uint8Array(await baixado.blob.arrayBuffer());
+    const conferido = window.AssinaturaDigital.conferirPdf(bytes);
+    assert.strictEqual(conferido.integro, true, 'a assinatura do arquivo baixado confere: ' + conferido.problemas.join(' | '));
+    assert.strictEqual(conferido.titular, 'JOAO DA SILVA', 'assinado pelo titular do certificado');
+    assert.match(textoDoPdf(bytes), /ASSINATURA DIGITAL/, 'o arquivo assinado tem a folha de assinatura');
+
+    // o documento guarda a marcação (a lista mostra "Assinado")
+    await Navegador.esperar(
+      () => $('#editor-assinatura') && !$('#editor-assinatura').classList.contains('oculto'),
+      'o editor mostra que o documento está assinado'
+    );
+    assert.match($('#editor-assinatura').textContent, /Assinado em/, 'etiqueta de assinado no editor');
+    const salvo = await requisitar(servidor, '/api/documentos/' + id);
+    assert.ok(salvo.json.documento.assinatura, 'a assinatura ficou gravada no documento');
+    assert.strictEqual(salvo.json.documento.assinatura.titular, 'JOAO DA SILVA', 'titular gravado');
+
+    const lista = await requisitar(servidor, '/api/documentos');
+    const resumo = lista.json.documentos.find((d) => d.id === id);
+    assert.ok(resumo.assinadoEm, 'a listagem sabe que o documento está assinado');
+
+    // na tela: a lista mostra a etiqueta "Assinado"
+    window.location.hash = '#/documentos';
+    await Navegador.esperar(() => !$('#view-documentos').classList.contains('oculto'), 'tela de documentos');
+    await Navegador.esperar(
+      () => /Assinado/.test($('#lista-documentos').textContent),
+      'a lista mostra a etiqueta de assinado'
+    );
+
+    // ------------------------------------------- sem certificado a tela explica
+    window.API.baixarBlob = baixarOriginal;
+    window.Certificado.remover();
+    window.location.hash = '#/documento/novo/proposta';
+    await Navegador.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor de novo');
+    $('#editor-assinar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Navegador.esperar(() => !$('#modal').classList.contains('oculto'), 'explica como importar');
+    assert.match($('#modal-corpo').textContent, /certificado A1/, 'a explicação fala do certificado A1');
+    assert.match($('#modal-corpo').textContent, /Minha empresa/, 'e diz onde importar');
+    window.UI.fecharModal();
+    window.close();
+  } finally {
+    servidor.close();
+  }
+});
+
+teste('Assinatura: o pacote que o navegador baixa está atualizado', async () => {
+  const pacote = require(path.join(RAIZ, 'scripts', 'vendor-assinatura.js'));
+  const gerado = Buffer.from(await pacote.gerar());
+  const publicado = fs.readFileSync(pacote.SAIDA);
+  assert.ok(
+    gerado.equals(publicado),
+    'public/vendor/assinatura.min.js desatualizado — rode: npm run pacote-assinatura'
+  );
+  const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
+  assert.strictEqual(
+    html.includes('<script src="vendor/assinatura.min.js'),
+    false,
+    'o pacote é baixado sob demanda (não pesa a abertura do site)'
+  );
+  assert.ok(
+    fs.readFileSync(path.join(RAIZ, 'public', 'js', 'certificado.js'), 'utf8').includes('vendor/assinatura.min.js'),
+    'e é o módulo do certificado que o baixa'
+  );
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);
