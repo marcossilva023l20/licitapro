@@ -84,6 +84,14 @@
       } else if (nuvemAtiva && nuvem.erro) {
         caixa.className = 'situacao-dados erro';
         texto.textContent = 'Nuvem: ' + nuvem.erro + ' — os dados continuam salvos neste navegador.';
+      } else if (nuvemAtiva && nuvem.enviando) {
+        caixa.className = 'situacao-dados';
+        texto.textContent = 'Enviando para a conta "' + (nuvem.usuario || '') + '"...';
+      } else if (nuvemAtiva && nuvem.pendente) {
+        caixa.className = 'situacao-dados aviso';
+        texto.textContent =
+          'Alterações salvas neste navegador — enviando para a conta "' + (nuvem.usuario || '') +
+          '" em instantes (pode fechar a página: o envio continua).';
       } else if (nuvemAtiva && nuvem.aviso) {
         caixa.className = 'situacao-dados aviso';
         texto.textContent = 'Conta "' + (nuvem.usuario || '') + '": ' + nuvem.aviso;
@@ -876,6 +884,148 @@
    * Mostra o resultado de um teste passo a passo ("testar a conexão/conta"):
    * uma linha por etapa, com ✓ ou ✕ e o motivo exato quando falha.
    */
+  /**
+   * Explica o caminho honesto para uma cópia no Google Drive: o Drive guarda
+   * arquivos, não banco de dados — então o backup do sistema é um arquivo que
+   * a pessoa salva lá (e restaura de volta quando precisar).
+   */
+  function explicarCopiaNoDrive() {
+    UI.abrirModal({
+      titulo: 'Guardar uma cópia no Google Drive',
+      corpo:
+        '<p>O Drive guarda <strong>arquivos</strong>, não um banco de dados — e o sistema não tem como ' +
+        'escrever direto na sua conta Google (isso exigiria um aplicativo autorizado por você, com ' +
+        'verificação do Google, e continua sem valer para duas pessoas ao mesmo tempo).</p>' +
+        '<p>O caminho que funciona de verdade:</p>' +
+        '<ol>' +
+        '<li>Clique em <strong>Baixar backup</strong> (aqui no menu). Sai um arquivo ' +
+        '<code>licitapro-backup-AAAA-MM-DD.json</code> com documentos, empresa e padrões.</li>' +
+        '<li>No Drive, crie uma pasta (ex.: <em>LicitaPro</em>) e arraste esse arquivo para lá.</li>' +
+        '<li>Quando quiser trazer de volta (outro computador, depois de formatar): baixe o arquivo do ' +
+        'Drive e use <strong>Restaurar backup</strong>.</li>' +
+        '</ol>' +
+        '<p><strong>Automático em qualquer computador</strong> é o que a <em>conta</em> faz: os dados ' +
+        'viajam cifrados para o seu projeto Supabase e abrem em qualquer máquina com o mesmo e-mail e ' +
+        'senha (o Drive não é chamado nisso).</p>' +
+        '<p class="texto-suave">Dica: o backup em arquivo é a única cópia que funciona sem internet e ' +
+        'sem senha — vale baixar um de vez em quando.</p>',
+      botoes: [{ texto: 'Entendi', classe: 'botao-primario', acao: () => UI.fecharModal() }],
+    });
+  }
+
+  /** Versão dos arquivos que estão rodando (o ?v= que veio no endereço do script). */
+  function versaoDosArquivos() {
+    try {
+      const scripts = Array.from(document.querySelectorAll('script[src]'));
+      const alvo = scripts.map((s) => s.getAttribute('src') || '').find((src) => /modo-estatico\.js/.test(src));
+      const achado = alvo && alvo.match(/[?&]v=([^&#]+)/);
+      return achado ? achado[1] : '(sem versão no endereço)';
+    } catch (_) {
+      return '(não deu para ler)';
+    }
+  }
+
+  /**
+   * Retrato do estado da conta, para colar e pedir ajuda: o que está ligado,
+   * onde estão os dados e o resultado do teste passo a passo.
+   */
+  async function montarDiagnostico() {
+    const linhas = [];
+    const nuvem = window.Nuvem ? window.Nuvem.situacao() : { ativa: false };
+    const projeto = window.Nuvem ? window.Nuvem.padrao() : { url: '', origem: '' };
+    const conta = window.Nuvem ? window.Nuvem.lerConfig() : null;
+    const situacao = window.ModoEstatico && window.ModoEstatico.armazenamento
+      ? window.ModoEstatico.armazenamento()
+      : null;
+    let guardado = null;
+    try {
+      guardado = window.localStorage.getItem('licitapro.local.v1');
+    } catch (_) {
+      guardado = null;
+    }
+
+    linhas.push('DEJ Solutions & Global — diagnóstico da conta');
+    linhas.push('quando: ' + new Date().toLocaleString('pt-BR'));
+    linhas.push('endereço: ' + window.location.href);
+    linhas.push('versão dos arquivos: ' + versaoDosArquivos());
+    linhas.push('modo: ' + (window.ModoEstatico && window.ModoEstatico.ativo() ? 'sem servidor (GitHub Pages)' : 'com servidor'));
+    linhas.push('projeto em uso: ' + (projeto.url || '(nenhum)') + ' — origem: ' + (projeto.origem || '?'));
+    linhas.push('conta ligada: ' + (nuvem.ativa ? 'sim' : 'não') + (conta && conta.usuario ? ' (' + conta.usuario + ')' : ''));
+    linhas.push('última sincronização: ' + (conta && conta.sincronizadoEm ? conta.sincronizadoEm : '(nunca)'));
+    linhas.push('erro guardado: ' + ((nuvem.erro || conta && conta.erro) || '(nenhum)'));
+    linhas.push('aviso: ' + (nuvem.aviso || '(nenhum)'));
+    linhas.push('envio agora: ' + (nuvem.enviando ? 'em andamento' : nuvem.pendente ? 'aguardando (2 s)' : 'tudo enviado'));
+    linhas.push('dados neste navegador: ' + (guardado ? guardado.length + ' caracteres' : '(nada)'));
+    linhas.push(
+      'armazenamento do navegador: ' +
+        (situacao ? (situacao.ok ? 'ok' : 'FALHANDO' + (situacao.motivo ? ' — ' + situacao.motivo : '')) : '?')
+    );
+    const fotos = conta && conta.imagens ? conta.imagens.length : 0;
+    linhas.push('fotos enviadas para a conta: ' + fotos);
+
+    linhas.push('');
+    linhas.push('--- teste passo a passo ---');
+    if (window.Nuvem && window.Nuvem.diagnostico) {
+      try {
+        const resultado = await window.Nuvem.diagnostico({});
+        (resultado.passos || []).forEach((passo) => {
+          linhas.push((passo.ok ? '[ok]  ' : '[X]   ') + passo.nome + (passo.detalhe ? ' — ' + passo.detalhe : ''));
+        });
+        linhas.push('resultado: ' + (resultado.ok ? 'tudo certo' : 'falhou'));
+      } catch (erro) {
+        linhas.push('o teste não pôde rodar: ' + erro.message);
+      }
+    } else {
+      linhas.push('(o teste passo a passo não está disponível nesta versão)');
+    }
+    return linhas.join('\n');
+  }
+
+  /** Copia o diagnóstico (ou mostra numa caixa, quando a área de transferência não deixa). */
+  async function copiarDiagnostico() {
+    const caixa = $('#nuvem-diagnostico-caixa');
+    const mensagem = $('#nuvem-mensagem');
+    const escrever = (texto, tipo) => {
+      if (!mensagem) return;
+      mensagem.textContent = texto || '';
+      mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+    };
+    escrever('Montando o diagnóstico...');
+    const texto = await montarDiagnostico();
+    if (caixa) {
+      caixa.value = texto;
+      caixa.classList.remove('oculto');
+      caixa.select();
+    }
+    try {
+      await navigator.clipboard.writeText(texto);
+      escrever('Diagnóstico copiado: cole na conversa para eu ver o que está acontecendo.', 'ok');
+    } catch (_) {
+      escrever('Copie o texto que apareceu aqui embaixo e cole na conversa.', 'ok');
+    }
+    return texto;
+  }
+
+  /**
+   * Manda agora para a conta o que acabou de ser salvo aqui (empresa, padrões,
+   * logo). É o que evita a surpresa de salvar, sair do site e o dado não ter
+   * subido: em vez de esperar o envio agendado, o envio sai na hora.
+   */
+  async function enviarParaAConta(aviso) {
+    if (!window.Nuvem || !window.Nuvem.configurada || !window.Nuvem.configurada()) return;
+    if (!window.Nuvem.enviarAgora) return;
+    try {
+      // `aoSair`: este envio nasce de um clique ("Salvar") e a pessoa costuma
+      // sair logo depois — o navegador termina de mandá-lo mesmo assim
+      await window.Nuvem.enviarAgora({ aoSair: true });
+      if (aviso) UI.toast(aviso, 'sucesso');
+      await atualizarSituacaoDados();
+    } catch (erro) {
+      UI.toast('Salvo neste navegador, mas não subiu para a conta: ' + erro.message, 'erro', 12000);
+      await atualizarSituacaoDados();
+    }
+  }
+
   function mostrarPassos(seletor, resultado) {
     const lista = $(seletor);
     if (!lista) return;
@@ -1150,6 +1300,9 @@
       });
     }
 
+    const copiar = $('#nuvem-diagnostico');
+    if (copiar) copiar.addEventListener('click', () => copiarDiagnostico());
+
     const link = $('#nuvem-link');
     if (link) {
       link.addEventListener('click', async () => {
@@ -1235,6 +1388,8 @@
         if (!avisarSeNaoGuardou(resposta, 'Os dados da empresa')) {
           UI.toast('Dados da empresa salvos.', 'sucesso');
         }
+        // e vai para a conta agora (não deixa pendente para depois)
+        await enviarParaAConta('Dados da empresa salvos na sua conta.');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       }
@@ -1248,6 +1403,7 @@
         const resposta = await API.put('/api/perfil/padroes', padroes);
         estado.perfil.padroes = resposta.padroes;
         if (!avisarSeNaoGuardou(resposta, 'Os padrões')) UI.toast('Padrões salvos.', 'sucesso');
+        await enviarParaAConta('Padrões salvos na sua conta.');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       }
@@ -1293,6 +1449,8 @@
   // --------------------------------------------------------------- geral
 
   function ligarNavegacao() {
+    const drive = $('#local-drive');
+    if (drive) drive.addEventListener('click', explicarCopiaNoDrive);
     $('#alternar-menu').addEventListener('click', () => $('#navegacao').classList.toggle('aberta'));
     $('#botao-usuario').addEventListener('click', () => $('#lista-usuario').classList.toggle('oculto'));
     document.addEventListener('click', (evento) => {

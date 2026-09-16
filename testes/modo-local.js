@@ -182,6 +182,39 @@ async function abrirSemServidor(opcoes = {}) {
     window.indexedDB = undefined;
   }
 
+  /**
+   * Fechar a aba como o navegador faz: a página é avisada (`pagehide`) e os
+   * timers pendentes morrem ali mesmo. Sem isso o jsdom continuaria rodando
+   * coisas depois do "fechamento" e os testes passariam a mentir — foi assim
+   * que um envio que nunca chegava no navegador aparecia como sucesso aqui.
+   */
+  const setTimeoutOriginal = window.setTimeout.bind(window);
+  const clearTimeoutOriginal = window.clearTimeout.bind(window);
+  const timers = new Set();
+  window.setTimeout = (fn, ms, ...args) => {
+    const id = setTimeoutOriginal((...a) => {
+      timers.delete(id);
+      if (typeof fn === 'function') fn(...a);
+    }, ms, ...args);
+    timers.add(id);
+    return id;
+  };
+  window.clearTimeout = (id) => {
+    timers.delete(id);
+    return clearTimeoutOriginal(id);
+  };
+  const fecharOriginal = window.close.bind(window);
+  window.close = () => {
+    try {
+      window.dispatchEvent(new window.Event('pagehide'));
+    } catch (_) {
+      /* a página não quis nem saber: seguimos com o fechamento */
+    }
+    timers.forEach((id) => clearTimeoutOriginal(id));
+    timers.clear();
+    return fecharOriginal();
+  };
+
   window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
   return { dom, window, erros, base, blobsFalsos };
 }

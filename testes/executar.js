@@ -1335,8 +1335,11 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     assert.ok(falso.autenticadas.length >= 2, 'os pedidos foram assinados com a chave pública');
     const guardado = w1.localStorage.getItem('licitapro.nuvem.v1');
     assert.ok(guardado && new RegExp('"usuario":"' + EMAIL + '"').test(guardado), 'a conta fica lembrada neste navegador');
-    assert.ok(
-      new RegExp('na conta "' + EMAIL + '"').test($1('#situacao-dados-texto').textContent),
+    // com a conta ligada, o painel diz que os dados estão nela (esperando o
+    // envio que o salvamento dispara)
+    await ModoLocal.esperar(
+      () => /na conta "?dej@empresa\.com\.br"?/.test($1('#situacao-dados-texto').textContent) &&
+        /última sincronização/.test($1('#situacao-dados-texto').textContent),
       'o painel diz que os dados estão na conta: ' + $1('#situacao-dados-texto').textContent
     );
     assert.strictEqual($1('#menu-sair').classList.contains('oculto'), false, 'com conta aparece "Sair da conta" no menu');
@@ -1381,12 +1384,163 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     assert.strictEqual(bancoDois.documentos.length, 1, 'o documento chegou inteiro');
     assert.strictEqual(bancoDois.documentos[0].itens[0].descricao, 'RÁDIO DE TESTE DA CONTA', 'com o item');
     assert.strictEqual(bancoDois.perfil.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL', 'e com os dados da empresa');
-    assert.ok(
-      new RegExp('na conta "' + EMAIL + '"').test($2('#situacao-dados-texto').textContent),
+    await ModoLocal.esperar(
+      () =>
+        new RegExp('na conta "' + EMAIL + '"').test($2('#situacao-dados-texto').textContent) &&
+        /última sincronização/.test($2('#situacao-dados-texto').textContent),
       'a linha do painel fala da conta: ' + $2('#situacao-dados-texto').textContent
     );
     assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
     w2.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: editar a empresa e sair do site na mesma hora não perde o que foi salvo', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  const EMAIL = 'dej@empresa.com.br';
+  const SENHA = 'senha-secreta-123';
+  const base = linkParaOProjeto(falso.url, CHAVE);
+
+  try {
+    // ---------------------------------------------- computador 1 (na correria)
+    const um = await ModoLocal.abrirSemServidor({ base, externo: [falso.url] });
+    const w1 = um.window;
+    const $1 = (sel) => w1.document.querySelector(sel);
+    await ModoLocal.esperar(() => w1.ModoEstatico && w1.ModoEstatico.ativo(), 'modo local no computador 1');
+    await ModoLocal.esperar(() => !$1('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+    $1('#aba-criar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    $1('#entrar-usuario').value = EMAIL;
+    $1('#entrar-senha').value = SENHA;
+    $1('#entrar-repetir').value = SENHA;
+    $1('#form-entrar').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$1('#app').classList.contains('oculto'), 'sistema aberto', 30000);
+
+    w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+    $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL LTDA';
+    $1('#emp-cnpj').value = '65.180.352/0001-11';
+    $1('#emp-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+
+    // espera o sistema confirmar que salvou NA CONTA (é o que a tela mostra)...
+    await ModoLocal.esperar(
+      () => /última sincronização/.test($1('#situacao-dados-texto').textContent),
+      'o envio do salvamento terminou: ' + $1('#situacao-dados-texto').textContent,
+      20000
+    );
+    // ...e sai do site imediatamente depois disso: nada pode ficar para trás
+    w1.close();
+
+    // ---------------------------------------------- computador 2 (janela privativa)
+    const dois = await ModoLocal.abrirSemServidor({ base, externo: [falso.url] });
+    const w2 = dois.window;
+    const $2 = (sel) => w2.document.querySelector(sel);
+    await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local no computador 2');
+    await ModoLocal.esperar(() => !$2('#tela-entrar').classList.contains('oculto'), 'tela de entrar no computador 2');
+    assert.strictEqual($2('#entrar-usuario').value, '', 'a janela privativa começa sem nada (é o caso real)');
+    $2('#entrar-usuario').value = EMAIL;
+    $2('#entrar-senha').value = SENHA;
+    $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'sistema aberto no computador 2', 30000);
+    await ModoLocal.esperar(
+      () => w2.ModoEstatico._interno.banco.perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL LTDA',
+      'a empresa editada apareceu no outro computador: ' +
+        JSON.stringify(w2.ModoEstatico._interno.banco.perfil.empresa.razaoSocial) +
+        ' | pedidos: ' + falso.requisicoes() + ' | erro: ' + (w2.Nuvem.situacao().erro || '(nenhum)'),
+      30000
+    );
+    assert.strictEqual(
+      w2.ModoEstatico._interno.banco.perfil.empresa.cnpj,
+      '65.180.352/0001-11',
+      'e com o resto dos campos'
+    );
+    assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
+    w2.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: fechar a aba com alteração pendente ainda envia (keepalive)', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  const EMAIL = 'dej@empresa.com.br';
+  const SENHA = 'senha-secreta-123';
+
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({
+      base: linkParaOProjeto(falso.url, CHAVE),
+      externo: [falso.url],
+    });
+    const w = aberto.window;
+    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local');
+    await w.Nuvem.criar({ usuario: EMAIL, senha: SENHA });
+    const antes = falso.requisicoes();
+
+    // uma proposta salva e a aba fechada na mesma hora (antes do envio agendado)
+    await w.API.pedir('/api/documentos', {
+      method: 'POST',
+      corpo: {
+        tipo: 'proposta',
+        numero: { sequencial: 1, ano: 2026, grupo: '' },
+        orgao: { nome: 'UASG 787010' },
+        itens: [{ descricao: 'RÁDIO DE TESTE', unidade: 'UND', quantidade: 2, precoVenda: 100 }],
+      },
+    });
+    assert.strictEqual(falso.requisicoes(), antes, 'nada foi enviado ainda (é o envio agendado que falta)');
+    w.close(); // aqui o navegador avisa a página (pagehide) e mata os timers
+
+    await ModoLocal.esperar(
+      () => falso.requisicoes() > antes,
+      'o envio saiu mesmo com a aba fechada: ' + falso.requisicoes(),
+      15000
+    );
+    const linha = falso.linhas.get('u:' + EMAIL);
+    assert.ok(linha && linha.conteudo && linha.conteudo.dados, 'o cofre recebeu o conteúdo');
+    assert.ok(linha.conteudo.dados.length > 50, 'e com o documento dentro (' + linha.conteudo.dados.length + ' caracteres)');
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: o diagnóstico pode ser copiado para pedir ajuda', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({
+      base: linkParaOProjeto(falso.url, CHAVE),
+      externo: [falso.url],
+      armazenamento: {
+        'licitapro.nuvem.v1': JSON.stringify({
+          usuario: 'dej@empresa.com.br', senha: 'senha-secreta-123',
+        }),
+      },
+    });
+    const w = aberto.window;
+    const $ = (sel) => w.document.querySelector(sel);
+    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local');
+    await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto', 20000);
+    await ModoLocal.esperar(() => !$('#nuvem-bloco').classList.contains('oculto'), 'bloco da conta visível');
+
+    $('#nuvem-diagnostico').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(
+      () => /diagnóstico da conta/.test($('#nuvem-diagnostico-caixa').value),
+      'o diagnóstico foi montado',
+      20000
+    );
+    const texto = $('#nuvem-diagnostico-caixa').value;
+    assert.ok(/projeto em uso: https?:\/\//.test(texto), 'diz o projeto em uso: ' + texto.split('\n')[4]);
+    assert.ok(/conta ligada: sim/.test(texto), 'diz que a conta está ligada');
+    assert.ok(/última sincronização/.test(texto), 'diz quando sincronizou');
+    assert.ok(/\[ok\]\s+O cofre aceita gravação/.test(texto), 'traz o teste passo a passo: ' + texto.slice(-160));
+    assert.strictEqual(texto.includes('senha-secreta-123'), false, 'e nunca mostra a senha');
+    assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+    w.close();
   } finally {
     await falso.fechar();
   }
@@ -1705,6 +1859,7 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
   // e as ações do modo local ficam no menu do usuário
   assert.ok(!$('#local-exportar').classList.contains('oculto'), 'backup disponível no menu');
   assert.ok(!$('#local-importar').classList.contains('oculto'), 'restauração disponível no menu');
+  assert.ok(!$('#local-drive').classList.contains('oculto'), 'explicação da cópia no Drive no menu');
   // sem aviso de boas-vindas: a primeira abertura não mostra toast nenhum
   await ModoLocal.esperar(() => $('#view-painel') && !$('#view-painel').classList.contains('oculto'), 'painel', 8000);
   await new Promise((r) => setTimeout(r, 900)); // o aviso antigo aparecia depois de 600 ms

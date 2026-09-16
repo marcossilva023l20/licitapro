@@ -26,7 +26,9 @@
   // não um serviço de arquivos): acima disso a foto é reduzida antes de subir
   const PESO_MAXIMO_FOTO = 1200 * 1024;
   const LARGURA_MAXIMA_FOTO = 1600;
-  const ESPERA_ENVIO = 2500; // ms depois da última gravação, antes de enviar
+  const ESPERA_ENVIO = 900; // ms depois da última gravação, antes de enviar
+  // o navegador só garante o envio "ao sair da página" (keepalive) até ~64 KB
+  const LIMITE_KEEPALIVE = 60000;
 
   const estado = {
     enviando: false,
@@ -182,11 +184,15 @@
   /** O que a tela mostra sobre a conta/nuvem. */
   function situacao() {
     const config = emUso();
-    const vazia = { ativa: false, enviando: false, erro: '', sincronizadoEm: null, projeto: '', usuario: '', aviso: '' };
+    const vazia = {
+      ativa: false, enviando: false, pendente: false, erro: '',
+      sincronizadoEm: null, projeto: '', usuario: '', aviso: '',
+    };
     if (!config || !configurada()) return vazia;
     return {
       ativa: true,
       enviando: estado.enviando,
+      pendente: Boolean(estado.agendado),
       usuario: config.usuario || '',
       projeto: config.projeto || projetoDaUrl(config.url),
       sincronizadoEm: config.sincronizadoEm || null,
@@ -308,11 +314,20 @@
     }
   }
 
-  function gravarLinha(config, id, conteudo) {
+  /**
+   * Grava uma linha do cofre. Com `aoSair`, a requisição é marcada como
+   * `keepalive`: o navegador termina de mandá-la mesmo se a aba for fechada
+   * logo em seguida (é o que salva quem edita e sai na correria). Acima de
+   * ~64 KB o navegador recusa esse modo, então aí vai do jeito normal.
+   */
+  function gravarLinha(config, id, conteudo, opcoes) {
+    const corpo = JSON.stringify({ id, conteudo, atualizado_em: new Date().toISOString() });
+    const manterAberto = Boolean(opcoes && opcoes.aoSair) && corpo.length <= LIMITE_KEEPALIVE;
     return pedir(config, TABELA + '?on_conflict=id', {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id, conteudo, atualizado_em: new Date().toISOString() }),
+      body: corpo,
+      keepalive: manterAberto,
     });
   }
 
@@ -453,7 +468,8 @@
 
   // ------------------------------------------------------------------ envio
 
-  async function enviar() {
+  async function enviar(opcoes) {
+    const aoSair = Boolean(opcoes && opcoes.aoSair);
     const config = emUso();
     if (!config || !configurada()) throw new Error('Entre numa conta para enviar os dados.');
     if (!window.ModoEstatico || !window.ModoEstatico.montarBackup) {
@@ -474,7 +490,7 @@
         const foto = await prepararFoto(blob);
         const bytes = new Uint8Array(await foto.arrayBuffer());
         const pacote = await cifrar({ imagem: paraBase64(bytes), tipo: foto.type || 'image/jpeg' }, config.senha);
-        await gravarLinha(config, linhaImagem(config, id), pacote);
+        await gravarLinha(config, linhaImagem(config, id), pacote, { aoSair });
         enviadas.add(id);
         gravarConfig(Object.assign({}, config, { imagens: Array.from(enviadas) }));
       } catch (erro) {
@@ -491,7 +507,7 @@
       banco: backup.banco,
       imagens: Array.from(enviadas),
     }, config.senha);
-    await gravarLinha(config, linhaPrincipal(config), pacote);
+    await gravarLinha(config, linhaPrincipal(config), pacote, { aoSair });
     gravarConfig(Object.assign({}, config, {
       imagens: Array.from(enviadas),
       sincronizadoEm: agora,
@@ -524,6 +540,40 @@
   }
 
   /** Envia depois de uma pausa (cada gravação no meio de uma digitação não pesa). */
+  /**
+   * Manda agora o que estiver pendente, sem esperar o tempo do agendamento.
+   * O botão "Sincronizar agora" e o salvamento da empresa usam este caminho.
+   */
+  async function enviarAgora(opcoes) {
+    if (!configurada()) return null;
+    if (estado.agendado) {
+      window.clearTimeout(estado.agendado);
+      estado.agendado = null;
+    }
+    return enviar(opcoes);
+  }
+
+  /**
+   * A aba vai fechar (ou ficou escondida)? Manda o que estiver pendente na
+   * hora, em modo `keepalive`, para não perder a última edição.
+   */
+  function despacharPendente() {
+    if (!estado.agendado || !configurada()) return;
+    window.clearTimeout(estado.agendado);
+    estado.agendado = null;
+    enviar({ aoSair: true }).catch(() => {
+      /* sem tempo para avisar: o próximo login sincroniza de novo */
+    });
+  }
+
+  window.addEventListener('pagehide', despacharPendente);
+  window.addEventListener('beforeunload', despacharPendente);
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') despacharPendente();
+    });
+  }
+
   function agendarEnvio() {
     if (!configurada()) return;
     if (estado.agendado) window.clearTimeout(estado.agendado);
@@ -803,6 +853,7 @@
     desconectar,
     sincronizar,
     enviar,
+    enviarAgora,
     agendarEnvio,
     baixarImagem,
     juntar,

@@ -415,6 +415,16 @@ input[type="search"] { padding-left: 12px; }
 .onde-guardar .texto-suave { margin: 10px 0 0; }
 .entrar-nota { margin: 0; font-size: 0.8rem; line-height: 1.45; }
 /* Resultado do "testar a conexão / testar a conta": um item por etapa */
+/* Diagnóstico copiável (o que a pessoa cola para pedir ajuda) */
+.caixa-diagnostico {
+  width: 100%;
+  min-height: 150px;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  white-space: pre;
+}
 .lista-passos { list-style: none; display: grid; gap: 6px; margin: 8px 0 0; padding: 0; font-size: 0.82rem; }
 .lista-passos li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
 .lista-passos li::before { content: '•'; text-align: center; }

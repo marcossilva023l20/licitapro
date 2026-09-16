@@ -105,6 +105,33 @@ Pronto: documentos, empresa, numeração, padrões e fotos chegam cifrados e abr
 
 ---
 
+## Salvou e saiu do site na mesma hora?
+
+O sistema **não espera você lembrar de sincronizar**: ao clicar em **Salvar** (empresa, padrões,
+documento) ele já manda para a conta, e ao fechar a aba ele termina o envio que estiver pendente.
+Mesmo assim, o aviso mais confiável é a própria tela:
+
+- *"Dados da empresa salvos na sua conta."* → já está no banco.
+- *"Dados salvos neste navegador e na conta "seu@email" — última sincronização …"* → idem.
+- *"Alterações salvas neste navegador — enviando para a conta…"* → ainda está subindo (segundos).
+
+Se a conexão cair no meio, o painel mostra *"Nuvem: <motivo> — os dados continuam salvos neste
+navegador"*: nada se perde, e a próxima abertura do site envia de novo.
+
+## E o Google Drive?
+
+O Drive guarda **arquivos**, não um banco de dados: o sistema não consegue escrever direto na sua
+conta Google (isso precisaria de um aplicativo autorizado por você, com verificação do Google — e
+não serviria para abrir os dados em outro computador sem passar por ele). O que funciona, e já está
+no menu do usuário, é a **cópia em arquivo**:
+
+1. Menu do usuário → **Baixar backup** → sai um `licitapro-backup-AAAA-MM-DD.json`.
+2. Arraste esse arquivo para uma pasta no Drive (ex.: *LicitaPro*).
+3. Para voltar: baixe o arquivo do Drive e use **Restaurar backup**.
+
+Quem faz o papel de "abrir em qualquer computador" é a **conta** (Supabase), não o Drive — e o menu
+explica isso em **Guardar uma cópia no Drive**.
+
 ## Se alguma etapa falhar
 
 O próprio **Testar a conexão** diz onde parou. Traduzindo:
