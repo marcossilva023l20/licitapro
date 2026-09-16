@@ -72,8 +72,8 @@ Desenvolvimento com recarga automática: `npm run dev`.
    Aproveite e defina os *padrões* (validade, prazo de entrega, garantia, condições de pagamento).
 
 2. **Baixar o modelo de planilha** — botão em *Painel*, *Importar planilha* ou no menu do usuário.
-   O arquivo `Modelo_Importacao_Itens_DEJ.xlsx` tem as abas **Itens** (para preencher) e
-   **Instruções** (legenda das colunas + exemplo).
+   O arquivo `Modelo_Importacao_Itens_DEJ.xlsx` tem **uma única aba**, **Itens**, com os títulos
+   das colunas e nada mais — sem aba de instruções, sem legenda e sem comentários.
 
 3. **Importar planilha** — arraste o arquivo preenchido. O sistema mostra os itens encontrados,
    avisa sobre linhas com problema e permite:
@@ -108,8 +108,8 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | **Resumo** | tipo, número, data, status, órgão/cliente, modalidade, objeto, empresa, quantidade de itens, subtotal, desconto, acréscimo, total, custo e lucro (uso interno), condições e a assinatura digital, quando houver |
    | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
 
-   São só essas duas abas: **sem aba de instruções e sem comentários nos títulos** —
-   quem já usa o sistema sabe preencher.
+   São só essas duas abas. Valem aqui as mesmas regras do modelo: **sem aba de
+   instruções e sem comentários nos títulos** — quem já usa o sistema sabe preencher.
 
    Como as colunas são as do modelo, a planilha pode ser **editada no Excel e
    reenviada na tela "Importar planilha"** — o sistema lê de volta os mesmos
@@ -153,7 +153,8 @@ Detalhes importantes:
   e o sistema também encontra o cabeçalho se houver linhas de título acima.
 - Linhas em branco são ignoradas; linhas problemáticas geram aviso (e podem ser desmarcadas antes de criar o documento).
 - Aceita `.xlsx`, `.xls`, `.csv` e `.ods` (até 15 MB).
-- Se a planilha tiver abas de instruções, o sistema escolhe automaticamente a aba com mais colunas conhecidas.
+- Se a planilha tiver mais de uma aba (capa, resumo, instruções antigas), o sistema escolhe
+  automaticamente a aba com mais colunas conhecidas.
 
 Gerar o modelo sem abrir o site: `npm run modelo`.
 

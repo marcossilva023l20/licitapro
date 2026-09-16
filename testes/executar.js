@@ -132,13 +132,16 @@ teste('Formato: máscaras de CNPJ, CPF, CEP e telefone', () => {
 
 // ===================================================== 2. planilha modelo
 
-teste('Modelo de planilha: gera .xlsx com as abas Itens e Instruções', () => {
+teste('Modelo de planilha: gera .xlsx com a aba Itens, sem instruções', () => {
   const Modelo = require(path.join(RAIZ, 'server', 'modeloImportacao'));
   const buffer = Modelo.gerarBuffer();
-  assert.ok(buffer.length > 5000, 'o arquivo deve ter conteúdo');
+  assert.ok(buffer.length > 1000, 'o arquivo deve ter conteúdo');
 
   const livro = XLSX.read(buffer, { type: 'buffer' });
-  assert.deepStrictEqual(livro.SheetNames, ['Itens', 'Instruções']);
+  assert.deepStrictEqual(livro.SheetNames, ['Itens'], 'só a aba de itens: ' + livro.SheetNames.join(' | '));
+  assert.ok(!livro.Sheets['Instruções'], 'não sai aba de instruções no modelo');
+  const titulo = livro.Sheets['Itens']['A1'];
+  assert.ok(!(titulo && titulo.c && titulo.c.length), 'os títulos não têm comentários');
 
   const cabecalhos = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 })[0];
   assert.deepStrictEqual(cabecalhos, [

@@ -37,7 +37,7 @@
     return XLSX.read(dados, Object.assign({ cellDates: false, raw: false, codepage: 65001 }, opcoesLeitura(dados)));
   }
 
-  /** Escolhe a aba com mais colunas reconhecidas (ignora a aba de instruções). */
+  /** Escolhe a aba com mais colunas reconhecidas (ignora capa/resumo/instruções antigas). */
   function escolherAba(livro) {
     let melhor = null;
     for (const nome of livro.SheetNames) {
