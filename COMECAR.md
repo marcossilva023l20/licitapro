@@ -68,6 +68,13 @@ menos passos manuais até funcionar. Se um dia você quiser migrar, o sistema ac
 
 ## Passo 5 — Apontar o site para o projeto novo
 
+> **Se o site já aponta para o seu projeto, pule para o item 5.** Abra
+> <https://marcossilva023l20.github.io/licitapro>, aperte `Ctrl+Shift+R` (recarregar sem cache) e veja,
+> em *"Usar outro projeto / testar a conexão"*, a linha **Projeto em uso:** — se o endereço for o
+> seu (por exemplo `https://yrqhxljwdxsacaopbllq.supabase.co`), o site já está ligado nele e os
+> itens 1 a 4 abaixo só servem para um dia trocar de projeto. Se aparecer outro endereço, clique em
+> **voltar ao projeto do site**.
+
 1. Abra <https://marcossilva023l20.github.io/licitapro>
 2. Na tela **Entrar / Criar conta**, abra **“Usar outro projeto / testar a conexão”**.
 3. Cole o **Project URL** e a **chave pública** e clique em **Testar a conexão**.
