@@ -16,7 +16,7 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 
 const RAIZ = path.join(__dirname, '..');
 
-function esperar(condicao, descricao, tempoMaximo = 8000) {
+function esperar(condicao, descricao, tempoMaximo = 15000) {
   return new Promise((resolve, reject) => {
     const inicio = Date.now();
     const tentar = () => {

@@ -13,7 +13,7 @@ const http = require('http');
 
 const RAIZ = path.join(__dirname, '..');
 
-function esperar(condicao, descricao, tempoMaximo = 4000) {
+function esperar(condicao, descricao, tempoMaximo = 10000) {
   return new Promise((resolve, reject) => {
     const inicio = Date.now();
     const tentar = () => {

@@ -29,14 +29,18 @@ async function executar() {
   const falhas = [];
   console.log('\nDEJ Solutions & Global — testes\n' + '='.repeat(60));
   for (const { nome, fn } of testes) {
+    const comecou = Date.now();
     try {
       await fn();
       passou += 1;
-      console.log('  ok   ' + nome);
+      console.log('  ok   ' + nome + ' (' + (Date.now() - comecou) + ' ms)');
     } catch (erro) {
       falhas.push({ nome, erro });
-      console.log('  FALHA ' + nome);
+      console.log('  FALHA ' + nome + ' (' + (Date.now() - comecou) + ' ms)');
       console.log('        ' + erro.message.split('\n')[0]);
+      // no GitHub Actions isto vira uma anotação no resultado da execução: com
+      // ela dá para saber qual teste falhou sem baixar o log inteiro
+      console.log('::error title=Teste falhou::' + nome + ' — ' + erro.message.split('\n')[0]);
     }
   }
   console.log('='.repeat(60));
