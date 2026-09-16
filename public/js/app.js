@@ -1268,6 +1268,7 @@
               : 'Os dados deste computador foram para a nuvem.',
             'ok'
           );
+          await recarregarPerfil();
           await carregarDocumentos();
           desenharPainel();
           atualizarSituacaoDados();
@@ -1341,11 +1342,34 @@
    * Ao abrir o sistema com a nuvem ligada, busca o que está lá (é o que faz os
    * documentos aparecerem em outro computador).
    */
+  /**
+   * Relê a empresa e os padrões depois que a nuvem trouxe dados para este
+   * computador.
+   *
+   * Sem isto a tela de "Minha empresa" continuava mostrando o que estava aqui
+   * ANTES de entrar na conta — em branco, numa janela nova — mesmo com os
+   * dados já gravados: parecia que nada tinha sido salvo. É o caminho exato de
+   * quem entra numa janela privativa e procura o nome da empresa.
+   */
+  async function recarregarPerfil() {
+    try {
+      const resposta = await API.get('/api/perfil');
+      estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
+      estado.empresa = Object.assign({}, estado.perfil.empresa || {});
+      estado.padroes = Object.assign({}, estado.perfil.padroes || {});
+      mostrarApp(); // nome no topo passa a ser o da empresa que veio da conta
+      if (!$('#view-empresa').classList.contains('oculto')) carregarEmpresa();
+    } catch (_) {
+      /* o que veio agora já está gravado: a tela se acerta no próximo sync */
+    }
+  }
+
   async function sincronizarAoAbrir() {
     if (!window.Nuvem || !window.Nuvem.configurada()) return;
     try {
       const resultado = await window.Nuvem.sincronizar();
       if (resultado && resultado.direcao !== 'envio') {
+        await recarregarPerfil();
         await carregarDocumentos();
         desenharPainel();
         if (!$('#view-documentos').classList.contains('oculto')) desenharListaDocumentos();
@@ -1379,6 +1403,9 @@
       const empresa = Object.assign({}, estado.empresa);
       CAMPOS_EMPRESA.forEach(([chave, sel]) => { empresa[chave] = $(sel).value.trim(); });
       empresa.simplesNacional = $('#emp-simples').checked;
+      // quando isto foi editado: com dois computadores, quem salvou por último
+      // manda nos dados da empresa (nunca um cadastro antigo por cima do novo)
+      empresa.atualizadoEm = new Date().toISOString();
       try {
         const resposta = await API.put('/api/perfil/empresa', empresa);
         estado.empresa = Object.assign(estado.empresa, resposta.empresa);
@@ -1399,6 +1426,7 @@
       const padroes = {};
       CAMPOS_PADROES.forEach(([chave, sel]) => { padroes[chave] = $(sel).value; });
       padroes.validadeDias = Number(padroes.validadeDias) || 0;
+      padroes.atualizadoEm = new Date().toISOString();
       try {
         const resposta = await API.put('/api/perfil/padroes', padroes);
         estado.perfil.padroes = resposta.padroes;

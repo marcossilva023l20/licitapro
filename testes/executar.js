@@ -1457,8 +1457,114 @@ teste('Nuvem: editar a empresa e sair do site na mesma hora não perde o que foi
       '65.180.352/0001-11',
       'e com o resto dos campos'
     );
+
+    // ...e a TELA precisa mostrar isso: é o que a pessoa vê quando entra numa
+    // janela nova. Banco certo com tela em branco é o "continua sem salvar".
+    w2.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$2('#view-empresa').classList.contains('oculto'), 'tela da empresa no computador 2');
+    await ModoLocal.esperar(
+      () => $2('#emp-razao').value === 'D.E.J SOLUTIONS & GLOBAL LTDA',
+      'a TELA da empresa precisava mostrar o que veio da conta, mas está: ' + JSON.stringify($2('#emp-razao').value),
+      8000
+    );
+    assert.strictEqual($2('#emp-cnpj').value, '65.180.352/0001-11', 'e o CNPJ na tela');
     assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
     w2.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobrescrita)', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  const EMAIL = 'dej@empresa.com.br';
+  const SENHA = 'senha-secreta-123';
+  const base = linkParaOProjeto(falso.url, CHAVE);
+  try {
+    // ---------------------------------------------- computador 1: cadastra tudo
+    const um = await ModoLocal.abrirSemServidor({ base, externo: [falso.url] });
+    const w1 = um.window;
+    const $1 = (sel) => w1.document.querySelector(sel);
+    await ModoLocal.esperar(() => w1.ModoEstatico && w1.ModoEstatico.ativo(), 'modo local no computador 1');
+    await ModoLocal.esperar(() => !$1('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+    $1('#aba-criar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    $1('#entrar-usuario').value = EMAIL;
+    $1('#entrar-senha').value = SENHA;
+    $1('#entrar-repetir').value = SENHA;
+    $1('#form-entrar').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$1('#app').classList.contains('oculto'), 'sistema aberto no computador 1', 30000);
+    w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa no computador 1');
+    $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL LTDA';
+    $1('#emp-cnpj').value = '65.180.352/0001-11';
+    $1('#emp-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(
+      () => /última sincronização/.test($1('#situacao-dados-texto').textContent),
+      'a primeira versão chegou na conta: ' + $1('#situacao-dados-texto').textContent,
+      20000
+    );
+    // o que este computador guardou (é o que ele terá quando voltar aqui)
+    const oQueOComputadorUmTem = w1.localStorage.getItem('licitapro.local.v1');
+    assert.ok(oQueOComputadorUmTem && /D\.E\.J SOLUTIONS/.test(oQueOComputadorUmTem), 'o computador 1 guardou o cadastro');
+    w1.close();
+
+    // --------------------------- computador 2 (janela privativa): corrige o nome
+    const dois = await ModoLocal.abrirSemServidor({ base, externo: [falso.url] });
+    const w2 = dois.window;
+    const $2 = (sel) => w2.document.querySelector(sel);
+    await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local no computador 2');
+    await ModoLocal.esperar(() => !$2('#tela-entrar').classList.contains('oculto'), 'tela de entrar no computador 2');
+    $2('#entrar-usuario').value = EMAIL;
+    $2('#entrar-senha').value = SENHA;
+    $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'sistema aberto no computador 2', 30000);
+    w2.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$2('#view-empresa').classList.contains('oculto'), 'tela da empresa no computador 2');
+    await ModoLocal.esperar(
+      () => $2('#emp-razao').value === 'D.E.J SOLUTIONS & GLOBAL LTDA',
+      'o computador 2 recebeu o cadastro: ' + JSON.stringify($2('#emp-razao').value),
+      15000
+    );
+    $2('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL — MATRIZ';
+    $2('#emp-salvar').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(
+      () => /última sincronização/.test($2('#situacao-dados-texto').textContent),
+      'a segunda versão chegou na conta: ' + $2('#situacao-dados-texto').textContent,
+      20000
+    );
+    w2.close();
+
+    // ------- computador 1 de novo: o que ele tem é a versão ANTIGA (não pode voltar)
+    const tres = await ModoLocal.abrirSemServidor({
+      base,
+      externo: [falso.url],
+      armazenamento: { 'licitapro.local.v1': oQueOComputadorUmTem },
+    });
+    const w3 = tres.window;
+    const $3 = (sel) => w3.document.querySelector(sel);
+    await ModoLocal.esperar(() => w3.ModoEstatico && w3.ModoEstatico.ativo(), 'modo local no computador 1 de novo');
+    await ModoLocal.esperar(() => !$3('#tela-entrar').classList.contains('oculto'), 'tela de entrar de novo');
+    $3('#entrar-usuario').value = EMAIL;
+    $3('#entrar-senha').value = SENHA;
+    $3('#form-entrar').dispatchEvent(new w3.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$3('#app').classList.contains('oculto'), 'sistema aberto de novo', 30000);
+    await ModoLocal.esperar(
+      () => w3.ModoEstatico._interno.banco.perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL — MATRIZ',
+      'a edição nova venceu a antiga: ' +
+        JSON.stringify(w3.ModoEstatico._interno.banco.perfil.empresa.razaoSocial),
+      20000
+    );
+    w3.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w3.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$3('#view-empresa').classList.contains('oculto'), 'tela da empresa de novo');
+    assert.strictEqual(
+      $3('#emp-razao').value,
+      'D.E.J SOLUTIONS & GLOBAL — MATRIZ',
+      'e a tela mostra a edição nova (não a antiga deste computador)'
+    );
+    assert.strictEqual(tres.erros.length, 0, 'sem erros de script: ' + tres.erros.join(' | '));
+    w3.close();
   } finally {
     await falso.fechar();
   }

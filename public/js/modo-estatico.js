@@ -317,7 +317,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '22';
+  const VERSAO_ARQUIVOS = '23';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {

@@ -636,10 +636,22 @@
     });
 
     const empresaDaqui = (meu.perfil && meu.perfil.empresa) || {};
-    const temEmpresa = Boolean(empresaDaqui.razaoSocial || empresaDaqui.cnpj || empresaDaqui.nomeFantasia);
-    const perfil = temEmpresa
-      ? meu.perfil
-      : Object.assign({}, meu.perfil, outro.perfil || {});
+    const empresaDeLa = (outro.perfil && outro.perfil.empresa) || {};
+    const temCadastro = (empresa) =>
+      Boolean(empresa.razaoSocial || empresa.cnpj || empresa.nomeFantasia);
+    let perfil;
+    if (temCadastro(empresaDaqui) && temCadastro(empresaDeLa)) {
+      // os dois computadores têm o cadastro: vale o que foi salvo por último
+      // (sem isso um cadastro antigo podia passar por cima da edição nova e
+      //  dar a impressão de que o que foi digitado não ficou salvo)
+      const meuEm = String(empresaDaqui.atualizadoEm || '');
+      const deleEm = String(empresaDeLa.atualizadoEm || '');
+      perfil = meuEm >= deleEm ? meu.perfil : outro.perfil;
+    } else if (temCadastro(empresaDaqui)) {
+      perfil = meu.perfil;
+    } else {
+      perfil = Object.assign({}, meu.perfil, outro.perfil || {});
+    }
 
     return { versao: 2, perfil, documentos: Array.from(porId.values()), sequencia };
   }
