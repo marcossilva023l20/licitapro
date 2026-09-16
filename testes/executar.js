@@ -2203,7 +2203,10 @@ teste('Interface: o painel deixa ligar o banco pela tela (só na própria máqui
 
     // sem a chave o formulário não manda nada
     $('#banco-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    assert.ok(/Cole a chave/.test($('#banco-mensagem').textContent), 'pede a chave: ' + $('#banco-mensagem').textContent);
+    assert.ok(
+      /Escolha o arquivo|Cole a chave/.test($('#banco-mensagem').textContent),
+      'pede a credencial: ' + $('#banco-mensagem').textContent
+    );
 
     clicar('#banco-cancelar');
     assert.strictEqual($('#banco-form').classList.contains('oculto'), true, 'dá para fechar o formulário');
@@ -2512,6 +2515,48 @@ teste('Firebase: o diagnóstico explica cada erro (banco sem Firestore, credenci
     }
   } finally {
     await falso.fechar();
+  }
+});
+
+teste('Interface: escolher o arquivo .json do Firebase conecta o banco', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+    const clicar = (sel) => $(sel).dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(() => !$('#conectar-banco').classList.contains('oculto'), 'formulário do banco disponível');
+    clicar('#banco-abrir');
+    assert.ok($('#banco-arquivo-botao'), 'tem o botão de escolher o arquivo');
+    assert.strictEqual($('#banco-arquivo').type, 'file', 'campo de arquivo .json');
+
+    // o POST é interceptado: aqui o teste confere o caminho da tela
+    let enviado = null;
+    window.API.post = async (rota, corpo) => {
+      enviado = { rota, corpo };
+      return { ok: true, provedor: 'firebase', provedorNome: 'Firebase', armazenamento: 'firebase', banco: { conectado: true } };
+    };
+
+    const conteudo = JSON.stringify({
+      type: 'service_account',
+      project_id: 'dej-propostas',
+      client_email: 'conta@dej-propostas.iam.gserviceaccount.com',
+      private_key: '-----BEGIN PRIVATE KEY-----\nchave-de-teste\n-----END PRIVATE KEY-----\n',
+    });
+    const arquivo = new window.File([conteudo], 'dej-firebase-adminsdk.json', { type: 'application/json' });
+    const campo = $('#banco-arquivo');
+    Object.defineProperty(campo, 'files', { value: [arquivo], configurable: true });
+    campo.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await Navegador.esperar(() => /conectado!/.test($('#banco-mensagem').textContent), 'avisa que conectou');
+    assert.ok(enviado && enviado.rota === '/api/banco/configurar', 'enviou para a rota do banco');
+    assert.strictEqual(enviado.corpo.credencial, conteudo.trim(), 'mandou o conteúdo do arquivo escolhido');
+    assert.ok(/Firebase conectado/.test($('#banco-mensagem').textContent), 'diz qual banco conectou: ' + $('#banco-mensagem').textContent);
+    assert.strictEqual($('#banco-credencial').value, '', 'limpa o campo depois de conectar');
+  } finally {
+    servidor.close();
   }
 });
 

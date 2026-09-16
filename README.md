@@ -231,10 +231,12 @@ estiverem, vale o Supabase):
 3. Em **Project settings (⚙) → Service accounts → Generate new private key**, baixe o
    arquivo `.json` (é a credencial: dá acesso total ao banco).
 4. Informe a credencial — qualquer um dos caminhos:
-   - **pela tela:** com o sistema aberto em `http://localhost:3000`, clique em
-     **“Conectar banco de dados”** no painel e cole o **conteúdo do arquivo JSON**
-     (o sistema grava em `data/firebase-service-account.json`, só o dono lê, e o
-     `.env` aponta para ele);
+   - **pela tela (mais fácil):** com o sistema aberto em `http://localhost:3000`,
+     clique em **“Conectar banco de dados”** no painel e depois em **“Escolher o
+     arquivo .json do Firebase”** — aponte para o arquivo baixado (ou arraste ele
+     para o formulário) e o sistema conecta sozinho. Também dá para colar o
+     conteúdo do JSON no campo. O arquivo é gravado em
+     `data/firebase-service-account.json` (só o dono lê) e o `.env` aponta para ele;
    - **pela linha de comando:** `npm run banco -- configurar` e cole o **caminho do
      arquivo** (arrastar o arquivo para o terminal também funciona);
    - **na hospedagem:** cadastre `FIREBASE_SERVICE_ACCOUNT` (o JSON inteiro, ou o

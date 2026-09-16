@@ -103,6 +103,17 @@
       mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
     };
 
+    /** Lê o arquivo escolhido (o .json do Firebase) como texto. */
+    function lerArquivoTexto(arquivo) {
+      if (arquivo && typeof arquivo.text === 'function') return arquivo.text();
+      return new Promise((resolver, rejeitar) => {
+        const leitor = new FileReader();
+        leitor.onload = () => resolver(String(leitor.result || ''));
+        leitor.onerror = () => rejeitar(new Error('Não consegui ler o arquivo escolhido.'));
+        leitor.readAsText(arquivo);
+      });
+    }
+
     if (abrir) {
       abrir.addEventListener('click', () => {
         form.classList.remove('oculto');
@@ -120,12 +131,11 @@
       });
     }
 
-    form.addEventListener('submit', async (evento) => {
-      evento.preventDefault();
+    async function enviarCredencial() {
       const url = $('#banco-url').value.trim();
       const credencial = $('#banco-credencial').value.trim();
       if (!credencial) {
-        escrever('Cole a chave do projeto (ou o JSON do Firebase) para continuar.', 'erro');
+        escrever('Escolha o arquivo .json do Firebase ou cole a chave do Supabase.', 'erro');
         return;
       }
 
@@ -149,6 +159,49 @@
       } finally {
         botao.disabled = false;
       }
+    }
+
+    form.addEventListener('submit', (evento) => {
+      evento.preventDefault();
+      enviarCredencial();
+    });
+
+    // escolher o .json baixado do Firebase (o jeito mais fácil: não precisa
+    // copiar o conteúdo da chave à mão) — envia assim que o arquivo é lido
+    const campoArquivo = $('#banco-arquivo');
+    const botaoArquivo = $('#banco-arquivo-botao');
+    async function usarArquivo(arquivo) {
+      if (!arquivo) return;
+      try {
+        const texto = await lerArquivoTexto(arquivo);
+        $('#banco-credencial').value = texto.trim();
+        escrever('Arquivo lido: ' + (arquivo.name || 'conta de serviço') + '. Conectando...');
+        await enviarCredencial();
+      } catch (erro) {
+        escrever(erro.message, 'erro');
+      }
+    }
+    if (botaoArquivo && campoArquivo) {
+      botaoArquivo.addEventListener('click', () => campoArquivo.click());
+      campoArquivo.addEventListener('change', () => usarArquivo(campoArquivo.files && campoArquivo.files[0]));
+    }
+
+    // arrastar o arquivo para dentro do formulário também funciona
+    ['dragenter', 'dragover'].forEach((tipo) =>
+      form.addEventListener(tipo, (evento) => {
+        evento.preventDefault();
+        form.classList.add('arrastando');
+      })
+    );
+    ['dragleave', 'drop'].forEach((tipo) =>
+      form.addEventListener(tipo, (evento) => {
+        evento.preventDefault();
+        form.classList.remove('arrastando');
+      })
+    );
+    form.addEventListener('drop', (evento) => {
+      const arquivo = evento.dataTransfer && evento.dataTransfer.files && evento.dataTransfer.files[0];
+      usarArquivo(arquivo);
     });
   }
 

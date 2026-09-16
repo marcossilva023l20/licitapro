@@ -348,6 +348,9 @@ input[type="search"] { padding-left: 12px; }
 }
 .campo-banco { display: grid; gap: 5px; font-size: 0.8rem; color: var(--texto-fraco); }
 .campo-banco input { width: 100%; }
+.arquivo-banco { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.arquivo-banco .texto-suave { font-size: 0.78rem; }
+.form-banco.arrastando { border-color: var(--dourado-300); background: var(--superficie-2); }
 .ajuda-banco { margin: 0; font-size: 0.78rem; color: var(--texto-fraco); line-height: 1.5; }
 .ajuda-banco code {
   font-size: 0.78rem;

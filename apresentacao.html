@@ -7,7 +7,7 @@
   <meta name="description" content="Sistema web que importa a planilha de itens do edital e gera a proposta de licitação e o orçamento em PDF, prontos para envio." />
   <meta name="theme-color" content="#0B1F33" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="site/apresentacao.css?v=12" />
+  <link rel="stylesheet" href="site/apresentacao.css?v=13" />
 </head>
 <body>
   <header class="topo">
@@ -124,8 +124,10 @@
         </article>
         <article class="cartao">
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3.2" /><path d="M4 6v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V6" /><path d="M4 12v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-6" /></svg></span>
-          <h3>Banco no Supabase</h3>
-          <p>Com servidor, a empresa e as propostas podem ficar num banco Postgres do Supabase: os
+          <h3>Banco na nuvem (Supabase ou Firebase)</h3>
+          <p>Com servidor, a empresa e as propostas podem ficar num banco na nuvem — Postgres do
+          <strong>Supabase</strong> ou <strong>Firestore do Firebase</strong> (o sistema escolhe pelo que você
+          configurar, e dá para ligar pela própria tela, sem terminal): os
           dados sobrevivem a atualização, reinício e troca de servidor — e, se o banco cair, o
           sistema continua no ar com uma cópia local até ele voltar. A chave de acesso fica só no
           servidor: o site publicado nunca recebe credencial do banco.</p>
@@ -220,7 +222,7 @@
           São dois caminhos. <strong>Modo local (GitHub Pages)</strong>: o endereço já abre o sistema e roda
           tudo no navegador — ótimo para uso individual, sem instalar nada.
           <strong>Com servidor</strong>: sem login, os documentos ficam guardados no servidor (no
-          <strong>banco Supabase</strong> ou num arquivo) e podem ser abertos de qualquer computador —
+          <strong>banco na nuvem</strong> ou num arquivo) e podem ser abertos de qualquer computador —
           proteja o endereço no proxy ou na plataforma de hospedagem.
           O repositório já vem com
           <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>

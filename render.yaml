@@ -38,6 +38,15 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+
+      # banco no Firebase (alternativa ao Supabase): cole o JSON da conta de
+      # serviço (o arquivo baixado em Project settings → Service accounts) e o
+      # id do projeto. Se a plataforma não aceitar quebras de linha no valor,
+      # cole o mesmo JSON em base64 — o sistema entende os dois formatos.
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
     disk:
       name: licitapro-dados
       mountPath: /var/data
