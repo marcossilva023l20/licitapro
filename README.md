@@ -367,17 +367,27 @@ tentar conectar.
 
 ### Opção A — Render (mais simples)
 
-1. Faça o **merge do pull request** para o código ficar na branch `main`.
-2. Crie a conta em <https://render.com> e conecte ao GitHub.
-3. **New +** → **Blueprint** → escolha o repositório `licitapro`.
-   O Render lê o `render.yaml` e configura comando de start, healthcheck e disco.
-4. Aguarde o deploy e acesse a URL gerada (`https://licitapro-xxxx.onrender.com`): o sistema
+> Passo a passo com os valores já preenchidos (inclusive as variáveis do Supabase e a
+> conferência no fim): **[`PUBLICAR.md`](PUBLICAR.md)**. Resumo:
+
+1. Faça o **merge do pull request** para o código ficar na branch `main` (e, se quiser, troque
+   a fonte do GitHub Pages para `main` em Settings → Pages).
+2. Crie a conta em <https://render.com> e entre com o **GitHub**.
+3. **New +** → **Web Service** → escolha o repositório `licitapro` e preencha:
+   branch `main`, **Build Command** `npm install --omit=dev --no-audit --no-fund`,
+   **Start Command** `node server/index.js`, **Health Check Path** `/api/health`.
+   (Atalho: **New +** → **Blueprint**, que lê o `render.yaml` e já deixa tudo pronto, com
+   disco em `/var/data` e plano `starter`.)
+4. Em **Environment**, informe `SUPABASE_URL` e `SUPABASE_SERVICE_KEY` (seção 4) para os dados
+   ficarem no Postgres — sem isso o Render usa o arquivo local, que se perde no plano gratuito.
+5. Aguarde o deploy e acesse a URL gerada (`https://licitapro-xxxx.onrender.com`): o sistema
    abre direto no painel, sem login.
-5. Se o endereço for público, proteja o acesso (senha no proxy, túnel autenticado ou o
+6. Se o endereço for público, proteja o acesso (senha no proxy, túnel autenticado ou o
    controle de acesso da própria plataforma).
 
-> **Sobre os dados:** no plano **gratuito** o disco é apagado a cada reinício, então as
-> propostas salvas se perdem — serve para testar/demonstrar. Para uso real há dois caminhos:
+> **Sobre os dados:** no plano **gratuito** o disco é apagado a cada reinício. Com o Supabase
+> ligado, documentos, empresa e numeração vivem no Postgres e sobrevivem; o que fica em disco
+> nesse caso são as **fotos enviadas pelo editor** (`/var/data/uploads`). Para uso real há dois caminhos:
 > **Supabase** (grátis, veja a seção 4 — é o recomendado: os dados ficam num Postgres e
 > sobrevivem a qualquer reinício) ou o bloco `disk` do `render.yaml` (plano pago: instância
 > ~US$ 7/mês + disco 1 GB ~US$ 0,25/mês), com os dados em `/var/data`.

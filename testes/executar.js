@@ -55,6 +55,23 @@ const RAIZ = path.join(__dirname, '..');
 const Formato = require(path.join(RAIZ, 'shared', 'format'));
 const XLSX = require('xlsx');
 
+teste('Publicação: o guia do Render existe e não carrega chave nenhuma', () => {
+  const guia = fs.readFileSync(path.join(RAIZ, 'PUBLICAR.md'), 'utf8');
+  const render = fs.readFileSync(path.join(RAIZ, 'render.yaml'), 'utf8');
+  const readme = fs.readFileSync(path.join(RAIZ, 'README.md'), 'utf8');
+
+  assert.ok(/render\.com/.test(guia) && /api\/health/.test(guia), 'o guia ensina a publicar e a conferir');
+  assert.ok(/esquema\.sql/.test(guia), 'o guia manda rodar o SQL das tabelas do servidor');
+  assert.ok(/SUPABASE_SERVICE_KEY/.test(guia), 'e diz qual variável o Render espera');
+  assert.ok(/Render/.test(readme) && /PUBLICAR\.md/.test(readme), 'o README aponta para o guia');
+  assert.ok(/SUPABASE_SERVICE_KEY/.test(render), 'o render.yaml pede a chave do servidor');
+  // o guia é público no repositório: nenhum valor de chave pode estar escrito nele
+  [/eyJ[A-Za-z0-9_-]{10,}\./, /sb_secret_[A-Za-z0-9_-]{10,}/].forEach((padrao) => {
+    assert.strictEqual(padrao.test(guia), false, 'sem chave escrita no guia de publicação');
+  });
+});
+
+
 // =========================================================== 1. formatação
 
 teste('Formato: converte textos em números no padrão brasileiro', () => {
