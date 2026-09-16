@@ -643,7 +643,11 @@
       desenharItens();
       if (!silencioso && guardado) UI.toast('Documento salvo.', 'sucesso');
       if (window.App) window.App.recarregarLista();
-      window.location.hash = '#/documento/' + estado.doc.id;
+      // o endereço aponta para o documento salvo — mas só se a pessoa continua
+      // no editor: se ela já clicou em outra tela, não a puxamos de volta
+      if (!$('#view-editor').classList.contains('oculto')) {
+        window.location.hash = '#/documento/' + estado.doc.id;
+      }
       return estado.doc;
     } catch (erro) {
       $('#editor-estado').textContent = 'Erro ao salvar';

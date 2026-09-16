@@ -1380,8 +1380,13 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     $1('#editor-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(() => $1('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
 
+    // clicar em "Minha empresa" logo depois de salvar não pode ser desfeito pelo
+    // salvamento: antes o editor devolvia o endereço do documento e a pessoa era
+    // puxada de volta (numa corrida a tela pedida nem aparecia)
     w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
-    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa', 15000);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.strictEqual($1('#view-empresa').classList.contains('oculto'), false, 'o salvamento não puxa a pessoa de volta');
     $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL';
     $1('#emp-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(
