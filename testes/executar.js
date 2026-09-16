@@ -893,15 +893,21 @@ teste('HTTP: o login foi removido de vez (sem senha, sem sessão, sem usuários)
     assert.strictEqual(fs.existsSync(path.join(RAIZ, 'server', 'auth.js')), false, 'server/auth.js foi removido');
     assert.strictEqual(fs.existsSync(path.join(RAIZ, 'server', 'routes', 'auth.js')), false, 'routes/auth.js foi removido');
 
-    // e a tela de login não existe no HTML
+    // a tela de conta (entrar/criar) é só do navegador: nenhuma senha passa
+    // pelo servidor — o que ele guarda é o cofre cifrado que o navegador manda
     const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
-    assert.strictEqual(html.includes('tela-login'), false, 'sem tela de login no HTML');
-    assert.strictEqual(html.includes('form-login'), false, 'sem formulário de login');
-    assert.strictEqual(html.includes('type="password"'), false, 'sem campo de senha');
+    assert.strictEqual(html.includes('tela-login'), false, 'sem a tela de login antiga');
+    assert.strictEqual(html.includes('form-login'), false, 'sem o formulário de login antigo');
+    assert.strictEqual(html.includes('botao-sair'), false, 'sem o botão de sair antigo');
+    assert.ok(/id="tela-entrar"/.test(html), 'a tela de entrar/criar conta existe');
+    assert.ok(/id="entrar-sem-conta"/.test(html), 'e dá para continuar sem conta nenhuma');
     // a credencial do banco é colada num campo comum (a chave ou o JSON), que só
     // aparece quando o sistema roda na própria máquina
-    assert.ok(/Verificar de novo|verificar de novo/.test(html), 'sem tela de entrada');
-    assert.strictEqual(html.includes('botao-sair'), false, 'sem botão de sair');
+    assert.ok(/Verificar de novo|verificar de novo/.test(html), 'campo do banco no painel');
+
+    const nuvemJs = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'nuvem.js'), 'utf8');
+    assert.ok(/AES-GCM/.test(nuvemJs) && /PBKDF2/.test(nuvemJs), 'a conta é cifrada no navegador');
+    assert.strictEqual(/\/api\//.test(nuvemJs), false, 'o cofre da conta não fala com o servidor do site');
   } finally {
     servidor.close();
   }
@@ -1198,27 +1204,44 @@ teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {
   assert.ok(/Enquadrada no SIMPLES NACIONAL/i.test(juntos) || true, 'marcação do SIMPLES quando cadastrada');
 });
 
-teste('Nuvem: liga no Supabase, cifra tudo e abre os documentos em outro computador', async () => {
+teste('Nuvem: criar a conta num computador e entrar no outro com a mesma senha', async () => {
   const { criarServidorDeMentira } = require('./nuvem-falsa');
   const CHAVE_PUBLICA = 'chave-publica-de-teste-do-projeto';
   const falso = await criarServidorDeMentira({ chave: CHAVE_PUBLICA });
-  const nuvem = { url: falso.url, chave: CHAVE_PUBLICA, codigo: 'codigo-secreto-123' };
+  const conta = { url: falso.url, chave: CHAVE_PUBLICA, usuario: 'dej.solutions', senha: 'senha-secreta-123' };
 
   try {
-    // ---------------------------------------------------- computador 1
-    const um = await abrirNoModoLocal({ externo: [falso.url] });
+    // ------------------------------------------ computador 1: criar a conta
+    const um = await ModoLocal.abrirSemServidor({ externo: [falso.url] });
     const w1 = um.window;
-    const $1 = um.$;
-    await entrarNoModoLocal(w1, $1);
+    const $1 = (sel) => w1.document.querySelector(sel);
+    await ModoLocal.esperar(() => w1.ModoEstatico && w1.ModoEstatico.ativo(), 'modo local no computador 1');
+    // quem abre o site sem conta (e sem ter dito que não quer) vê a tela de entrar
+    await ModoLocal.esperar(() => !$1('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+    assert.strictEqual($1('#app').classList.contains('oculto'), true, 'o sistema espera a conta');
 
-    // uma proposta com foto (a foto viaja dentro do documento no modo local)
+    $1('#aba-criar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    assert.strictEqual($1('#entrar-repetir-campo').classList.contains('oculto'), false, 'ao criar, pede a senha duas vezes');
+    $1('#entrar-url').value = conta.url;
+    $1('#entrar-chave').value = conta.chave;
+    $1('#entrar-usuario').value = conta.usuario;
+    $1('#entrar-senha').value = conta.senha;
+    $1('#entrar-repetir').value = conta.senha;
+    $1('#form-entrar').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(
+      () => !$1('#app').classList.contains('oculto'),
+      'sistema abriu depois de criar a conta: ' + $1('#entrar-mensagem').textContent,
+      20000
+    );
+
+    // uma proposta, um item e os dados da empresa (o que o usuário faz no uso real)
     $1('#botao-nova-proposta').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(() => !$1('#view-editor').classList.contains('oculto'), 'editor visível');
     await ModoLocal.esperar(() => $1('#campo-numero-sequencial').value !== '', 'numeração automática');
     $1('#itens-adicionar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(() => $1('#lista-itens .item'), 'item criado');
     const descricao = $1('#lista-itens .item input[data-campo="descricao"]');
-    descricao.value = 'RÁDIO DE TESTE DA NUVEM';
+    descricao.value = 'RÁDIO DE TESTE DA CONTA';
     descricao.dispatchEvent(new w1.Event('input', { bubbles: true }));
     $1('#editor-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(() => $1('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
@@ -1232,79 +1255,120 @@ teste('Nuvem: liga no Supabase, cifra tudo e abre os documentos em outro computa
       'empresa salva'
     );
 
-    // liga a nuvem pela tela (é o que o usuário faz)
-    $1('#nav-painel') && $1('#nav-painel').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
-    w1.location.hash = '#/painel';
-    await ModoLocal.esperar(() => !$1('#nuvem-bloco').classList.contains('oculto'), 'bloco da nuvem visível');
-    $1('#nuvem-url').value = nuvem.url;
-    $1('#nuvem-chave').value = nuvem.chave;
-    $1('#nuvem-codigo').value = nuvem.codigo;
-    $1('#nuvem-form').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
-    await ModoLocal.esperar(
-      () => /Dados enviados para a nuvem/.test($1('#nuvem-mensagem').textContent),
-      'dados enviados para a nuvem: ' + $1('#nuvem-mensagem').textContent,
-      15000
-    );
+    // manda tudo para a conta (é o mesmo botão "Sincronizar agora" da tela)
+    const envio = await w1.Nuvem.sincronizar();
+    assert.ok(envio && envio.ok, 'a sincronização terminou bem');
 
-    // no banco nada legível: o que está lá é a cifra
-    const principal = falso.linhas.get('principal');
-    assert.ok(principal, 'a linha principal chegou no Supabase');
+    // no banco, cada conta tem a sua linha — e nada legível dentro
+    const principal = falso.linhas.get('u:' + conta.usuario);
+    assert.ok(principal, 'a conta ficou na linha u:dej.solutions');
     const cifrado = JSON.stringify(principal.conteudo);
     assert.ok(!/RÁDIO|RADIO/.test(cifrado), 'o que está no banco não mostra o item');
     assert.ok(!/D\.E\.J/.test(cifrado), 'nem a empresa');
     assert.ok(principal.conteudo.dados.length > 100, 'e o conteúdo cifrado está lá');
+    assert.ok(!JSON.stringify(falso.corpos).includes(conta.senha), 'a senha nunca é enviada para o banco');
+    assert.ok(!JSON.stringify(falso.corpos).includes('RÁDIO'), 'nem nada em claro');
     assert.ok(falso.autenticadas.length >= 2, 'os pedidos foram assinados com a chave pública');
-    assert.ok(
-      falso.autenticadas.some((linha) => /licitapro_cofre/.test(linha)),
-      'o sistema falou com a tabela do cofre'
-    );
-    assert.ok(/sincronizado/.test($1('#nuvem-status').textContent) || /na nuvem/.test($1('#situacao-dados-texto').textContent),
-      'a tela mostra que a nuvem está ligada: ' + $1('#situacao-dados-texto').textContent);
     const guardado = w1.localStorage.getItem('licitapro.nuvem.v1');
-    assert.ok(guardado && /"codigo"/.test(guardado), 'a configuração da nuvem fica guardada neste navegador');
+    assert.ok(guardado && /"usuario":"dej\.solutions"/.test(guardado), 'a conta fica lembrada neste navegador');
+    assert.ok(
+      /na conta "dej\.solutions"/.test($1('#situacao-dados-texto').textContent),
+      'o painel diz que os dados estão na conta: ' + $1('#situacao-dados-texto').textContent
+    );
+    assert.strictEqual($1('#menu-sair').classList.contains('oculto'), false, 'com conta aparece "Sair da conta" no menu');
+
+    const link = w1.Nuvem.linkParaOutroComputador();
+    assert.ok(/[?]nuvem=/.test(link), 'o link leva o endereço do projeto: ' + link.slice(0, 80));
+    assert.strictEqual(link.includes('senha-secreta-123'), false, 'e nunca leva a senha');
     w1.close();
 
-    // ---------------------------------------------------- computador 2
-    const dois = await ModoLocal.abrirSemServidor({
-      externo: [falso.url],
-      armazenamento: { 'licitapro.nuvem.v1': JSON.stringify(nuvem) },
-    });
+    // ------------------------------------------ computador 2: entrar na conta
+    const dois = await ModoLocal.abrirSemServidor({ externo: [falso.url], base: link });
     const w2 = dois.window;
     const $2 = (sel) => w2.document.querySelector(sel);
     await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local no computador 2');
-    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
+    await ModoLocal.esperar(() => !$2('#tela-entrar').classList.contains('oculto'), 'tela de entrar no computador 2');
+    assert.strictEqual($2('#entrar-url').value, conta.url, 'o endereço do projeto veio no link');
+    assert.strictEqual($2('#entrar-chave').value, conta.chave, 'e a chave pública também');
+    assert.strictEqual($2('#entrar-usuario').value, '', 'o usuário é digitado aqui');
+    assert.strictEqual($2('#entrar-senha').value, '', 'e a senha também');
+
+    // primeiro com a senha errada: não entra e explica o motivo
+    $2('#entrar-usuario').value = conta.usuario;
+    $2('#entrar-senha').value = 'senha-errada-999';
+    $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(
+      () => /senha não confere/i.test($2('#entrar-mensagem').textContent),
+      'senha errada explicada: ' + $2('#entrar-mensagem').textContent,
+      15000
+    );
+    assert.strictEqual($2('#app').classList.contains('oculto'), true, 'e o sistema continua fechado');
+    assert.strictEqual(w2.localStorage.getItem('licitapro.nuvem.v1'), null, 'nada de conta guardada pela metade');
+
+    // agora com a senha certa: os dados do computador 1 aparecem aqui
+    $2('#entrar-senha').value = conta.senha;
+    $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'sistema abriu no computador 2', 20000);
     await ModoLocal.esperar(
       () => /001\/2026/.test($2('#painel-recentes').textContent),
-      'a proposta criada no outro computador aparece: ' + $2('#painel-recentes').textContent.slice(0, 80),
+      'a proposta do computador 1 aparece: ' + $2('#painel-recentes').textContent.slice(0, 80),
       15000
     );
     const bancoDois = w2.ModoEstatico._interno.banco;
     assert.strictEqual(bancoDois.documentos.length, 1, 'o documento chegou inteiro');
-    assert.strictEqual(bancoDois.documentos[0].itens[0].descricao, 'RÁDIO DE TESTE DA NUVEM', 'com o item');
+    assert.strictEqual(bancoDois.documentos[0].itens[0].descricao, 'RÁDIO DE TESTE DA CONTA', 'com o item');
     assert.strictEqual(bancoDois.perfil.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL', 'e com os dados da empresa');
-    assert.ok(/na nuvem/.test($2('#situacao-dados-texto').textContent), 'a linha do painel fala da nuvem: ' + $2('#situacao-dados-texto').textContent);
+    assert.ok(
+      /na conta "dej\.solutions"/.test($2('#situacao-dados-texto').textContent),
+      'a linha do painel fala da conta: ' + $2('#situacao-dados-texto').textContent
+    );
     assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
     w2.close();
-
-    // ---------------------------------------------------- código errado
-    const errado = Object.assign({}, nuvem, { codigo: 'codigo-errado-999' });
-    const tres = await ModoLocal.abrirSemServidor({
-      externo: [falso.url],
-      armazenamento: { 'licitapro.nuvem.v1': JSON.stringify(errado) },
-    });
-    try {
-      let mensagem = '';
-      await tres.window.Nuvem.sincronizar().catch((erro) => { mensagem = erro.message; });
-      assert.ok(/código de acesso está certo/.test(mensagem), 'o código errado é explicado: ' + mensagem);
-    } finally {
-      tres.window.close();
-    }
   } finally {
     await falso.fechar();
   }
 });
 
-teste('Nuvem: o link leva endereço e chave para o outro computador', async () => {
+teste('Nuvem: no site sem servidor a conta é opcional (dá para continuar sem ela)', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const falso = await criarServidorDeMentira({ chave: 'chave-publica-de-teste' });
+  try {
+    // primeira visita: convida a entrar/criar conta, mas deixa seguir sem nenhuma
+    const primeira = await ModoLocal.abrirSemServidor({ externo: [falso.url] });
+    const w = primeira.window;
+    const $ = (sel) => w.document.querySelector(sel);
+    await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar na primeira visita');
+    assert.ok(/Continuar sem conta/.test($('#entrar-sem-conta').textContent), 'a saída sem conta está à mão');
+    $('#entrar-sem-conta').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto sem conta', 15000);
+    assert.strictEqual($('#tela-entrar').classList.contains('oculto'), true, 'a tela sai da frente');
+    assert.strictEqual(w.localStorage.getItem('licitapro.semconta.v1'), '1', 'a escolha fica lembrada');
+    assert.strictEqual($('#menu-sair').classList.contains('oculto'), true, 'sem conta não aparece "Sair da conta"');
+    await ModoLocal.esperar(() => /Sem conta/.test($('#nuvem-status').textContent), 'o bloco diz que não há conta');
+    assert.strictEqual($('#nuvem-entrar').classList.contains('oculto'), false, 'e oferece entrar numa conta');
+    assert.strictEqual($('#nuvem-sincronizar').classList.contains('oculto'), true, 'sem conta não há o que sincronizar');
+    assert.strictEqual(primeira.erros.length, 0, 'sem erros de script: ' + primeira.erros.join(' | '));
+    w.close();
+
+    // segunda visita: quem já disse que não quer conta não vê a tela de novo
+    const segunda = await ModoLocal.abrirSemServidor({
+      externo: [falso.url],
+      armazenamento: { 'licitapro.semconta.v1': '1' },
+    });
+    const w2 = segunda.window;
+    await ModoLocal.esperar(
+      () => !w2.document.querySelector('#app').classList.contains('oculto'),
+      'a segunda visita abre direto',
+      15000
+    );
+    assert.strictEqual(w2.document.querySelector('#tela-entrar').classList.contains('oculto'), true, 'sem a tela de entrar');
+    w2.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: o link leva endereço e chave para o outro computador (a senha não sai daqui)', async () => {
   const { criarServidorDeMentira } = require('./nuvem-falsa');
   const CHAVE = 'chave-publica-de-teste-do-projeto';
   const falso = await criarServidorDeMentira({ chave: CHAVE });
@@ -1313,28 +1377,30 @@ teste('Nuvem: o link leva endereço e chave para o outro computador', async () =
     const origem = await ModoLocal.abrirSemServidor({
       externo: [falso.url],
       armazenamento: {
-        'licitapro.nuvem.v1': JSON.stringify({ url: falso.url, chave: CHAVE, codigo: 'codigo-secreto-123' }),
+        'licitapro.nuvem.v1': JSON.stringify({
+          url: falso.url, chave: CHAVE, usuario: 'dej.solutions', senha: 'senha-secreta-123',
+        }),
       },
     });
-    await ModoLocal.esperar(
-      () => origem.window.ModoEstatico && origem.window.ModoEstatico.ativo(),
-      'modo local na origem'
-    );
-    const link = origem.window.Nuvem.linkParaOutroComputador();
-    assert.ok(/[?]nuvem=/.test(link), 'o link leva os dados da nuvem: ' + link.slice(0, 70));
-    assert.strictEqual(/codigo-secreto-123/.test(link), false, 'o link não leva o código de acesso');
-    origem.window.close();
+    const wo = origem.window;
+    await ModoLocal.esperar(() => wo.ModoEstatico && wo.ModoEstatico.ativo(), 'modo local na origem');
+    await ModoLocal.esperar(() => !wo.document.querySelector('#app').classList.contains('oculto'), 'sistema aberto na origem', 15000);
+    assert.strictEqual(wo.Nuvem.usuario(), 'dej.solutions', 'a origem está com a conta ligada');
+    const link = wo.Nuvem.linkParaOutroComputador();
+    assert.ok(/[?]nuvem=/.test(link), 'o link leva a configuração: ' + link.slice(0, 70));
+    assert.strictEqual(/senha-secreta-123|dej\.solutions/.test(link), false, 'nem a senha nem o usuário vão no link');
+    wo.close();
 
-    // no outro computador o formulário já chega preenchido (falta o código)
+    // no outro computador a tela de entrar já chega com o endereço e a chave
     const outro = await ModoLocal.abrirSemServidor({ externo: [falso.url], base: link });
     const w = outro.window;
     const $ = (sel) => w.document.querySelector(sel);
-    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local no outro computador');
-    await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
-    await ModoLocal.esperar(() => $('#nuvem-url').value === falso.url, 'endereço preenchido pelo link');
-    assert.strictEqual($('#nuvem-chave').value, CHAVE, 'chave preenchida pelo link');
-    assert.strictEqual($('#nuvem-codigo').value, '', 'o código de acesso continua sendo digitado aqui');
-    assert.strictEqual($('#nuvem-bloco').open, true, 'o bloco da nuvem já abre aberto');
+    await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar no outro computador');
+    assert.strictEqual($('#entrar-url').value, falso.url, 'endereço preenchido pelo link');
+    assert.strictEqual($('#entrar-chave').value, CHAVE, 'chave preenchida pelo link');
+    assert.strictEqual($('#entrar-usuario').value, '', 'o usuário continua sendo digitado aqui');
+    assert.strictEqual($('#entrar-senha').value, '', 'e a senha também');
+    assert.strictEqual($('#entrar-onde').open, false, 'com o link não precisa nem abrir "onde os dados ficam"');
     w.close();
   } finally {
     await falso.fechar();
@@ -1348,10 +1414,11 @@ teste('Nuvem: explica que falta rodar o nuvem.sql quando a tabela não existe', 
     const aberto = await ModoLocal.abrirSemServidor({ externo: [falso.url] });
     await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local');
     let mensagem = '';
-    await aberto.window.Nuvem.conectar({
+    await aberto.window.Nuvem.criar({
       url: falso.url,
       chave: 'chave-publica-de-teste',
-      codigo: 'codigo-secreto-123',
+      usuario: 'dej.solutions',
+      senha: 'senha-secreta-123',
     }).catch((erro) => { mensagem = erro.message; });
     assert.ok(/nuvem\.sql/.test(mensagem), 'a mensagem manda rodar o arquivo do cofre: ' + mensagem);
     assert.strictEqual(aberto.window.Nuvem.configurada(), false, 'e não fica ligada pela metade');
@@ -1366,7 +1433,11 @@ teste('Nuvem: explica que falta rodar o nuvem.sql quando a tabela não existe', 
 const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
 
 async function abrirNoModoLocal(opcoes) {
-  const aberto = await ModoLocal.abrirSemServidor(opcoes || {});
+  const dadas = (opcoes && opcoes.armazenamento) || {};
+  // quem já escolheu "continuar sem conta" neste navegador não vê a tela de
+  // entrar de novo: os testes do dia a dia começam daí
+  const armazenamento = Object.assign({ 'licitapro.semconta.v1': '1' }, dadas);
+  const aberto = await ModoLocal.abrirSemServidor(Object.assign({}, opcoes || {}, { armazenamento }));
   const { window } = aberto;
   const $ = (sel) => window.document.querySelector(sel);
   await ModoLocal.esperar(() => window.ModoEstatico && window.ModoEstatico.ativo(), 'modo local ativo', 15000);
@@ -1407,8 +1478,12 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
     'nenhum aviso aparece ao abrir: ' + (caixa ? caixa.textContent.trim().slice(0, 80) : '')
   );
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta direto', 10000);
-  assert.strictEqual($('#tela-login'), null, 'não existe tela de login em lugar nenhum');
-  assert.strictEqual($('#botao-sair'), null, 'sem botão "Sair" em lugar nenhum');
+  assert.ok($('#tela-entrar'), 'a tela de entrar/criar conta existe (é opcional)');
+  assert.strictEqual(
+    $('#tela-entrar').classList.contains('oculto'), true,
+    'e não aparece para quem já escolheu continuar sem conta'
+  );
+  assert.strictEqual($('#menu-sair').classList.contains('oculto'), true, 'sem conta não há "Sair da conta" no menu');
   assert.strictEqual(
     window.document.documentElement.getAttribute('data-modo'), 'local',
     'interface marcada como modo local'
@@ -1465,7 +1540,9 @@ teste('Modo local: o que foi salvo continua lá ao abrir o site numa nova aba', 
   w1.close();
 
   // ---- visita 2: "nova aba" — o navegador entrega o mesmo armazenamento
-  const segunda = await ModoLocal.abrirSemServidor({ armazenamento: { [CHAVE]: salvo } });
+  const segunda = await ModoLocal.abrirSemServidor({
+    armazenamento: { [CHAVE]: salvo, 'licitapro.semconta.v1': '1' },
+  });
   const w2 = segunda.window;
   const $2 = (sel) => w2.document.querySelector(sel);
   await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local na nova aba');
@@ -1542,6 +1619,10 @@ teste('Modo local: avisa quando o navegador não está guardando os dados (janel
   const w = aberto.window;
   const $ = (sel) => w.document.querySelector(sel);
   await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local ativo');
+  // sem armazenamento não dá para lembrar da escolha: a tela de conta aparece,
+  // e "continuar sem conta" segue funcionando (mesmo sem poder gravar nada)
+  await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+  $('#entrar-sem-conta').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
 
   const situacao = w.ModoEstatico.armazenamento();
@@ -1837,6 +1918,7 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   );
   assert.ok(raiz.includes('js/modo-estatico.js'), 'a raiz carrega o modo local');
   assert.ok(raiz.includes('id="view-painel"'), 'a raiz é a tela do sistema');
+  assert.ok(/src="public\/marca\/logo\.png"/.test(raiz), 'logo da tela de conta com o caminho da raiz');
   assert.ok(!raiz.includes('tela-login'), 'a raiz não tem tela de login');
 
   // a página de apresentação continua existindo, ao lado do sistema
@@ -1848,6 +1930,7 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   const aberto = await ModoLocal.abrirSemServidor({
     base: 'https://marcossilva023l20.github.io/licitapro/',
     arquivo: 'index.html',
+    armazenamento: { 'licitapro.semconta.v1': '1' },
   });
   const $ = (sel) => aberto.window.document.querySelector(sel);
   await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local na raiz', 15000);

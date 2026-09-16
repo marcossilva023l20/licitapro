@@ -232,30 +232,36 @@ estiverem, vale o Supabase):
    configurado…"* ou *"O banco (…) não está recebendo os dados: <motivo>"*. O
    `/api/health` também responde `"armazenamento"` e o estado do banco.
 
-#### Sem servidor: guardar na nuvem do GitHub Pages
+#### Sem servidor: entrar numa conta e abrir o sistema de outro computador
 
 O endereço do GitHub Pages **não tem servidor**: ali os dados ficam no navegador (com backup em
-arquivo). Para abrir o sistema em **outro computador** sem hospedar nada, o próprio navegador pode
-guardar tudo no seu projeto Supabase — cifrado:
+arquivo). Para abrir o sistema em **outro computador** sem hospedar nada, o próprio navegador
+guarda tudo no seu projeto Supabase — cifrado com a **sua senha**:
 
 1. No SQL Editor do projeto, rode uma vez o arquivo [`supabase/nuvem.sql`](supabase/nuvem.sql)
    (no terminal, `npm run banco -- nuvem` mostra o SQL). Ele cria a tabela `licitapro_cofre` e
    libera só ela para a chave pública.
-2. Abra o site publicado, no painel clique em **“Guardar na nuvem (abrir de outro computador)”** e
-   informe: **Project URL**, a **chave pública** (*anon*/*publishable* — pode circular, ela só abre
-   o cofre) e um **código de acesso** inventado por você (mínimo 6 caracteres).
-3. Em qualquer outro computador, abra o mesmo endereço e digite os mesmos três valores — ou use o
-   botão **“link para o outro computador”**: ele copia um endereço que já leva o Project URL e a
-   chave pública, e aí só falta digitar o código de acesso (o código nunca vai no link).
+2. Abra o site publicado: na primeira visita aparece a tela **Entrar / Criar conta**. Abra
+   *“Onde os dados ficam guardados”*, informe o **Project URL** e a **chave pública**
+   (*anon*/*publishable* — pode circular, ela só abre o cofre), escolha um **usuário** (ex.:
+   `dej.solutions`) e uma **senha** (mínimo 6 caracteres) e use **Criar conta**.
+   Quem não quiser conta nenhuma clica em **“Continuar sem conta”** e segue com os dados só neste
+   navegador (a tela não volta a incomodar).
+3. Em qualquer outro computador, abra o mesmo endereço, informe usuário e senha e use **Entrar**.
+   Para não digitar o endereço nem a chave de novo, use o botão **“link para o outro computador”**
+   (dentro de *Conta e nuvem*): ele copia um endereço que já leva o Project URL e a chave pública —
+   lá só faltam o usuário e a senha.
 
 Como funciona: antes de sair do navegador, documentos, empresa, padrões e numeração são cifrados
-com o seu código (**AES-256-GCM**, chave derivada por PBKDF2 com 150 mil iterações) e só então
-enviados. No banco existe apenas texto cifrado — sem o código, ninguém lê nada (nem quem tem a
-chave pública do projeto). O código nunca é enviado a lugar nenhum e **não tem recuperação**: se
-esquecer, os dados da nuvem não têm volta (a cópia do navegador e os backups em arquivo continuam).
-Cada foto enviada vira uma linha própria e é baixada só quando o PDF precisa dela. Enquanto a nuvem
-estiver ligada, cada alteração é enviada pouco depois de salvar, e abrir o sistema busca o que está
-lá (documentos são unidos pelo id, ficando com o mais novo).
+com a **sua senha** (**AES-256-GCM**, chave derivada por PBKDF2 com 150 mil iterações) e só então
+enviados. No banco existe apenas texto cifrado, cada conta na sua própria linha (`u:<usuário>`) —
+sem a senha, ninguém lê nada (nem quem tem a chave pública do projeto). A senha **nunca é enviada a
+lugar nenhum** e **não tem recuperação**: se esquecer, os dados da nuvem não têm volta (a cópia do
+navegador e os backups em arquivo continuam). Usuário errado não acha nada; senha errada não abre
+nada. **Sair da conta** (no menu do usuário) manda o que faltar, limpa este navegador e deixa tudo
+guardado na conta. Cada foto enviada vira uma linha própria e é baixada só quando o PDF precisa
+dela. Enquanto a conta estiver ligada, cada alteração é enviada pouco depois de salvar, e abrir o
+sistema busca o que está lá (documentos são unidos pelo id, ficando com o mais novo).
 
 Se preferir o caminho “clássico” — servidor hospedado com o banco na nuvem e credencial só no
 servidor — siga as duas seções abaixo.

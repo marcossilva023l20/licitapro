@@ -15,6 +15,7 @@ function criarServidorDeMentira(opcoes) {
   const config = opcoes || {};
   const linhas = new Map(); // id -> { id, conteudo, atualizado_em }
   const autenticadas = [];
+  const corpos = []; // o que o navegador mandou (para conferir que a senha não sai)
   let requisicoes = 0;
 
   const servidor = http.createServer((req, res) => {
@@ -59,6 +60,7 @@ function criarServidorDeMentira(opcoes) {
       let corpo = '';
       req.on('data', (pedaco) => { corpo += pedaco; });
       req.on('end', () => {
+        corpos.push(corpo);
         try {
           const dados = JSON.parse(corpo);
           linhas.set(dados.id, Object.assign({}, linhas.get(dados.id) || {}, dados));
@@ -79,6 +81,7 @@ function criarServidorDeMentira(opcoes) {
         url: 'http://127.0.0.1:' + servidor.address().port,
         linhas,
         autenticadas,
+        corpos,
         requisicoes: () => requisicoes,
         fechar: () => new Promise((pronto) => servidor.close(pronto)),
       });

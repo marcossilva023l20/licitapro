@@ -27,7 +27,7 @@ const AVISO = [
   '  ATENÇÃO: arquivo gerado por scripts/paginas.js — não edite à mão.',
   '  É a página do sistema (public/index.html) preparada para o GitHub Pages,',
   '  que publica apenas arquivos estáticos: os caminhos relativos foram',
-  '  reescritos (css/ e js/ passam a public/..., ../shared/ vira shared/) e a',
+  '  reescritos (css/, js/ e marca/ passam a public/..., ../shared/ vira shared/) e a',
   '  meta licitapro-base avisa o modo local de onde vêm as bibliotecas.',
   '  Para alterar, edite public/index.html e rode: npm run paginas',
   '-->',
@@ -44,7 +44,8 @@ function gerar() {
     // as referências podem trazer ?v= (versão dos arquivos): trocamos só o caminho
     .replace(/href="css\//g, 'href="public/css/')
     .replace(/src="\.\.\/shared\//g, 'src="shared/')
-    .replace(/src="js\//g, 'src="public/js/');
+    .replace(/src="js\//g, 'src="public/js/')
+    .replace(/src="marca\//g, 'src="public/marca/');
 
   // A raiz do Pages não tem servidor: o modo local usa esta meta para achar
   // vendor/ e shared/ (que ficam em public/... e na raiz do repositório).

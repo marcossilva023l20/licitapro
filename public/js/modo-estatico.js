@@ -317,7 +317,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '17';
+  const VERSAO_ARQUIVOS = '18';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -953,6 +953,30 @@
     return false;
   }
 
+  /**
+   * Apaga os dados deste navegador (é o que "sair da conta" faz): o que já
+   * subiu para a nuvem continua lá e volta ao entrar de novo.
+   */
+  async function limparTudo() {
+    try {
+      window.localStorage.removeItem(CHAVE_BANCO);
+    } catch (_) {
+      /* sem armazenamento */
+    }
+    try {
+      if (window.indexedDB) {
+        await new Promise((pronto) => {
+          const pedido = window.indexedDB.deleteDatabase(BANCO_IDB);
+          pedido.onsuccess = pronto;
+          pedido.onerror = pronto;
+          pedido.onblocked = pronto;
+        });
+      }
+    } catch (_) {
+      /* sem IndexedDB: não havia imagem guardada aqui */
+    }
+  }
+
   window.ModoEstatico = {
     ativar,
     ativo: () => estado.ativo,
@@ -966,6 +990,7 @@
     aplicarBackup,
     salvarImagem: salvarImagemBlob,
     listarIdsImagens,
+    limparTudo,
     baixarModeloPlanilha,
     motorPdf: motorPdfPronto,
     verificarAmbiente,

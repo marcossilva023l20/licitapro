@@ -381,6 +381,41 @@ input[type="search"] { padding-left: 12px; }
 }
 .nuvem-bloco[open] summary { margin-bottom: 8px; }
 .nuvem-bloco .form-banco { margin-top: 6px; }
+/* Tela de entrada (entrar / criar conta) — só no site sem servidor */
+.tela-entrar {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px 16px;
+}
+.cartao-entrar {
+  width: 100%;
+  max-width: 430px;
+  display: grid;
+  gap: 14px;
+  padding: 26px 24px 22px;
+  background: var(--superficie, #102a43);
+  border: 1px solid var(--borda, #1e4b77);
+  border-radius: var(--raio, 14px);
+  box-shadow: var(--sombra-2, 0 18px 40px rgba(0, 0, 0, 0.35));
+}
+.marca-entrar { text-align: center; }
+.marca-entrar img { display: block; width: 84px; height: auto; margin: 0 auto 8px; }
+.marca-entrar h1 { margin: 0; font-size: 1.15rem; }
+.marca-entrar p { margin: 4px 0 0; }
+.abas-entrar { display: flex; gap: 6px; }
+.abas-entrar .aba { flex: 1 1 0; }
+.form-entrar { display: grid; gap: 12px; }
+.campo-entrar { display: grid; gap: 6px; font-size: 0.82rem; color: var(--texto-fraco, #c3d2e2); }
+.botao-largo { width: 100%; justify-content: center; }
+.onde-guardar { border-top: 1px solid var(--borda, #1e4b77); padding-top: 12px; }
+.onde-guardar summary { cursor: pointer; font-weight: 600; color: var(--dourado-600, #a8873f); }
+.onde-guardar .campo-entrar { margin-top: 10px; }
+.onde-guardar .texto-suave { margin: 10px 0 0; }
+.entrar-rodape { margin: 0; text-align: center; }
+#entrar-aviso:empty { display: none; }
+
 #nuvem-link-caixa {
   width: 100%;
   margin-top: 6px;

@@ -86,13 +86,14 @@
       } else if (nuvemAtiva) {
         caixa.className = 'situacao-dados ok';
         texto.textContent =
-          'Dados salvos neste navegador e na nuvem (projeto ' + (nuvem.projeto || '') + ')' +
+          'Dados salvos neste navegador e na conta ' + (nuvem.usuario ? '"' + nuvem.usuario + '"' : 'da nuvem') +
+          (nuvem.projeto ? ' (projeto ' + nuvem.projeto + ')' : '') +
           (nuvem.sincronizadoEm ? ' — última sincronização ' + quando(nuvem.sincronizadoEm) + '.' : '.');
       } else {
         caixa.className = 'situacao-dados aviso';
         texto.textContent =
-          'Dados salvos neste navegador (sem servidor). Para abrir em outro computador, use ' +
-          '"Guardar na nuvem" aqui embaixo — ou baixe um backup pelo menu.';
+          'Dados salvos neste navegador (sem servidor). Para abrir em outro computador, entre numa ' +
+          'conta em "Conta e nuvem" aqui embaixo — ou baixe um backup pelo menu.';
       }
       const blocoNuvem = $('#nuvem-bloco');
       if (blocoNuvem) blocoNuvem.classList.remove('oculto');
@@ -295,6 +296,7 @@
   }
 
   function mostrarApp() {
+    $('#app').classList.remove('oculto');
     const nome = nomeDaEmpresa();
     $('#nome-usuario').textContent = nome;
     $('#avatar-usuario').textContent = F.iniciais(nome) || 'DEJ';
@@ -753,131 +755,275 @@
     }
   }
 
-  /** Escreve o estado da nuvem no bloco "Guardar na nuvem". */
+  /** Escreve o estado da conta/nuvem no bloco "Conta e nuvem". */
   function mostrarStatusDaNuvem() {
     const area = $('#nuvem-status');
-    if (!area) return;
     const nuvem = window.Nuvem ? window.Nuvem.situacao() : { ativa: false };
-    if (!nuvem.ativa) {
-      area.textContent = '';
+    const logado = Boolean(nuvem.ativa);
+    const entrar = $('#nuvem-entrar');
+    const sincronizar = $('#nuvem-sincronizar');
+    const link = $('#nuvem-link');
+    const sair = $('#nuvem-sair');
+    if (entrar) entrar.classList.toggle('oculto', logado);
+    [sincronizar, link, sair].forEach((botao) => { if (botao) botao.classList.toggle('oculto', !logado); });
+    const noMenu = $('#menu-sair');
+    if (noMenu) noMenu.classList.toggle('oculto', !logado);
+    if (!area) return;
+    if (!logado) {
+      area.textContent = 'Sem conta: os dados ficam só neste navegador.';
       return;
     }
     area.textContent = nuvem.erro
-      ? 'Nuvem ligada no projeto ' + (nuvem.projeto || '') + ', mas com problema: ' + nuvem.erro
-      : 'Nuvem ligada no projeto ' + (nuvem.projeto || '') +
+      ? 'Conta "' + nuvem.usuario + '" no projeto ' + (nuvem.projeto || '') + ', mas com problema: ' + nuvem.erro
+      : 'Conta "' + nuvem.usuario + '" no projeto ' + (nuvem.projeto || '') +
         (nuvem.sincronizadoEm ? ' — última sincronização ' + quando(nuvem.sincronizadoEm) + '.' : '.');
   }
 
-  /**
-   * Nuvem: guardar os dados no Supabase direto do navegador (o site publicado
-   * no GitHub Pages não tem servidor). É o caminho para abrir o sistema em
-   * outro computador sem depender de nenhum PC ligado.
-   */
-  function ligarNuvem() {
-    const form = $('#nuvem-form');
-    if (!form || !window.Nuvem) return;
+  // --------------------------------------------------------------- entrar/criar
 
-    const mensagem = $('#nuvem-mensagem');
-    const escrever = (texto, tipo) => {
-      mensagem.textContent = texto || '';
-      mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
-    };
+  const CHAVE_SEM_CONTA = 'licitapro.semconta.v1';
 
-    const config = window.Nuvem.lerConfig();
-    const doLink = window.Nuvem.configDoEndereco();
-    if (config) {
-      $('#nuvem-url').value = config.url || '';
-      $('#nuvem-chave').value = config.chave || '';
-      $('#nuvem-codigo').value = config.codigo || '';
+  /** A pessoa já escolheu continuar sem conta neste navegador? */
+  function escolheuSemConta() {
+    try {
+      return window.localStorage.getItem(CHAVE_SEM_CONTA) === '1';
+    } catch (_) {
+      return false;
     }
-    // veio por um link de outro computador: já entra com endereço e chave
-    if (doLink) {
-      $('#nuvem-url').value = doLink.url;
-      $('#nuvem-chave').value = doLink.chave;
-      if (!$('#nuvem-bloco').open) $('#nuvem-bloco').open = true;
+  }
+
+  function marcarSemConta(sim) {
+    try {
+      if (sim) window.localStorage.setItem(CHAVE_SEM_CONTA, '1');
+      else window.localStorage.removeItem(CHAVE_SEM_CONTA);
+    } catch (_) {
+      /* sem armazenamento: a pergunta volta na próxima visita */
     }
+  }
 
-    form.addEventListener('submit', async (evento) => {
-      evento.preventDefault();
-      const botao = $('#nuvem-conectar');
-      botao.disabled = true;
-      escrever('Testando a conexão com o Supabase...');
-      try {
-        await window.Nuvem.conectar({
-          url: $('#nuvem-url').value,
-          chave: $('#nuvem-chave').value,
-          codigo: $('#nuvem-codigo').value,
-        });
-        escrever('Nuvem ligada. Enviando os dados deste computador...');
-        const resultado = await window.Nuvem.sincronizar();
-        escrever(
-          (resultado && resultado.direcao === 'download'
-            ? 'Dados baixados da nuvem. '
-            : 'Dados enviados para a nuvem. ') + 'Abra o sistema em outro computador com o mesmo código.',
-          'ok'
-        );
-        UI.toast('Nuvem ligada: seus dados agora abrem em qualquer computador.', 'sucesso');
-        if (doLink && window.history && window.history.replaceState) {
-          window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-        }
-        await atualizarSituacaoDados();
-      } catch (erro) {
-        escrever(erro.message, 'erro');
-      } finally {
-        botao.disabled = false;
-      }
+  let abaEntrar = 'entrar';
+
+  function trocarAbaEntrar(nome) {
+    abaEntrar = nome === 'criar' ? 'criar' : 'entrar';
+    UI.$$('#abas-entrar .aba').forEach((aba) => {
+      aba.classList.toggle('ativa', aba.dataset.abaEntrar === abaEntrar);
     });
+    const repetir = $('#entrar-repetir-campo');
+    if (repetir) repetir.classList.toggle('oculto', abaEntrar !== 'criar');
+    const botao = $('#entrar-botao');
+    if (botao) botao.textContent = abaEntrar === 'criar' ? 'Criar conta e entrar' : 'Entrar';
+    const mensagem = $('#entrar-mensagem');
+    if (mensagem) mensagem.textContent = '';
+  }
 
-    $('#nuvem-sincronizar').addEventListener('click', async () => {
-      escrever('Sincronizando...');
-      try {
-        const resultado = await window.Nuvem.sincronizar();
-        escrever(
-          resultado && resultado.direcao === 'download'
-            ? 'Os dados da nuvem vieram para este computador.'
-            : 'Os dados deste computador foram para a nuvem.',
-          'ok'
-        );
-        await carregarDocumentos();
-        desenharPainel();
-        atualizarSituacaoDados();
-      } catch (erro) {
-        escrever(erro.message, 'erro');
+  /** Tela de entrar/criar conta (existe só no site sem servidor). */
+  function mostrarTelaEntrar() {
+    const tela = $('#tela-entrar');
+    if (!tela) return;
+    const app = $('#app');
+    if (app) app.classList.add('oculto');
+    tela.classList.remove('oculto');
+    const logo = $('#entrar-logo');
+    if (logo && UI.caminhoBase) logo.src = UI.caminhoBase + 'marca/logo.png';
+
+    const doLink = window.Nuvem ? window.Nuvem.configDoEndereco() : null;
+    const config = window.Nuvem ? window.Nuvem.lerConfig() : null;
+    const url = (doLink && doLink.url) || (config && config.url) || $('#entrar-url').value || '';
+    const chave = (doLink && doLink.chave) || (config && config.chave) || $('#entrar-chave').value || '';
+    $('#entrar-url').value = url;
+    $('#entrar-chave').value = chave;
+    if (!url || !chave) $('#entrar-onde').open = true;
+    trocarAbaEntrar(abaEntrar);
+    const aviso = $('#entrar-aviso');
+    if (aviso) {
+      aviso.textContent = url && chave
+        ? 'Para usar em outro computador, entre com o mesmo usuário e senha.'
+        : 'Preencha o endereço do projeto e a chave pública (ou abra o sistema pelo link que leva os dois).';
+    }
+  }
+
+  function escreverEntrar(texto, tipo) {
+    const mensagem = $('#entrar-mensagem');
+    if (!mensagem) return;
+    mensagem.textContent = texto || '';
+    mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+  }
+
+  /** Carrega o perfil da empresa e abre o sistema (usado também depois de entrar). */
+  async function abrirSistema() {
+    const tela = $('#tela-entrar');
+    if (tela) tela.classList.add('oculto');
+    const resposta = await API.get('/api/perfil');
+    estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
+    mostrarApp();
+    await atualizarSituacaoDados();
+    if (!window.location.hash) window.location.hash = '#/painel';
+    rotear();
+    await sincronizarAoAbrir();
+  }
+
+  /** Entrar numa conta ou criar uma nova (e já trazer/levar os dados). */
+  async function entrarNoSistema(criar) {
+    const botao = $('#entrar-botao');
+    const usuario = $('#entrar-usuario').value.trim().toLowerCase();
+    const senha = $('#entrar-senha').value;
+    if (criar && senha !== $('#entrar-repetir').value) {
+      escreverEntrar('As duas senhas precisam ser iguais.', 'erro');
+      return;
+    }
+    botao.disabled = true;
+    escreverEntrar(criar ? 'Criando a conta...' : 'Entrando...');
+    try {
+      const dados = {
+        url: $('#entrar-url').value,
+        chave: $('#entrar-chave').value,
+        usuario,
+        senha,
+      };
+      if (criar) await window.Nuvem.criar(dados);
+      else await window.Nuvem.entrar(dados);
+      marcarSemConta(false);
+      escreverEntrar('Tudo certo. Abrindo o sistema...', 'ok');
+      await abrirSistema();
+      await carregarDocumentos();
+      desenharPainel();
+      await atualizarSituacaoDados();
+      UI.toast(
+        criar ? 'Conta criada: seus dados agora abrem em qualquer computador.' : 'Bem-vindo de volta!',
+        'sucesso'
+      );
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.hash);
       }
+    } catch (erro) {
+      escreverEntrar(erro.message, 'erro');
+      const tela = $('#tela-entrar');
+      const app = $('#app');
+      if (tela && !tela.classList.contains('oculto') && app) app.classList.add('oculto');
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  /** Sair da conta: envia o que falta e limpa este navegador. */
+  async function sairDaConta() {
+    const confirmado = await UI.confirmar({
+      titulo: 'Sair da conta',
+      texto:
+        'O sistema envia o que estiver pendente para a nuvem e depois limpa os dados deste navegador ' +
+        '(eles continuam guardados na sua conta). Sair agora?',
+      textoConfirmar: 'Sair',
+      perigo: true,
     });
-
-    $('#nuvem-link').addEventListener('click', async () => {
-      const link = window.Nuvem.linkParaOutroComputador();
-      if (!link) {
-        escrever('A nuvem ainda não está ligada neste computador.', 'erro');
-        return;
-      }
-      const caixa = $('#nuvem-link-caixa');
-      caixa.value = link;
-      caixa.classList.remove('oculto');
-      caixa.select();
-      try {
-        await navigator.clipboard.writeText(link);
-        escrever('Link copiado. Abra no outro computador e digite o seu código de acesso.', 'ok');
-      } catch (_) {
-        escrever('Copie o link que apareceu aqui embaixo e abra no outro computador.', 'ok');
-      }
-    });
-
-    $('#nuvem-desligar').addEventListener('click', async () => {
-      const confirmado = await UI.confirmar({
-        titulo: 'Desligar a nuvem',
+    if (!confirmado) return;
+    try {
+      if (window.Nuvem.configurada()) await window.Nuvem.sincronizar();
+    } catch (erro) {
+      const assim = await UI.confirmar({
+        titulo: 'A nuvem não respondeu',
         texto:
-          'Os dados que já estão na nuvem continuam guardados (com o seu código), mas este navegador ' +
-          'para de sincronizar. Tem certeza?',
-        textoConfirmar: 'Desligar',
+          'Não consegui enviar agora (' + erro.message + '). Se sair, o que foi feito aqui desde a ' +
+          'última sincronização pode se perder. Sair mesmo assim?',
+        textoConfirmar: 'Sair mesmo assim',
         perigo: true,
       });
-      if (!confirmado) return;
-      window.Nuvem.desconectar();
-      escrever('Nuvem desligada neste computador.');
-      await atualizarSituacaoDados();
+      if (!assim) return;
+    }
+    window.Nuvem.sair();
+    if (window.ModoEstatico && window.ModoEstatico.limparTudo) window.ModoEstatico.limparTudo();
+    UI.toast('Você saiu da conta. Os dados continuam na nuvem.', 'sucesso');
+    window.location.reload();
+  }
+
+  /**
+   * Conta e nuvem: entrar/criar conta, sincronizar e sair. No site publicado
+   * (GitHub Pages) não existe servidor — a conta é o que leva os dados de um
+   * computador para o outro, com tudo cifrado pela senha.
+   */
+  function ligarNuvem() {
+    if (!window.Nuvem) return;
+
+    UI.$$('#abas-entrar .aba').forEach((aba) => {
+      aba.addEventListener('click', () => trocarAbaEntrar(aba.dataset.abaEntrar));
     });
+
+    $('#form-entrar').addEventListener('submit', (evento) => {
+      evento.preventDefault();
+      entrarNoSistema(abaEntrar === 'criar');
+    });
+
+    const semConta = $('#entrar-sem-conta');
+    if (semConta) {
+      semConta.addEventListener('click', async () => {
+        marcarSemConta(true);
+        await abrirSistema();
+      });
+    }
+
+    const doLink = window.Nuvem.configDoEndereco();
+    if (doLink) {
+      $('#entrar-url').value = doLink.url;
+      $('#entrar-chave').value = doLink.chave;
+    }
+
+    const sincronizar = $('#nuvem-sincronizar');
+    if (sincronizar) {
+      sincronizar.addEventListener('click', async () => {
+        const mensagem = $('#nuvem-mensagem');
+        const escrever = (texto, tipo) => {
+          mensagem.textContent = texto || '';
+          mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+        };
+        escrever('Sincronizando...');
+        try {
+          const resultado = await window.Nuvem.sincronizar();
+          escrever(
+            resultado && resultado.direcao === 'download'
+              ? 'Os dados da nuvem vieram para este computador.'
+              : 'Os dados deste computador foram para a nuvem.',
+            'ok'
+          );
+          await carregarDocumentos();
+          desenharPainel();
+          atualizarSituacaoDados();
+        } catch (erro) {
+          escrever(erro.message, 'erro');
+        }
+      });
+    }
+
+    const link = $('#nuvem-link');
+    if (link) {
+      link.addEventListener('click', async () => {
+        const mensagem = $('#nuvem-mensagem');
+        const escrever = (texto, tipo) => {
+          mensagem.textContent = texto || '';
+          mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+        };
+        const endereco = window.Nuvem.linkParaOutroComputador();
+        if (!endereco) {
+          escrever('Entre numa conta primeiro.', 'erro');
+          return;
+        }
+        const caixa = $('#nuvem-link-caixa');
+        caixa.value = endereco;
+        caixa.classList.remove('oculto');
+        caixa.select();
+        try {
+          await navigator.clipboard.writeText(endereco);
+          escrever('Link copiado. Abra no outro computador e entre com o mesmo usuário e senha.', 'ok');
+        } catch (_) {
+          escrever('Copie o link que apareceu aqui embaixo e abra no outro computador.', 'ok');
+        }
+      });
+    }
+
+    const sair = $('#nuvem-sair');
+    if (sair) sair.addEventListener('click', sairDaConta);
+    const sairMenu = $('#menu-sair');
+    if (sairMenu) sairMenu.addEventListener('click', sairDaConta);
+    const entrarPeloPainel = $('#nuvem-entrar');
+    if (entrarPeloPainel) entrarPeloPainel.addEventListener('click', mostrarTelaEntrar);
   }
 
   /**
@@ -1025,16 +1171,28 @@
     ligarImportacao();
     ligarEmpresa();
 
+    // Antes de decidir o que mostrar, espera a checagem do ambiente: é ela que
+    // diz se esta página tem servidor (com banco) ou se roda só no navegador.
+    if (window.ModoEstatico && window.ModoEstatico.verificarAmbiente) {
+      try {
+        await window.ModoEstatico.verificarAmbiente();
+      } catch (_) {
+        /* sem servidor também não dá para responder: segue o fluxo normal */
+      }
+    }
+
+    // No site publicado (sem servidor) os dados vivem no navegador. Quem ainda
+    // não tem conta (e não escolheu continuar sem ela) vê a tela de entrar:
+    // é a conta que leva os dados de um computador para o outro.
+    const soNoNavegador = window.ModoEstatico && window.ModoEstatico.ativo && window.ModoEstatico.ativo();
+    if (soNoNavegador && !window.Nuvem.configurada() && !escolheuSemConta()) {
+      mostrarTelaEntrar();
+      return;
+    }
+
     try {
-      // não há login: o sistema abre direto no painel com os dados da empresa
-      const resposta = await API.get('/api/perfil');
-      estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
-      mostrarApp();
-      atualizarSituacaoDados();
-      if (!window.location.hash) window.location.hash = '#/painel';
-      rotear();
-      // com a nuvem ligada, o que está lá é buscado assim que o sistema abre
-      sincronizarAoAbrir();
+      // com servidor (ou já com conta) o sistema abre direto no painel
+      await abrirSistema();
     } catch (erro) {
       UI.toast('Não foi possível carregar os dados do sistema: ' + erro.message, 'erro');
     }

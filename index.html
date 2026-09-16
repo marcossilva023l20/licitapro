@@ -5,7 +5,7 @@
   ATENÇÃO: arquivo gerado por scripts/paginas.js — não edite à mão.
   É a página do sistema (public/index.html) preparada para o GitHub Pages,
   que publica apenas arquivos estáticos: os caminhos relativos foram
-  reescritos (css/ e js/ passam a public/..., ../shared/ vira shared/) e a
+  reescritos (css/, js/ e marca/ passam a public/..., ../shared/ vira shared/) e a
   meta licitapro-base avisa o modo local de onde vêm as bibliotecas.
   Para alterar, edite public/index.html e rode: npm run paginas
 -->
@@ -19,11 +19,75 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="public/css/estilos.css?v=17" />
+  <link rel="stylesheet" href="public/css/estilos.css?v=18" />
 </head>
 <body>
+  <!-- ============================ ENTRAR / CRIAR CONTA ============================
+       Só aparece no site publicado (sem servidor): cada pessoa cria a sua conta
+       e, em qualquer computador, entra com o mesmo usuário e senha para
+       continuar de onde parou. Os dados ficam no projeto Supabase, cifrados
+       com a senha — que não é enviada para lugar nenhum. -->
+  <section class="tela-entrar oculto" id="tela-entrar">
+    <div class="cartao-entrar">
+      <div class="marca-entrar">
+        <img id="entrar-logo" src="public/marca/logo.png" alt="" />
+        <h1>DEJ Solutions &amp; Global</h1>
+        <p class="texto-suave">Propostas de licitação e orçamentos</p>
+      </div>
+
+      <div class="abas-entrar" id="abas-entrar">
+        <button class="aba ativa" id="aba-entrar" data-aba-entrar="entrar" type="button">Entrar</button>
+        <button class="aba" id="aba-criar" data-aba-entrar="criar" type="button">Criar conta</button>
+      </div>
+
+      <form class="form-entrar" id="form-entrar" autocomplete="off">
+        <label class="campo-entrar">
+          <span>Usuário</span>
+          <input id="entrar-usuario" name="usuario" type="text" spellcheck="false" autocapitalize="none"
+            placeholder="ex.: dej.solutions">
+        </label>
+        <label class="campo-entrar">
+          <span>Senha</span>
+          <input id="entrar-senha" name="senha" type="password" placeholder="mínimo 6 caracteres">
+        </label>
+        <label class="campo-entrar oculto" id="entrar-repetir-campo">
+          <span>Repita a senha</span>
+          <input id="entrar-repetir" name="repetir" type="password" placeholder="a mesma senha">
+        </label>
+        <button class="botao botao-primario botao-largo" id="entrar-botao" type="submit">Entrar</button>
+        <span class="mensagem-banco" id="entrar-mensagem" role="status"></span>
+      </form>
+
+      <details class="onde-guardar" id="entrar-onde">
+        <summary>Onde os dados ficam guardados</summary>
+        <label class="campo-entrar">
+          <span>Endereço do projeto (Supabase)</span>
+          <input id="entrar-url" name="url" type="url" spellcheck="false"
+            placeholder="https://xxxxxxxx.supabase.co">
+        </label>
+        <label class="campo-entrar">
+          <span>Chave pública do projeto (anon / publishable)</span>
+          <input id="entrar-chave" name="chave" type="text" spellcheck="false"
+            placeholder="eyJ... ou sb_publishable_...">
+        </label>
+        <p class="texto-suave">
+          Vem preenchido quando você abre o sistema pelo link. A sua senha <strong>cifra os dados neste
+          navegador</strong> antes de sair: no banco só existe texto cifrado e a senha não é enviada
+          para lugar nenhum.
+        </p>
+      </details>
+
+      <p class="entrar-rodape">
+        <button class="botao-link" id="entrar-sem-conta" type="button">
+          Continuar sem conta (os dados ficam só neste navegador)
+        </button>
+      </p>
+      <p class="texto-suave" id="entrar-aviso"></p>
+    </div>
+  </section>
+
   <!-- ================================= APLICAÇÃO ================================= -->
-  <div id="app" class="app">
+  <div id="app" class="app oculto">
     <header class="topo">
       <button class="botao-icone so-mobile" id="alternar-menu" title="Menu" type="button">☰</button>
       <a class="marca marca-clara" href="#/painel">
@@ -51,6 +115,7 @@
             <a href="/api/modelo-planilha">Baixar modelo de planilha</a>
             <!-- modo local (sem servidor): os dados ficam neste navegador, então o
                  backup vive aqui no menu, sem ocupar espaço na tela -->
+            <button type="button" id="menu-sair" class="oculto">Sair da conta</button>
             <button type="button" id="local-exportar" data-modo-local class="oculto">Baixar backup</button>
             <button type="button" id="local-importar" data-modo-local class="oculto">Restaurar backup</button>
             <input type="file" id="local-arquivo-backup" accept="application/json,.json" class="oculto" />
@@ -119,44 +184,21 @@
               </form>
             </div>
 
-            <!-- Nuvem: no site publicado (GitHub Pages) não existe servidor, e
-                 os dados ficam presos neste navegador. Aqui eles passam a ser
-                 guardados (cifrados) no projeto Supabase da pessoa, para abrir
-                 o sistema em qualquer computador. -->
+            <!-- Conta e nuvem: no site publicado (GitHub Pages) não existe
+                 servidor, então os dados ficam no projeto Supabase da pessoa,
+                 cifrados com a senha da conta (veja supabase/nuvem.sql). -->
             <details class="nuvem-bloco oculto" id="nuvem-bloco">
-              <summary>Guardar na nuvem (abrir de outro computador)</summary>
-              <form class="form-banco" id="nuvem-form" autocomplete="off">
-                <p class="ajuda-banco">
-                  Sem servidor, os dados ficam só neste navegador. Ligando a nuvem, eles passam a ser
-                  guardados no <strong>seu</strong> projeto Supabase — e você abre o sistema em qualquer
-                  computador digitando o mesmo código de acesso. Os dados são <strong>cifrados neste
-                  navegador</strong> antes de sair (AES-256): no banco só existe texto cifrado, e o código
-                  nunca é enviado para lugar nenhum. Antes de ligar, rode uma vez o arquivo
-                  <code>supabase/nuvem.sql</code> no SQL Editor do projeto.
-                </p>
-                <label class="campo-banco">
-                  <span>Endereço do projeto (Project URL)</span>
-                  <input id="nuvem-url" name="nuvem-url" type="url" placeholder="https://xxxxxxxx.supabase.co" spellcheck="false">
-                </label>
-                <label class="campo-banco">
-                  <span>Chave pública do projeto (anon / publishable key)</span>
-                  <input id="nuvem-chave" name="nuvem-chave" type="text" placeholder="eyJ... ou sb_publishable_..." spellcheck="false">
-                </label>
-                <label class="campo-banco">
-                  <span>Código de acesso (invente um; é ele que cifra os seus dados)</span>
-                  <input id="nuvem-codigo" name="nuvem-codigo" type="text" placeholder="mínimo 6 caracteres" spellcheck="false">
-                </label>
-                <div class="acoes-banco">
-                  <button class="botao botao-primario" id="nuvem-conectar" type="submit">Ligar a nuvem</button>
-                  <button class="botao botao-suave" id="nuvem-sincronizar" type="button">Sincronizar agora</button>
-                  <button class="botao-link" id="nuvem-desligar" type="button">desligar</button>
-                  <button class="botao-link" id="nuvem-link" type="button">link para o outro computador</button>
-                  <span class="mensagem-banco" id="nuvem-mensagem" role="status"></span>
-                </div>
-                <input class="oculto" id="nuvem-link-caixa" readonly spellcheck="false"
-                  aria-label="Link para abrir o sistema em outro computador">
-                <p class="texto-suave" id="nuvem-status"></p>
-              </form>
+              <summary>Conta e nuvem</summary>
+              <p class="texto-suave" id="nuvem-status"></p>
+              <div class="acoes-banco">
+                <button class="botao botao-suave" id="nuvem-entrar" type="button">Entrar numa conta</button>
+                <button class="botao botao-suave oculto" id="nuvem-sincronizar" type="button">Sincronizar agora</button>
+                <button class="botao-link oculto" id="nuvem-link" type="button">link para o outro computador</button>
+                <button class="botao-link oculto" id="nuvem-sair" type="button">sair da conta</button>
+                <span class="mensagem-banco" id="nuvem-mensagem" role="status"></span>
+              </div>
+              <input class="oculto" id="nuvem-link-caixa" readonly spellcheck="false"
+                aria-label="Link para abrir o sistema em outro computador">
             </details>
           </div>
           <div class="acoes-vista">
@@ -689,12 +731,12 @@
     </div>
   </div>
 
-  <script src="shared/format.js?v=17"></script>
-  <script src="public/js/api.js?v=17"></script>
-  <script src="public/js/ui.js?v=17"></script>
-  <script src="public/js/editar.js?v=17"></script>
-  <script src="public/js/app.js?v=17"></script>
-  <script src="public/js/modo-estatico.js?v=17"></script>
-  <script src="public/js/nuvem.js?v=17"></script>
+  <script src="shared/format.js?v=18"></script>
+  <script src="public/js/api.js?v=18"></script>
+  <script src="public/js/ui.js?v=18"></script>
+  <script src="public/js/editar.js?v=18"></script>
+  <script src="public/js/app.js?v=18"></script>
+  <script src="public/js/modo-estatico.js?v=18"></script>
+  <script src="public/js/nuvem.js?v=18"></script>
 </body>
 </html>
