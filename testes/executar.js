@@ -1198,10 +1198,13 @@ teste('Planilha auxiliar: a rota do servidor e o botão da tela entregam o arqui
       /spreadsheetml\.sheet/,
       'é um arquivo do Excel: ' + resposta.headers['content-type']
     );
+    const disposicao = String(resposta.headers['content-disposition']);
+    assert.match(disposicao, /_planilha\.xlsx/, 'o nome do arquivo diz que é a planilha: ' + disposicao);
+    // o nome simples (o que navegadores antigos usam) também termina em .xlsx
     assert.match(
-      String(resposta.headers['content-disposition']),
-      /_planilha\.xlsx/,
-      'o nome do arquivo diz que é a planilha: ' + resposta.headers['content-disposition']
+      disposicao,
+      /filename="[\w.-]+\.xlsx"/,
+      'o nome simples do download mantém a extensão: ' + disposicao
     );
     const livro = XLSX.read(resposta.corpo, { type: 'buffer' });
     assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas do arquivo');

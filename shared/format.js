@@ -269,6 +269,20 @@
       .toLowerCase();
   }
 
+  /**
+   * Nome de arquivo seguro em ASCII **mantendo a extensão** — usado no
+   * cabeçalho `filename=` do download (o `filename*` leva o nome completo, com
+   * acentos). Sem isso, "Proposta_045-2026_planilha.xlsx" virava
+   * "proposta-045-2026-planilha-xlsx" em navegadores que só leem o primeiro.
+   */
+  function nomeArquivoSeguro(nome) {
+    const texto = String(nome || 'documento').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const achado = texto.match(/^(.*?)(\.[a-zA-Z0-9]{2,5})$/);
+    const base = (achado ? achado[1] : texto).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const extensao = (achado ? achado[2] : '').toLowerCase();
+    return (base || 'documento') + extensao;
+  }
+
   function primeiroNome(nome) {
     return String(nome || '').trim().split(/\s+/)[0] || '';
   }
@@ -314,6 +328,7 @@
     somenteDigitos,
     escapar,
     slug,
+    nomeArquivoSeguro,
     primeiroNome,
     iniciais,
     textoOuTraco,

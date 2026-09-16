@@ -214,7 +214,7 @@ rotas.get('/:id/planilha', (req, res) => {
 
   const nome = `${doc.tipo === 'orcamento' ? 'Orcamento' : 'Proposta'}_${Pdf.numeroFormatado(doc).replace(/\W+/g, '-')}_itens.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${Formato.slug(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+  res.setHeader('Content-Disposition', `attachment; filename="${Formato.nomeArquivoSeguro(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
   res.end(buffer);
 });
 
@@ -235,7 +235,7 @@ rotas.get('/:id/planilha-auxiliar', (req, res) => {
   const nome = PlanilhaAuxiliar.nomeArquivo(doc);
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${Formato.slug(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+  res.setHeader('Content-Disposition', `attachment; filename="${Formato.nomeArquivoSeguro(nome)}"; filename*=UTF-8''${encodeURIComponent(nome)}`);
   res.end(buffer);
 });
 

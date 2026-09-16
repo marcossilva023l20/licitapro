@@ -318,7 +318,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '28';
+  const VERSAO_ARQUIVOS = '29';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -429,7 +429,8 @@
   function nomeArquivoPdf(documento) {
     const banco = lerBanco();
     const nome = Pdf().nomeArquivo(documento, banco.perfil.empresa || {});
-    return window.Formato.slug(nome.replace(/\.pdf$/i, '')) + '.pdf';
+    // mesmo padrão de nome do servidor (Proposta_001-2026_orgao.pdf)
+    return window.Formato.nomeArquivoSeguro(nome);
   }
 
   /**
