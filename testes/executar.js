@@ -530,6 +530,8 @@ teste('Site: identidade da marca na página e no editor (logo + opção de marca
 
   assert.ok(html.includes('class="marca-logo"'), 'lugar da logo no topo e na tela de entrada');
   assert.ok(html.includes('id="op-marcadagua"'), "opção de marca d'água no editor");
+  assert.ok(!html.includes('Como funciona'), 'painel sem o bloco de instruções');
+  assert.ok(!/class="passos"/.test(html), 'sem a lista de passos no sistema');
   assert.ok(/--dourado-500:\s*#c6a15b/i.test(css), 'dourado da paleta nos tokens do site');
   assert.ok(/--dourado-300:\s*#d8b873/i.test(css), 'dourado claro da paleta nos tokens do site');
   assert.ok(/--marca-800:\s*#0b1f33/i.test(css), 'azul-marinho principal nos tokens do site');
@@ -1142,7 +1144,11 @@ async function abrirNoModoLocal() {
   const { window } = aberto;
   const $ = (sel) => window.document.querySelector(sel);
   await ModoLocal.esperar(() => window.ModoEstatico && window.ModoEstatico.ativo(), 'modo local ativo', 15000);
-  await ModoLocal.esperar(() => $('#banner-modo-local'), 'aviso de modo local', 5000);
+  await ModoLocal.esperar(
+    () => window.document.documentElement.getAttribute('data-modo') === 'local',
+    'interface em modo local',
+    5000
+  );
   return Object.assign(aberto, { $ });
 }
 
@@ -1156,13 +1162,16 @@ async function entrarNoModoLocal(window, $) {
   await ModoLocal.esperar(() => $('#view-painel') && !$('#view-painel').classList.contains('oculto'), 'painel visível', 8000);
 }
 
-teste('Modo local: abre sem servidor (GitHub Pages) e avisa onde os dados ficam', async () => {
+teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async () => {
   const { window, $, erros } = await abrirNoModoLocal();
 
   assert.strictEqual(window.ModoEstatico.ativo(), true, 'modo local ativado');
-  const banner = $('#banner-modo-local');
-  assert.ok(/neste navegador|sem servidor/i.test(banner.textContent), 'aviso explica o modo local');
-  assert.ok(/backup/i.test(banner.textContent), 'aviso menciona o backup');
+  // nada de aviso fixo ocupando a tela
+  assert.strictEqual($('#banner-modo-local'), null, 'sem aviso fixo de modo local');
+  assert.strictEqual($('.banner-local'), null, 'sem barra de aviso na tela');
+  // e as ações do modo local ficam no menu do usuário
+  assert.ok(!$('#local-exportar').classList.contains('oculto'), 'backup disponível no menu');
+  assert.ok(!$('#local-importar').classList.contains('oculto'), 'restauração disponível no menu');
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta direto', 10000);
   assert.ok($('#tela-login').classList.contains('oculto'), 'no modo local não se pede senha');
   assert.ok($('#botao-sair').classList.contains('oculto'), 'sem botão "Sair" no modo local');
@@ -1463,15 +1472,16 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
   const $ = (sel) => aberto.window.document.querySelector(sel);
   await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local na raiz', 15000);
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto na raiz do Pages', 15000);
-  assert.ok($('#banner-modo-local'), 'aviso do modo local na raiz');
-  assert.ok($('.banner-local-sobre'), 'link para a página de apresentação');
+  assert.strictEqual($('#banner-modo-local'), null, 'na raiz também sem aviso fixo');
+  assert.ok(!$('#local-exportar').classList.contains('oculto'), 'backup no menu na raiz');
+  assert.ok($('.menu-local-sobre'), 'link para a página de apresentação no menu');
 
   await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel do sistema montado', 10000);
   assert.ok($('#botao-nova-proposta'), 'botão de nova proposta disponível na raiz');
   assert.ok($('#nome-usuario').textContent.length > 0, 'perfil local no topo');
 
   // e o "Sobre o sistema" leva à apresentação (arquivo que existe no repositório)
-  assert.strictEqual($('.banner-local-sobre').getAttribute('href'), 'apresentacao.html', 'link da apresentação');
+  assert.strictEqual($('.menu-local-sobre').getAttribute('href'), 'apresentacao.html', 'link da apresentação');
   assert.ok(fs.existsSync(path.join(RAIZ, 'apresentacao.html')), 'a apresentação existe no repositório');
 
   // no endereço da raiz, o PDF também sai: as bibliotecas vêm de public/vendor/
@@ -1505,6 +1515,8 @@ teste('Modo local: com servidor disponível ele não interfere', async () => {
     await Navegador.esperar(() => !$('#tela-login').classList.contains('oculto'), 'tela de login');
     assert.strictEqual(window.ModoEstatico.ativo(), false, 'modo local desligado quando há servidor');
     assert.strictEqual($('#banner-modo-local'), null, 'sem aviso de modo local');
+    assert.ok($('#local-exportar').classList.contains('oculto'), 'backup do modo local fica escondido com servidor');
+    assert.ok($('#local-importar').classList.contains('oculto'), 'restauração também escondida com servidor');
   } finally {
     servidor.close();
   }

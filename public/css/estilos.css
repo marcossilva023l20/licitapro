@@ -756,39 +756,6 @@ input[type="search"] { padding-left: 12px; }
   margin-bottom: 14px;
 }
 
-.passos {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  counter-reset: passo;
-  display: grid;
-  gap: 12px;
-}
-.passos li {
-  position: relative;
-  counter-increment: passo;
-  padding-left: 42px;
-  color: var(--texto-suave);
-  font-size: 0.89rem;
-  line-height: 1.5;
-}
-.passos li::before {
-  content: counter(passo);
-  position: absolute;
-  left: 0;
-  top: -1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: #16395c;
-  border: 1px solid var(--borda);
-  color: var(--dourado-300);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
 
 .filtros { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 .filtros input[type="search"] { flex: 1; min-width: 230px; }
@@ -1223,35 +1190,9 @@ input[type="search"] { padding-left: 12px; }
 
 /* -------------------------------------------------------- 12. modo local */
 
-.banner-local {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin: 18px 24px 0;
-  padding: 14px 18px;
-  background: linear-gradient(120deg, rgba(198, 161, 91, 0.18), rgba(198, 161, 91, 0.08));
-  border: 1px solid rgba(216, 184, 115, 0.45);
-  border-left: 4px solid var(--dourado-500);
-  border-radius: var(--raio-lg);
-  color: #f0e2c4;
-  font-size: 0.85rem;
-  box-shadow: var(--sombra-1);
-}
-.banner-local-texto { display: flex; flex-direction: column; gap: 2px; max-width: 78ch; }
-.banner-local-texto strong { display: flex; align-items: center; gap: 7px; font-size: 0.9rem; }
-.banner-local-texto strong::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--dourado-500);
-  box-shadow: 0 0 0 4px rgba(198, 161, 91, 0.24);
-}
-.banner-local-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
-.banner-local .botao { background: #0b1f33; border-color: rgba(216, 184, 115, 0.45); color: #e0c07f; box-shadow: none; }
-.banner-local .botao:hover { background: #16395c; border-color: var(--dourado-300); }
+/* o backup e a restauração vivem no menu do usuário (itens data-modo-local),
+   então o modo local não ocupa espaço fixo na tela */
+.usuario-lista [data-modo-local] { color: var(--dourado-300); }
 
 /* no modo local não há "senha" nem ações dependentes do servidor */
 [data-modo="local"] [data-somente-servidor] { display: none !important; }
@@ -1359,7 +1300,6 @@ input[type="search"] { padding-left: 12px; }
   .item-total { grid-column: 2; text-align: left; }
   .item-acoes { grid-column: 2; justify-content: flex-end; }
   .ferramenta-margem { margin-left: 0; width: 100%; justify-content: space-between; }
-  .banner-local { margin: 14px 16px 0; }
   .editor-topo { padding: 14px; }
   .editor-topo-acoes { width: 100%; }
 }
@@ -1376,7 +1316,7 @@ input[type="search"] { padding-left: 12px; }
 /* ----------------------------------------------------------- 15. impressão */
 
 @media print {
-  .topo, .editor-topo, .abas-editor, .editor-previa, .caixa-toasts, .banner-local { display: none !important; }
+  .topo, .editor-topo, .abas-editor, .editor-previa, .caixa-toasts { display: none !important; }
   /* o tema é escuro na tela, mas a folha impressa continua branca */
   :root {
     --fundo: #ffffff;

@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=4" />
+  <link rel="stylesheet" href="css/estilos.css?v=5" />
 </head>
 <body>
   <!-- ============================== TELA DE ENTRADA ============================== -->
@@ -115,6 +115,11 @@
           <div class="usuario-lista oculto" id="lista-usuario">
             <a href="#/empresa">Dados da empresa</a>
             <a href="/api/modelo-planilha">Baixar modelo de planilha</a>
+            <!-- modo local (sem servidor): os dados ficam neste navegador, então o
+                 backup vive aqui no menu, sem ocupar espaço na tela -->
+            <button type="button" id="local-exportar" data-modo-local class="oculto">Baixar backup</button>
+            <button type="button" id="local-importar" data-modo-local class="oculto">Restaurar backup</button>
+            <input type="file" id="local-arquivo-backup" accept="application/json,.json" class="oculto" />
             <button type="button" id="botao-sair" data-somente-servidor>Sair</button>
           </div>
         </div>
@@ -170,15 +175,6 @@
           <div id="painel-recentes" class="lista-documentos"></div>
         </div>
 
-        <div class="bloco">
-          <div class="bloco-cabecalho"><h3>Como funciona</h3></div>
-          <ol class="passos">
-            <li><strong>Preencha os dados da empresa</strong> uma única vez em <em>Minha empresa</em> (CNPJ, endereço, banco, representante legal, logo e assinatura).</li>
-            <li><strong>Baixe o modelo de planilha</strong>, cole os itens do edital com quantidade, preço e foto, e envie em <em>Importar planilha</em>.</li>
-            <li><strong>Revise na tela de edição</strong>: descrição, fotos, preços e condições.</li>
-            <li><strong>Clique em Gerar PDF</strong> para baixar a proposta ou o orçamento pronto para enviar ao órgão ou ao cliente.</li>
-          </ol>
-        </div>
       </section>
 
       <!-- ------------------------------------------------ Documentos -->
@@ -684,11 +680,11 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=4"></script>
-  <script src="js/api.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
-  <script src="js/editar.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
-  <script src="js/modo-estatico.js?v=4"></script>
+  <script src="../shared/format.js?v=5"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
+  <script src="js/editar.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
+  <script src="js/modo-estatico.js?v=5"></script>
 </body>
 </html>

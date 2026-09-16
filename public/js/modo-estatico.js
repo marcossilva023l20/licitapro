@@ -207,7 +207,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '4';
+  const VERSAO_ARQUIVOS = '5';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -646,55 +646,52 @@
 
   // ---------------------------------------------------------- interface
 
-  function injetarBanner() {
-    if (document.getElementById('banner-modo-local')) return;
-    const barra = document.createElement('div');
-    barra.id = 'banner-modo-local';
-    barra.className = 'banner-local';
-    barra.innerHTML = `
-      <div class="banner-local-texto">
-        <strong>Modo local</strong>
-        <span>Este site está rodando sem servidor: os documentos ficam salvos <em>neste navegador</em>
-        (no mesmo computador e navegador). Faça um backup de vez em quando.</span>
-      </div>
-      <div class="banner-local-acoes">
-        <button class="botao" type="button" id="local-exportar">Baixar backup</button>
-        <button class="botao" type="button" id="local-importar">Restaurar backup</button>
-        <input type="file" id="local-arquivo-backup" accept="application/json,.json" class="oculto" />
-      </div>`;
-
-    // Na versão publicada no GitHub Pages existe uma página de apresentação
-    // ao lado do sistema (meta licitapro-sobre).
-    const sobre = document.querySelector('meta[name="licitapro-sobre"]');
-    if (sobre && sobre.content) {
-      const link = document.createElement('a');
-      link.className = 'botao banner-local-sobre';
-      link.href = sobre.content;
-      link.textContent = 'Sobre o sistema';
-      barra.querySelector('.banner-local-acoes').appendChild(link);
-    }
-    const app = document.getElementById('app');
-    if (app) app.insertBefore(barra, app.querySelector('.conteudo'));
-
-    barra.querySelector('#local-exportar').addEventListener('click', () => {
-      exportarBackup().catch((erro) => window.UI && window.UI.toast(erro.message, 'erro'));
-    });
-    const entrada = barra.querySelector('#local-arquivo-backup');
-    barra.querySelector('#local-importar').addEventListener('click', () => entrada.click());
-    entrada.addEventListener('change', async () => {
-      const arquivo = entrada.files[0];
-      if (!arquivo) return;
-      try {
-        await importarBackup(arquivo);
-        window.location.reload();
-      } catch (erro) {
-        window.UI && window.UI.toast(erro.message, 'erro');
-      }
-    });
-
+  /**
+   * Ajustes de interface do modo local. Não há aviso fixo na tela: o backup e a
+   * restauração ficam no menu do usuário (itens data-modo-local), e o que
+   * depende de servidor sai de cena.
+   */
+  function prepararInterfaceLocal() {
     // recursos que dependem de servidor não fazem sentido no modo local
     document.querySelectorAll('[data-somente-servidor]').forEach((elemento) => elemento.classList.add('oculto'));
     document.documentElement.setAttribute('data-modo', 'local');
+
+    const menu = document.getElementById('lista-usuario');
+    if (!menu) return;
+    menu.querySelectorAll('[data-modo-local]').forEach((elemento) => elemento.classList.remove('oculto'));
+
+    const exportar = menu.querySelector('#local-exportar');
+    const importar = menu.querySelector('#local-importar');
+    const entrada = menu.querySelector('#local-arquivo-backup');
+    if (exportar) {
+      exportar.addEventListener('click', () => {
+        exportarBackup().catch((erro) => window.UI && window.UI.toast(erro.message, 'erro'));
+      });
+    }
+    if (importar && entrada) {
+      importar.addEventListener('click', () => entrada.click());
+      entrada.addEventListener('change', async () => {
+        const arquivo = entrada.files[0];
+        if (!arquivo) return;
+        try {
+          await importarBackup(arquivo);
+          window.location.reload();
+        } catch (erro) {
+          window.UI && window.UI.toast(erro.message, 'erro');
+        }
+      });
+    }
+
+    // Na versão publicada no GitHub Pages existe uma página de apresentação
+    // ao lado do sistema (meta licitapro-sobre): ela entra no mesmo menu.
+    const sobre = document.querySelector('meta[name="licitapro-sobre"]');
+    if (sobre && sobre.content) {
+      const link = document.createElement('a');
+      link.className = 'menu-local-sobre';
+      link.href = sobre.content;
+      link.textContent = 'Sobre o sistema';
+      menu.insertBefore(link, menu.querySelector('[data-modo-local]'));
+    }
   }
 
   /** Links para /api/modelo-planilha passam a gerar o arquivo no navegador. */
@@ -716,7 +713,7 @@
     const primeiraVez = bancoSemDados();
     lerBanco();
     gravarBanco();
-    injetarBanner();
+    prepararInterfaceLocal();
     interceptarModelo();
     if (primeiraVez) avisarPrimeiroAcesso();
 
