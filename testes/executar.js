@@ -857,7 +857,7 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     const auxiliar = await requisitar(servidor, `/api/documentos/${id}/planilha-auxiliar`);
     assert.strictEqual(auxiliar.status, 200, 'planilha auxiliar gerada');
     const livroAuxiliar = XLSX.read(auxiliar.corpo, { type: 'buffer' });
-    assert.deepStrictEqual(livroAuxiliar.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas da planilha auxiliar');
+    assert.deepStrictEqual(livroAuxiliar.SheetNames, ['Resumo', 'Itens'], 'abas da planilha auxiliar');
     assert.ok(
       XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens']).length >= 1,
       'a planilha auxiliar tem os itens do documento'
@@ -1078,7 +1078,7 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
   assert.ok(buffer && buffer.length > 800, 'o arquivo foi gerado: ' + (buffer && buffer.length) + ' bytes');
 
   const livro = XLSX.read(buffer, { type: 'buffer' });
-  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas do arquivo: ' + livro.SheetNames.join(' | '));
+  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens'], 'abas do arquivo: ' + livro.SheetNames.join(' | '));
 
   // 1) os títulos da aba de itens são EXATAMENTE os do modelo de importação
   const { COLUNAS } = require(path.join(RAIZ, 'shared', 'colunas.js'));
@@ -1138,12 +1138,15 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
   assert.strictEqual(lido.itens[0].linkCompra, 'https://loja.exemplo/radio', 'volta o link da compra');
   assert.strictEqual(lido.itens[1].descricao, 'BATERIA EXTRA 1500 mAh', 'e o segundo item também');
 
-  // 5) a aba "Instruções" existe e explica as colunas (igual ao modelo)
-  const instrucoes = XLSX.utils.sheet_to_json(livro.Sheets['Instruções'], { header: 1, defval: '' });
-  const texto = instrucoes.map((l) => l.join(' ')).join('\n');
-  assert.match(texto, /mesmas colunas/i, 'as instruções dizem que é o formato do modelo');
-  assert.match(texto, /Descricao_Edital/, 'e trazem a legenda das colunas');
-  assert.match(texto, /Importar planilha/, 'diz onde reenviar');
+  // 5) sem aba de instruções e sem comentários explicativos nos títulos:
+  //    quem usa o sistema já sabe preencher a planilha
+  assert.ok(!livro.Sheets['Instruções'], 'não sai aba de instruções');
+  const tituloItens = livro.Sheets['Itens']['A1'];
+  assert.ok(!(tituloItens && tituloItens.c && tituloItens.c.length), 'os títulos não têm comentários');
+  const resumoTexto = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' })
+    .map((l) => l.join(' '))
+    .join('\n');
+  assert.ok(!/instruç|explica|como preencher/i.test(resumoTexto), 'o resumo não traz explicações');
 
   // 6) orçamento usa os dados do cliente no lugar do órgão
   const orcamento = Object.assign({}, doc, { tipo: 'orcamento', cliente: { nome: 'CLIENTE X', cnpjCpf: '00.000.000/0001-00' }, orgao: {} });
@@ -1207,7 +1210,7 @@ teste('Planilha auxiliar: a rota do servidor e o botão da tela entregam o arqui
       'o nome simples do download mantém a extensão: ' + disposicao
     );
     const livro = XLSX.read(resposta.corpo, { type: 'buffer' });
-    assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas do arquivo');
+    assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens'], 'abas do arquivo');
     const itens = XLSX.utils.sheet_to_json(livro.Sheets['Itens']);
     assert.strictEqual(itens.length, 1, 'o item do documento está na planilha');
     assert.strictEqual(itens[0].Descricao_Edital, 'RÁDIO TRANSCEPTOR DIGITAL', 'descrição preenchida');
@@ -1232,7 +1235,7 @@ teste('Planilha auxiliar: a rota do servidor e o botão da tela entregam o arqui
     await Navegador.esperar(() => baixado, 'a planilha auxiliar foi baixada', 20000);
     assert.match(baixado.nome, /_planilha\.xlsx$/, 'nome do arquivo baixado: ' + baixado.nome);
     const doBotao = XLSX.read(Buffer.from(await baixado.blob.arrayBuffer()), { type: 'buffer' });
-    assert.deepStrictEqual(doBotao.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'mesmas abas pelo botão');
+    assert.deepStrictEqual(doBotao.SheetNames, ['Resumo', 'Itens'], 'mesmas abas pelo botão');
 
     // 3) e a lista de documentos também tem a ação
     window.API.baixarBlob = original;
@@ -1275,7 +1278,7 @@ teste('Planilha auxiliar: no modo local (GitHub Pages) o navegador gera o arquiv
   const bytes = new Uint8Array(await arquivo.blob.arrayBuffer());
   assert.ok(bytes.length > 800, 'o arquivo tem conteúdo: ' + bytes.length + ' bytes');
   const livro = XLSX.read(Buffer.from(bytes), { type: 'buffer' });
-  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens', 'Instruções'], 'abas da planilha no modo local');
+  assert.deepStrictEqual(livro.SheetNames, ['Resumo', 'Itens'], 'abas da planilha no modo local');
   const itens = XLSX.utils.sheet_to_json(livro.Sheets['Itens']);
   assert.strictEqual(itens.length, 1, 'o item está na planilha');
   assert.strictEqual(itens[0].Descricao_Edital, 'ITEM DO MODO LOCAL', 'descrição preenchida');

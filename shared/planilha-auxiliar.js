@@ -1,26 +1,27 @@
 /**
  * Planilha AUXILIAR do documento: um .xlsx com os itens da proposta/orçamento
  * preenchidos **no mesmo formato da planilha-modelo de importação** (mesmas
- * colunas, mesmos títulos, mesmas abas). Serve para:
+ * colunas e mesmos títulos). Serve para:
  *
  *   • conferir e trabalhar os itens no Excel (custo, margem, valores);
  *   • guardar uma cópia legível junto do PDF;
  *   • reenviar a planilha na tela "Importar planilha" — ela volta igual,
  *     porque as colunas são exatamente as do modelo.
  *
- * Além da aba de itens (igual ao modelo), sai uma aba **Resumo** com a
- * identificação do documento, o destinatário, os totais e as condições.
+ * São só duas abas: **Itens** (o formato do modelo) e **Resumo** (a
+ * identificação do documento, o destinatário, os totais e as condições).
+ * Sem aba de instruções/comentários: quem usa o sistema já sabe preencher.
  *
  * Roda no servidor (Buffer) e no navegador (Uint8Array), com as bibliotecas
  * injetadas por quem chama.
  */
 (function (raiz, fabrica) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = fabrica(require('xlsx'), require('./colunas'), require('./importar'), require('./modelo-importacao'), require('./format'));
+    module.exports = fabrica(require('xlsx'), require('./colunas'), require('./importar'), require('./format'));
   } else {
-    raiz.PlanilhaAuxiliar = fabrica(raiz.XLSX, raiz.Colunas, raiz.Importador, raiz.ModeloImportacao, raiz.Formato);
+    raiz.PlanilhaAuxiliar = fabrica(raiz.XLSX, raiz.Colunas, raiz.Importador, raiz.Formato);
   }
-})(typeof self !== 'undefined' ? self : this, function (XLSX, Colunas, Importador, ModeloImportacao, Formato) {
+})(typeof self !== 'undefined' ? self : this, function (XLSX, Colunas, Importador, Formato) {
   'use strict';
 
   const COLUNAS = Colunas.COLUNAS;
@@ -69,7 +70,7 @@
     return doc.tipo === 'orcamento' ? 'ORÇAMENTO' : 'PROPOSTA DE FORNECIMENTO';
   }
 
-  /** Aba com os itens, idêntica ao modelo (títulos, larguras e comentários). */
+  /** Aba com os itens: mesmos títulos e larguras do modelo, sem explicações. */
   function abaItens(doc) {
     const linhas = (doc.itens || []).map((item) =>
       COLUNAS.map((coluna) => {
@@ -79,14 +80,6 @@
     );
     const aba = XLSX.utils.aoa_to_sheet([COLUNAS.map((c) => c.titulo), ...linhas]);
     aba['!cols'] = COLUNAS.map((c) => ({ wch: c.largura }));
-
-    // os mesmos comentários explicativos do modelo, para a planilha se explicar
-    COLUNAS.forEach((coluna, indice) => {
-      const endereco = XLSX.utils.encode_cell({ r: 0, c: indice });
-      if (aba[endereco]) {
-        aba[endereco].c = [{ t: `${coluna.rotulo}\n\n${coluna.dica}` }];
-      }
-    });
     return aba;
   }
 
@@ -101,7 +94,6 @@
     const desconto = doc.desconto || {};
     const linhas = [
       ['PLANILHA AUXILIAR DO DOCUMENTO'],
-      ['Mesmas colunas da planilha-modelo de importação — pode ser reenviada na tela "Importar planilha".'],
       [''],
       ['DOCUMENTO'],
       ['Tipo', rotuloTipo(doc)],
@@ -169,29 +161,11 @@
     return aba;
   }
 
-  /** Livro completo: Resumo + Itens (formato do modelo) + Instruções. */
+  /** Livro completo: só o Resumo e os Itens (sem aba de instruções). */
   function montarLivro(doc, empresa) {
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, abaResumo(doc, empresa), 'Resumo');
     XLSX.utils.book_append_sheet(livro, abaItens(doc), 'Itens');
-
-    // as instruções são as mesmas do modelo (é o formato que a planilha segue)
-    const instrucoes = XLSX.utils.aoa_to_sheet(
-      [
-        ['PLANILHA AUXILIAR — DEJ SOLUTIONS & GLOBAL'],
-        [''],
-        ['1) A aba "Itens" usa as mesmas colunas da planilha-modelo de importação do sistema.'],
-        ['2) Ela vem preenchida com os itens deste documento e pode ser editada e reenviada'],
-        ['   na tela "Importar planilha" — o sistema lê exatamente estas colunas.'],
-        ['3) A aba "Resumo" traz a identificação, os totais e as condições do documento.'],
-        ['4) Salve em .xlsx antes de reenviar.'],
-        [''],
-      ].concat(
-        (ModeloImportacao && ModeloImportacao.linhasInstrucoes ? ModeloImportacao.linhasInstrucoes() : []).slice(6)
-      )
-    );
-    instrucoes['!cols'] = [{ wch: 22 }, { wch: 70 }, { wch: 14 }];
-    XLSX.utils.book_append_sheet(livro, instrucoes, 'Instruções');
     return livro;
   }
 

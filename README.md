@@ -106,8 +106,10 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que traz |
    |---|---|
    | **Resumo** | tipo, número, data, status, órgão/cliente, modalidade, objeto, empresa, quantidade de itens, subtotal, desconto, acréscimo, total, custo e lucro (uso interno), condições e a assinatura digital, quando houver |
-   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`), com os comentários explicativos em cada título |
-   | **Instruções** | a mesma legenda de colunas do modelo |
+   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
+
+   São só essas duas abas: **sem aba de instruções e sem comentários nos títulos** —
+   quem já usa o sistema sabe preencher.
 
    Como as colunas são as do modelo, a planilha pode ser **editada no Excel e
    reenviada na tela "Importar planilha"** — o sistema lê de volta os mesmos
