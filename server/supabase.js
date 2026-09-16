@@ -15,6 +15,68 @@
 
 const TIMEOUT_MS = 15000;
 
+/**
+ * Projeto do Supabase já usado por este sistema. Serve só como conveniência:
+ * se uma chave for informada sem o endereço, usamos este projeto. Defina
+ * SUPABASE_URL para apontar para outro projeto.
+ */
+const PROJETO_PADRAO = 'dynebhtodtkbtydzgouo';
+const URL_PADRAO = `https://${PROJETO_PADRAO}.supabase.co`;
+
+/**
+ * Descobre que tipo de chave foi configurada — só pelo conteúdo dela, sem
+ * chamar o Supabase (útil para avisar antes de tentar usar).
+ *
+ *  - `service_role` / `sb_secret_...`: acesso total, ignora o RLS. É a chave
+ *    que o sistema espera: fica no servidor e ninguém mais tem.
+ *  - `anon` / `sb_publishable_...`: chave pública (feita para rodar no
+ *    navegador). Com o RLS ligado e sem políticas, ela NÃO lê nem grava.
+ */
+function classificarChave(chave) {
+  const valor = String(chave || '').trim();
+  if (!valor) return 'ausente';
+  if (valor.startsWith('sb_secret_')) return 'secret';
+  if (valor.startsWith('sb_publishable_')) return 'publishable';
+  const partes = valor.split('.');
+  if (partes.length === 3) {
+    try {
+      const dados = JSON.parse(Buffer.from(partes[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+      if (dados && dados.role === 'service_role') return 'service_role';
+      if (dados && dados.role === 'anon') return 'anon';
+      if (dados && dados.role) return 'jwt:' + dados.role;
+    } catch (_) { /* não é um JWT legível */ }
+  }
+  return 'desconhecida';
+}
+
+/** A chave configurada serve para o servidor gravar sem depender de políticas? */
+function chaveDeServidor(chave) {
+  const tipo = classificarChave(chave);
+  return tipo === 'service_role' || tipo === 'secret';
+}
+
+/** Texto pronto para explicar o que fazer com a chave configurada. */
+function orientacaoDaChave(chave) {
+  const tipo = classificarChave(chave);
+  if (tipo === 'service_role' || tipo === 'secret') return null;
+  if (tipo === 'anon' || tipo === 'publishable') {
+    return [
+      'A chave configurada é a pública (' + tipo + '), que roda no navegador.',
+      'Com o RLS ligado e sem políticas, o Supabase recusa ler e gravar com ela.',
+      'Escolha um dos dois caminhos:',
+      '  A) usar a chave de servidor — no Supabase: Project Settings → API keys →',
+      '     service_role (Reveal) [ou a secret key, sb_secret_...] e informe em',
+      '     SUPABASE_SERVICE_KEY (ela fica só no servidor);',
+      '  B) manter esta chave e abrir as políticas das três tabelas para o papel',
+      '     anon — rode supabase/politicas-anon.sql no SQL Editor (veja',
+      '     npm run supabase -- politicas). Qualquer pessoa que obtenha esta chave',
+      '     pública poderá ler e gravar os documentos.',
+    ].join('\n');
+  }
+  if (tipo === 'ausente') return 'Nenhuma chave do Supabase foi informada (SUPABASE_SERVICE_KEY).';
+  return 'A chave informada não parece ser do Supabase (nem JWT, nem sb_secret_..., nem sb_publishable_...).';
+}
+
 /** Tabelas usadas pelo sistema (veja supabase/esquema.sql). */
 const TABELAS = {
   perfil: 'licitapro_perfil',
@@ -33,10 +95,15 @@ function normalizar(url, chave) {
 
 function lerConfiguracao(env) {
   const ambiente = env || process.env;
-  return normalizar(
-    ambiente.SUPABASE_URL,
-    ambiente.SUPABASE_SERVICE_KEY || ambiente.SUPABASE_SERVICE_ROLE_KEY || ambiente.SUPABASE_KEY
-  );
+  const chave =
+    ambiente.SUPABASE_SERVICE_KEY ||
+    ambiente.SUPABASE_SERVICE_ROLE_KEY ||
+    ambiente.SUPABASE_SECRET_KEY ||
+    ambiente.SUPABASE_ANON_KEY ||
+    ambiente.SUPABASE_KEY;
+  // sem endereço informado, vai para o projeto padrão (o mesmo do repositório)
+  const url = String(ambiente.SUPABASE_URL || '').trim() || (chave ? URL_PADRAO : '');
+  return normalizar(url, chave);
 }
 
 /** O sistema foi configurado para usar o Supabase? */
@@ -179,4 +246,17 @@ async function gravarEstado(cliente, estado, removerIds) {
   );
 }
 
-module.exports = { TABELAS, configurado, normalizar, lerConfiguracao, criarCliente, lerEstado, gravarEstado };
+module.exports = {
+  TABELAS,
+  PROJETO_PADRAO,
+  URL_PADRAO,
+  configurado,
+  normalizar,
+  lerConfiguracao,
+  criarCliente,
+  lerEstado,
+  gravarEstado,
+  classificarChave,
+  chaveDeServidor,
+  orientacaoDaChave,
+};

@@ -113,6 +113,9 @@ async function prepararArmazenamento() {
     store.carregar();
     return 'arquivo';
   }
+  const config = Supabase.lerConfiguracao();
+  const aviso = Supabase.orientacaoDaChave(config.chave);
+  if (aviso) console.warn('\n  [supabase] ' + aviso.split('\n').join('\n  [supabase] ') + '\n');
   store.usarRemoto(Supabase.criarCliente());
   await store.carregarRemoto();
   store.perfil.obter(); // garante o perfil no banco no primeiro uso

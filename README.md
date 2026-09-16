@@ -173,7 +173,10 @@ deploy, reinício e mudança de servidor.
    `licitapro_sequencia`, com RLS ligado — a chave pública não lê nada.
 3. Copie as credenciais do projeto:
    - **Project Settings → Data API → Project URL** → `SUPABASE_URL`
-   - **Project Settings → API keys → service_role** → `SUPABASE_SERVICE_KEY`
+     (o endereço do projeto já usado por este sistema é o padrão; pode omitir)
+   - **Project Settings → API keys → service_role** (clique em *Reveal*) → `SUPABASE_SERVICE_KEY`
+     — é a chave de servidor, que ignora o RLS; pode usar também a *secret key*
+     (`sb_secret_...`) do formato novo
 4. Informe as duas no serviço:
    - **na sua máquina:** crie um arquivo `.env` na raiz (veja `.env.example`);
    - **no Render/Railway/Docker:** cadastre as duas variáveis de ambiente.
@@ -196,6 +199,22 @@ O que acontece quando as variáveis estão definidas:
 > No GitHub Pages (modo local) o sistema continua guardando os documentos no
 > próprio navegador — o site publicado nunca recebe credencial do banco.
 
+#### "Só tenho a chave anon" (chave pública)
+
+A chave **anon** (`sb_publishable_...` no formato novo) é a chave pública do projeto:
+com o RLS ligado e sem políticas, o Supabase **recusa** ler e gravar com ela. Há dois caminhos:
+
+- **Recomendado:** pegue a chave de servidor (*service_role* → *Reveal*, ou a *secret key*)
+  e informe em `SUPABASE_SERVICE_KEY`. Ela fica só no servidor e ignora o RLS.
+- **Alternativa (com a chave que você já tem):** rode
+  [`supabase/politicas-anon.sql`](supabase/politicas-anon.sql) no SQL Editor e informe a chave
+  em `SUPABASE_ANON_KEY` (`npm run supabase -- politicas` mostra o SQL).
+  Isso abre as três tabelas para o papel `anon`: **quem obtiver essa chave pública
+  consegue ler, alterar e apagar os documentos direto no banco**, sem passar pelo sistema.
+
+`npm run supabase` diz qual chave está configurada e o que ela permite — inclusive antes de
+tentar conectar.
+
 ---
 
 ## 5. Configurações (variáveis de ambiente)
@@ -206,7 +225,8 @@ O que acontece quando as variáveis estão definidas:
 | `HOST` | `0.0.0.0` | interface de rede |
 | `LICITAPRO_DATA_DIR` | `./data` | pasta de dados |
 | `SUPABASE_URL` | — | endereço do projeto Supabase (liga o banco; veja a seção 4) |
-| `SUPABASE_SERVICE_KEY` | — | chave `service_role` do Supabase (só no servidor) |
+| `SUPABASE_SERVICE_KEY` | — | chave `service_role`/`sb_secret_...` do Supabase (só no servidor) |
+| `SUPABASE_ANON_KEY` | — | chave pública, para quem preferir usar as políticas abertas |
 | `LICITAPRO_ARMAZENAMENTO` | automático | `arquivo` ignora o Supabase e usa só `data/db.json` |
 | `LICITAPRO_SILENCIOSO` | — | `1` não imprime o cabeçalho no terminal (usado nos testes) |
 

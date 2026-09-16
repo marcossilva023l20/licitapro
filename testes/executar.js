@@ -1594,7 +1594,8 @@ teste('Supabase: sem credenciais o sistema usa o arquivo local', () => {
   const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
   assert.strictEqual(Supabase.configurado({}), false, 'sem variáveis não usa o banco');
   assert.strictEqual(Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co' }), false, 'a URL sozinha não basta');
-  assert.strictEqual(Supabase.configurado({ SUPABASE_SERVICE_KEY: 'chave' }), false, 'a chave sozinha não basta');
+  // a chave sozinha já liga o banco: o endereço cai no projeto padrão do sistema
+  assert.strictEqual(Supabase.configurado({ SUPABASE_SERVICE_KEY: 'chave' }), true, 'a chave sozinha usa o projeto padrão');
   assert.strictEqual(
     Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'chave' }),
     true,
@@ -1633,6 +1634,60 @@ teste('Supabase: o esquema cria as tabelas usadas, com RLS, e sem chave no naveg
     const conteudo = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
     assert.strictEqual(/SUPABASE|service_role|supabase\.co/i.test(conteudo), false, 'sem credencial de banco em ' + relativo);
   });
+});
+
+teste('Supabase: reconhece o tipo de chave e avisa o que ela permite', () => {
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const anon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bmViaHRvZHRrYnR5ZHpnb3VvIiwicm9sZSI6ImFub24ifQ.assinatura';
+  const servico = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.assinatura';
+
+  assert.strictEqual(Supabase.classificarChave(anon), 'anon', 'reconhece a chave pública');
+  assert.strictEqual(Supabase.classificarChave(servico), 'service_role', 'reconhece a chave de servidor');
+  assert.strictEqual(Supabase.classificarChave('sb_secret_abc'), 'secret', 'reconhece a secret key nova');
+  assert.strictEqual(Supabase.classificarChave('sb_publishable_abc'), 'publishable', 'reconhece a publishable nova');
+  assert.strictEqual(Supabase.classificarChave(''), 'ausente', 'sem chave');
+  assert.strictEqual(Supabase.classificarChave('uma-senha-qualquer'), 'desconhecida', 'formato desconhecido');
+
+  assert.strictEqual(Supabase.chaveDeServidor(servico), true, 'service_role serve para o servidor');
+  assert.strictEqual(Supabase.chaveDeServidor('sb_secret_abc'), true, 'secret key serve para o servidor');
+  assert.strictEqual(Supabase.chaveDeServidor(anon), false, 'a chave pública não basta com o RLS ligado');
+  assert.strictEqual(Supabase.chaveDeServidor('sb_publishable_abc'), false, 'publishable também não');
+
+  // a orientação diz o que fazer (e cita os dois caminhos)
+  const aviso = Supabase.orientacaoDaChave(anon);
+  assert.ok(/pública/.test(aviso), 'explica que a chave é pública');
+  assert.ok(/service_role/.test(aviso), 'aponta a chave de servidor');
+  assert.ok(/politicas-anon\.sql/.test(aviso), 'aponta o SQL das políticas');
+  assert.strictEqual(Supabase.orientacaoDaChave(servico), null, 'com a chave certa não há aviso');
+
+  // sem endereço informado, usa o projeto padrão do sistema
+  const config = Supabase.lerConfiguracao({ SUPABASE_ANON_KEY: anon });
+  assert.strictEqual(config.url, 'https://' + Supabase.PROJETO_PADRAO + '.supabase.co', 'projeto padrão');
+  assert.strictEqual(config.configurado, true, 'URL padrão + chave já liga o banco');
+  assert.strictEqual(
+    Supabase.lerConfiguracao({ SUPABASE_URL: 'https://outro.supabase.co', SUPABASE_SERVICE_KEY: servico }).url,
+    'https://outro.supabase.co',
+    'SUPABASE_URL tem prioridade'
+  );
+});
+
+teste('Supabase: o SQL das políticas (opcional) cobre as três tabelas e avisa do risco', () => {
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const caminho = path.join(RAIZ, 'supabase', 'politicas-anon.sql');
+  assert.ok(fs.existsSync(caminho), 'o arquivo de políticas existe');
+  const sql = fs.readFileSync(caminho, 'utf8');
+
+  Object.values(Supabase.TABELAS).forEach((tabela) => {
+    assert.ok(sql.includes('public.' + tabela), 'políticas para ' + tabela);
+  });
+  assert.ok(/to anon/.test(sql), 'as políticas valem para o papel anon');
+  assert.ok(/OPCIONAL/i.test(sql), 'o arquivo se apresenta como opcional');
+  assert.ok(/service_role/.test(sql), 'o aviso recomenda a chave de servidor');
+  assert.ok(/for delete/.test(sql), 'excluir documento também é permitido (necessário para o sistema)');
+
+  // o esquema principal continua fechado: nenhuma política nele
+  const esquema = fs.readFileSync(path.join(RAIZ, 'supabase', 'esquema.sql'), 'utf8');
+  assert.strictEqual(/create\s+policy/i.test(esquema), false, 'o esquema não abre nada para o anon');
 });
 
 teste('Supabase: banco vazio recebe o conteúdo local', async () => {
