@@ -35,6 +35,7 @@ let remotoModo = 'arquivo';        // 'arquivo' | 'supabase'
 let filaRemota = Promise.resolve(); // serializa os envios ao banco
 let removidosRemotos = new Set();   // documentos excluídos (para apagar no banco)
 let erroRemoto = null;              // última falha de gravação (aparece no /api/health)
+let remotoIndisponivel = null;      // falha ao conectar no start (site segue no arquivo)
 
 const VAZIO = () => ({ perfil: null, documentos: [], sequencia: {} });
 
@@ -145,6 +146,53 @@ function id() {
   return require('crypto').randomUUID();
 }
 
+/** O perfil tem algum dado preenchido? (usado para escolher entre banco e arquivo) */
+function perfilTemDados(perfil) {
+  if (!perfil) return false;
+  const empresa = perfil.empresa || {};
+  const padroes = perfil.padroes || {};
+  return [empresa, padroes].some((grupo) =>
+    Object.values(grupo).some((valor) => (typeof valor === 'string' ? valor.trim() !== '' : Boolean(valor)))
+  );
+}
+
+/**
+ * Junta o que está no banco com o que está no arquivo local **sem perder nada**:
+ *  - documentos: união pelo id (quando o documento existe nos dois, vale a
+ *    versão do banco — é a que recebeu as edições mais recentes);
+ *  - perfil: o do banco, quando tem dados; senão o local;
+ *  - numeração: o maior número de cada tipo/ano.
+ *
+ * É o que permite subir o sistema depois de um período sem banco (ou com o
+ * arquivo local mais novo) sem que nenhum documento desapareça.
+ */
+function mesclar(local, remoto) {
+  const origemLocal = local || VAZIO();
+  const origemRemota = remoto || VAZIO();
+
+  const porId = new Map();
+  (origemLocal.documentos || []).forEach((d) => { if (d && d.id) porId.set(d.id, d); });
+  (origemRemota.documentos || []).forEach((d) => { if (d && d.id) porId.set(d.id, d); }); // banco vence
+
+  const sequencia = {};
+  [origemLocal.sequencia, origemRemota.sequencia].forEach((grupo) => {
+    Object.entries(grupo || {}).forEach(([chave, porAno]) => {
+      sequencia[chave] = sequencia[chave] || {};
+      Object.entries(porAno || {}).forEach(([ano, numero]) => {
+        sequencia[chave][ano] = Math.max(Number(sequencia[chave][ano] || 0), Number(numero || 0));
+      });
+    });
+  });
+
+  const documentos = Array.from(porId.values());
+  garantirIds(documentos);
+  return {
+    perfil: perfilTemDados(origemRemota.perfil) ? origemRemota.perfil : (origemLocal.perfil || origemRemota.perfil || null),
+    documentos,
+    sequencia,
+  };
+}
+
 /**
  * Documento sem id (arquivo antigo ou editado à mão) ganha um: a chave primária
  * do banco é um uuid e não pode ficar vazia.
@@ -170,6 +218,34 @@ function modo() {
   return remotoModo;
 }
 
+/** O Supabase está configurado (mesmo que esteja fora do ar agora)? */
+function remotoConfigurado() {
+  return Boolean(remoto);
+}
+
+/** Detalhes do banco para o /api/health e para os avisos do log. */
+function situacaoRemota() {
+  const erro = remotoIndisponivel || erroRemoto;
+  return {
+    configurado: Boolean(remoto),
+    // "conectado" é o estado da última gravação: se ela falhou, fica falso até
+    // a próxima dar certo (mesmo que o banco tenha respondido no start)
+    conectado: Boolean(remoto) && !erro,
+    erro: erro ? erro.message : null,
+  };
+}
+
+/**
+ * O banco não respondeu no start: o site continua funcionando com o arquivo
+ * local e cada alteração tenta o banco de novo (quando ele voltar, os dois
+ * lados são unidos e nada se perde).
+ */
+function marcarRemotoIndisponivel(erro) {
+  remotoIndisponivel = erro || new Error('Supabase indisponível');
+  remotoModo = 'arquivo';
+  erroRemoto = remotoIndisponivel;
+}
+
 function ultimoErroRemoto() {
   return erroRemoto ? erroRemoto.message : null;
 }
@@ -190,6 +266,11 @@ async function enviarRemoto() {
     await Supabase.gravarEstado(remoto, db || VAZIO(), remover);
     remover.forEach((documentoId) => removidosRemotos.delete(documentoId));
     erroRemoto = null;
+    if (remotoIndisponivel) {
+      remotoIndisponivel = null; // o banco voltou
+      remotoModo = 'supabase';
+      console.log('[supabase] conexão restabelecida: banco e arquivo estão sincronizados.');
+    }
   } catch (erro) {
     erroRemoto = erro;
     console.error('[supabase] falha ao gravar os dados:', erro.message);
@@ -206,25 +287,22 @@ async function carregarRemoto() {
   if (!remoto) return false;
   const Supabase = require('./supabase');
   const estado = await Supabase.lerEstado(remoto);
+  const local = lerArquivoLocal();
+  const tinhaLocal = Boolean(local && (local.documentos.length || perfilTemDados(local.perfil)));
 
-  if (estado.vazio) {
-    const local = lerArquivoLocal();
-    db = local || VAZIO();
-    await Supabase.gravarEstado(remoto, db, new Set());
-    if (local) {
-      console.log('[supabase] banco vazio: enviei o conteúdo de ' + DB_FILE + ' para lá.');
-    }
-  } else {
-    db = Object.assign(VAZIO(), {
-      perfil: estado.perfil || null,
-      documentos: estado.documentos,
-      sequencia: estado.sequencia || {},
-    });
-    db.documentos.forEach((d) => { delete d.usuarioId; });
-    garantirIds(db.documentos);
-    gravarArquivo(); // cópia local do que veio do banco
+  // une os dois lados (nada é descartado) e devolve a união para o banco
+  db = mesclar(local, { perfil: estado.perfil, documentos: estado.documentos, sequencia: estado.sequencia });
+  await Supabase.gravarEstado(remoto, db, new Set());
+  gravarArquivo();
+
+  if (estado.vazio && tinhaLocal) {
+    console.log('[supabase] banco vazio: enviei o conteúdo de ' + DB_FILE + ' para lá.');
+  } else if (tinhaLocal && !estado.vazio) {
+    console.log('[supabase] dados do banco e do arquivo local unidos (' + db.documentos.length + ' documento(s)).');
   }
+
   remotoModo = 'supabase';
+  remotoIndisponivel = null;
   return true;
 }
 
@@ -406,4 +484,9 @@ module.exports = {
   carregarRemoto,
   encerrar,
   esquecer,
+  marcarRemotoIndisponivel,
+  remotoConfigurado,
+  situacaoRemota,
+  mesclar,
+  perfilTemDados,
 };

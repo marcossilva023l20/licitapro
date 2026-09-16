@@ -186,13 +186,19 @@ deploy, reinício e mudança de servidor.
 
 O que acontece quando as variáveis estão definidas:
 
-- Ao subir, o sistema **lê tudo do banco** (perfil, documentos e numeração).
-- Se o banco estiver **vazio**, o conteúdo de `data/db.json` é enviado para lá
-  automaticamente — dá para migrar sem perder nada (ou forçar com
-  `npm run supabase -- enviar`).
+- Ao subir, o sistema **lê tudo do banco** (perfil, documentos e numeração) e
+  **une** com o que estiver em `data/db.json`: documentos entram pelo id (quando
+  o mesmo existe nos dois, vale a versão do banco), a numeração fica com o maior
+  número de cada tipo/ano. **Nada é descartado** — nem de um lado, nem do outro.
+  Se o banco estiver vazio, o conteúdo do arquivo é enviado para lá.
 - Cada alteração é gravada no banco **e** numa cópia local em `data/db.json`.
-  Se o banco falhar, a alteração continua salva no arquivo e o erro aparece em
-  `/api/health` (`ultimoErroDeGravacao`).
+- **Se o banco estiver fora do ar** (queda de rede, projeto pausado, tabela
+  faltando), o site **continua no ar** com o arquivo local: os dados continuam
+  salvos, o motivo aparece em `/api/health` (`supabase.erro`) e a cada alteração
+  o sistema tenta o banco de novo. Quando ele volta, banco e arquivo são
+  sincronizados automaticamente (e o documento criado durante a queda vai para
+  o banco).
+- `npm run supabase` mostra a conexão, o tipo de chave e o que está gravado.
 - Para voltar ao arquivo local: `LICITAPRO_ARMAZENAMENTO=arquivo`.
 
 > **A chave `service_role` dá acesso total ao banco: ela fica só no servidor.**
@@ -379,10 +385,12 @@ transparência dentro do arquivo).
 
 Cobre o **banco no Supabase** com um servidor de mentira que imita a API REST: o
 esquema do repositório (tabelas + RLS), o envio do conteúdo local para um banco vazio,
-a volta dos dados depois de um "redeploy" (memória zerada e arquivo apagado), a exclusão
-de documento refletida no banco e a falha de conexão — que avisa e mantém o dado salvo
-no arquivo local. Um teste garante também que nenhuma credencial de banco aparece no
-que vai para o navegador.
+a volta dos dados depois de um "redeploy" (memória zerada e arquivo apagado), a união
+banco + arquivo sem perder documento, o banco fora do ar (o site segue no ar e
+sincroniza quando ele volta), a exclusão de documento refletida no banco e o
+reconhecimento do tipo de chave (anon x service_role). Dois testes de **segurança**
+garantem que nenhuma chave de servidor existe no repositório e que nenhuma credencial
+de banco aparece no que vai para o navegador.
 
 Também cobre o **modo local** (GitHub Pages): a página da raiz publicada abre o sistema sem
 servidor, importa uma planilha `.xlsx` de verdade, gera um PDF válido (`%PDF-`) no navegador,

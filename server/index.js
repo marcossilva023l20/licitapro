@@ -46,6 +46,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     armazenamento: store.modo(), // 'supabase' ou 'arquivo'
+    supabase: store.situacaoRemota(), // configurado / conectado / erro
     ultimoErroDeGravacao: store.ultimoErroRemoto(),
     documentos: banco.documentos.length,
     dadosEm: DATA_DIR,
@@ -115,11 +116,35 @@ async function prepararArmazenamento() {
   }
   const config = Supabase.lerConfiguracao();
   const aviso = Supabase.orientacaoDaChave(config.chave);
-  if (aviso) console.warn('\n  [supabase] ' + aviso.split('\n').join('\n  [supabase] ') + '\n');
+  if (aviso && !avisouSobreAChave) {
+    avisouSobreAChave = true; // uma vez por execução, em vez de a cada leitura
+    console.warn(formataAviso('supabase', aviso));
+  }
   store.usarRemoto(Supabase.criarCliente());
-  await store.carregarRemoto();
-  store.perfil.obter(); // garante o perfil no banco no primeiro uso
-  return 'supabase';
+  try {
+    await store.carregarRemoto();
+    store.perfil.obter(); // garante o perfil no banco no primeiro uso
+    return 'supabase';
+  } catch (erro) {
+    // O site não pode ficar fora do ar porque o banco (ou a internet) caiu:
+    // segue com o arquivo local e cada alteração tenta o banco de novo.
+    store.marcarRemotoIndisponivel(erro);
+    store.carregar();
+    console.warn(formataAviso('supabase', [
+      'Não consegui usar o banco agora: ' + erro.message,
+      'O site está no ar com o arquivo local (' + DATA_DIR + ').',
+      'As alterações continuam sendo salvas aí e vão para o banco assim que ele responder.',
+      'Confira o SUPABASE_URL, a chave e se supabase/esquema.sql já foi executado.',
+    ].join('\n')));
+    return 'arquivo';
+  }
+}
+
+let avisouSobreAChave = false;
+
+/** Deixa o aviso bem visível no terminal. */
+function formataAviso(origem, texto) {
+  return '\n  [' + origem + '] ' + texto.split('\n').join('\n  [' + origem + '] ') + '\n';
 }
 
 /** Sobe o servidor (o sistema não tem login: abre direto no painel). */
@@ -151,10 +176,13 @@ function iniciar(porta, host) {
         console.log('  DEJ Solutions & Global — gerador de propostas e orçamentos');
         console.log('  ---------------------------------------------------------');
         console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
+        const banco = store.situacaoRemota();
         if (store.modo() === 'supabase') {
-          const alvo = Supabase.lerConfiguracao().url;
-          console.log(`  Dados em:  Supabase (${alvo})`);
+          console.log(`  Dados em:  Supabase (${Supabase.lerConfiguracao().url})`);
           console.log(`  Cópia local: ${DATA_DIR}`);
+        } else if (banco.configurado) {
+          console.log(`  Dados em:  arquivo local — Supabase indisponível`);
+          console.log(`             ${banco.erro || ''}`);
         } else {
           console.log(`  Dados em:  ${DATA_DIR}`);
         }
@@ -162,11 +190,10 @@ function iniciar(porta, host) {
       });
     })
     .catch((erro) => {
+      // falha inesperada ao preparar o armazenamento (ex.: arquivo local inválido)
       console.error('');
-      console.error('  Não foi possível usar o banco do Supabase: ' + erro.message);
-      console.error('  Confira SUPABASE_URL e SUPABASE_SERVICE_KEY e se o arquivo');
-      console.error('  supabase/esquema.sql já foi executado no projeto.');
-      console.error('  Para seguir sem o banco: LICITAPRO_ARMAZENAMENTO=arquivo npm start');
+      console.error('  Não consegui preparar o armazenamento: ' + erro.message);
+      console.error('  Para começar sem o banco: LICITAPRO_ARMAZENAMENTO=arquivo npm start');
       console.error('');
       process.exit(1);
     });

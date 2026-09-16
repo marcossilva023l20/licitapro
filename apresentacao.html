@@ -126,9 +126,9 @@
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3.2" /><path d="M4 6v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V6" /><path d="M4 12v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-6" /></svg></span>
           <h3>Banco no Supabase</h3>
           <p>Com servidor, a empresa e as propostas podem ficar num banco Postgres do Supabase: os
-          dados sobrevivem a atualização, reinício e troca de servidor. Sem banco, tudo continua
-          funcionando com o arquivo local. A chave de acesso fica só no servidor — o site publicado
-          nunca recebe credencial do banco.</p>
+          dados sobrevivem a atualização, reinício e troca de servidor — e, se o banco cair, o
+          sistema continua no ar com uma cópia local até ele voltar. A chave de acesso fica só no
+          servidor: o site publicado nunca recebe credencial do banco.</p>
         </article>
         <article class="cartao">
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3.2 2" /></svg></span>
@@ -279,7 +279,7 @@ cd licitapro
 npm install
 npm start          # abre em http://localhost:3000
 
-npm run testes     # 52 testes automatizados
+npm run testes     # 56 testes automatizados
 npm run paginas    # regenera o index.html do GitHub Pages
 npm run fontes     # regenera as métricas da fonte Times
 npm run modelo     # gera a planilha-modelo (.xlsx)

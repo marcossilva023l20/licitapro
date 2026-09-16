@@ -1781,6 +1781,115 @@ teste('Supabase: excluir um documento apaga também no banco', async () => {
   });
 });
 
+teste('Supabase: a união do banco com o arquivo não perde documento nenhum', async () => {
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+
+  const mesclado = store.mesclar(
+    {
+      perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
+      documentos: [
+        { id: 'a0000000-0000-4000-8000-000000000001', tipo: 'proposta', itens: [] },
+        { id: 'c0000000-0000-4000-8000-000000000003', tipo: 'proposta', itens: [{ descricao: 'SÓ NO ARQUIVO' }] },
+      ],
+      sequencia: { proposta: { '2026': 3 } },
+    },
+    {
+      perfil: null,
+      documentos: [
+        { id: 'b0000000-0000-4000-8000-000000000002', tipo: 'orcamento', itens: [] },
+        { id: 'c0000000-0000-4000-8000-000000000003', tipo: 'proposta', itens: [{ descricao: 'VERSÃO DO BANCO' }] },
+      ],
+      sequencia: { proposta: { '2026': 7 }, orcamento: { '2026': 2 } },
+    }
+  );
+
+  assert.strictEqual(mesclado.documentos.length, 3, 'os três documentos sobrevivem');
+  assert.strictEqual(mesclado.sequencia.proposta['2026'], 7, 'numeração fica com o maior número');
+  assert.strictEqual(mesclado.sequencia.orcamento['2026'], 2, 'numeração do outro tipo também');
+  assert.strictEqual(mesclado.perfil.empresa.razaoSocial, 'EMPRESA DO ARQUIVO', 'perfil do arquivo, já que o banco não tinha');
+  const repetido = mesclado.documentos.find((d) => d.id === 'c0000000-0000-4000-8000-000000000003');
+  assert.strictEqual(repetido.itens[0].descricao, 'VERSÃO DO BANCO', 'quando existe nos dois, vale a versão do banco');
+
+  // e o que foi unido volta para o banco (documento do arquivo incluído)
+  await comBancoDeMentira(async (falso) => {
+    store.esquecer();
+    falso.definir('licitapro_documentos', [
+      { id: 'b0000000-0000-4000-8000-000000000002', dados: { id: 'b0000000-0000-4000-8000-000000000002', tipo: 'orcamento', itens: [] } },
+    ]);
+    await store.carregarRemoto();
+    await store.encerrar();
+    assert.strictEqual(falso.contagem('licitapro_documentos'), 2, 'o documento que só existia no arquivo foi para o banco');
+    assert.ok(
+      falso.linhas('licitapro_documentos').some((l) => l.id === '00000000-0000-4000-8000-000000000001'),
+      'id do arquivo local preservado'
+    );
+  }, {
+    perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
+    documentos: [documentoComId('proposta')],
+    sequencia: { proposta: { '2026': 3 } },
+  });
+});
+
+teste('Supabase: banco fora do ar não derruba o site e sincroniza quando volta', async () => {
+  const { criarServidorDeMentira } = require('./supabase-falso');
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+  const app = require(path.join(RAIZ, 'server', 'index.js'));
+
+  const falso = await criarServidorDeMentira({ falhar: true }); // banco fora do ar
+  const ambiente = { url: process.env.SUPABASE_URL, chave: process.env.SUPABASE_SERVICE_KEY };
+  const arquivo = path.join(process.env.LICITAPRO_DATA_DIR, 'db.json');
+  const backup = fs.existsSync(arquivo) ? fs.readFileSync(arquivo, 'utf8') : null;
+  process.env.SUPABASE_URL = falso.url;
+  process.env.SUPABASE_SERVICE_KEY = require('./supabase-falso').CHAVE_ESPERADA;
+
+  try {
+    fs.writeFileSync(arquivo, JSON.stringify({
+      perfil: { empresa: { razaoSocial: 'EMPRESA LOCAL' }, padroes: {} },
+      documentos: [documentoComId('proposta')],
+      sequencia: { proposta: { '2026': 1 } },
+    }));
+    store.usarRemoto(null);
+    store.esquecer();
+
+    // 1. o start não falha: segue no arquivo local
+    const modo = await app.prepararArmazenamento();
+    assert.strictEqual(modo, 'arquivo', 'cai para o arquivo local em vez de derrubar o site');
+    assert.strictEqual(store.carregar().documentos.length, 1, 'os dados locais continuam disponíveis');
+    const situacao = store.situacaoRemota();
+    assert.strictEqual(situacao.configurado, true, 'o banco está configurado');
+    assert.strictEqual(situacao.conectado, false, 'e marcado como não conectado');
+    assert.ok(situacao.erro, 'com o motivo registrado');
+
+    // 2. dá para trabalhar normalmente com o banco fora do ar
+    const criado = store.documento.criar({ tipo: 'orcamento', numero: { sequencial: 1, ano: 2026, grupo: '' }, itens: [{ descricao: 'FEITO DURANTE A QUEDA' }] });
+    const sincronizou = await store.encerrar();
+    assert.strictEqual(sincronizou, false, 'o encerramento avisa que o banco não recebeu');
+    assert.ok(fs.readFileSync(arquivo, 'utf8').includes('FEITO DURANTE A QUEDA'), 'o documento ficou salvo no arquivo');
+
+    // 3. o banco volta: a próxima alteração sincroniza os dois lados
+    falso.falhar = false;
+    store.perfil.atualizar({ empresa: { razaoSocial: 'EMPRESA LOCAL' } });
+    const depois = await store.encerrar();
+    assert.strictEqual(depois, true, 'gravação recuperada');
+    assert.strictEqual(store.modo(), 'supabase', 'volta ao modo banco');
+    assert.strictEqual(store.situacaoRemota().conectado, true, 'situação atualizada');
+    assert.strictEqual(falso.contagem('licitapro_documentos'), 2, 'o documento criado na queda foi para o banco');
+    assert.ok(
+      falso.linhas('licitapro_documentos').some((l) => l.dados.itens[0].descricao === 'FEITO DURANTE A QUEDA'),
+      'com o conteúdo certo'
+    );
+  } finally {
+    store.usarRemoto(null);
+    store.esquecer();
+    if (ambiente.url === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = ambiente.url;
+    if (ambiente.chave === undefined) delete process.env.SUPABASE_SERVICE_KEY; else process.env.SUPABASE_SERVICE_KEY = ambiente.chave;
+    if (backup !== null) fs.writeFileSync(arquivo, backup); else fs.rmSync(arquivo, { force: true });
+    await falso.fechar();
+  }
+});
+
 teste('Supabase: falha no banco é avisada e o arquivo local continua salvando', async () => {
   await comBancoDeMentira(async (falso, store) => {
     store.esquecer();
@@ -1799,6 +1908,72 @@ teste('Supabase: falha no banco é avisada e o arquivo local continua salvando',
     perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
     documentos: [],
     sequencia: {},
+  });
+});
+
+teste('Segurança: nenhuma chave de servidor do Supabase no repositório', () => {
+  // percorre o projeto (fora de node_modules, .git e data/) procurando chaves
+  // que dão acesso total ao banco. Chaves de exemplo dos testes são assinadas
+  // com "assinatura"/"x" (curtas) e não contam como vazamento.
+  const pastasIgnoradas = new Set(['node_modules', '.git', 'data', 'vendor', '.github']);
+  const extensoes = /\.(js|mjs|cjs|json|sql|md|html|css|yml|yaml|txt|example|env)$/i;
+  // grupo 1 = carga (payload) do JWT, grupo 2 = assinatura (o que garante que é uma chave de verdade)
+  const padraoJwt = /eyJ[A-Za-z0-9_-]{10,}\.(eyJ[A-Za-z0-9_-]{10,})\.([A-Za-z0-9_-]{20,})/g;
+  const padraoSecret = /sb_secret_[A-Za-z0-9_-]{20,}/g;
+  const problemas = [];
+
+  function lerPasta(caminho) {
+    for (const entrada of fs.readdirSync(caminho, { withFileTypes: true })) {
+      if (entrada.name.startsWith('.') && entrada.name !== '.env.example') continue;
+      const completo = path.join(caminho, entrada.name);
+      if (entrada.isDirectory()) {
+        if (!pastasIgnoradas.has(entrada.name)) lerPasta(completo);
+        continue;
+      }
+      if (!extensoes.test(entrada.name)) continue;
+      const conteudo = fs.readFileSync(completo, 'utf8');
+      const relativo = path.relative(RAIZ, completo);
+
+      Array.from(conteudo.matchAll(padraoJwt)).forEach((achado) => {
+        try {
+          const carga = achado[1].replace(/-/g, '+').replace(/_/g, '/');
+          const dados = JSON.parse(Buffer.from(carga, 'base64').toString('utf8'));
+          if (dados && dados.role === 'service_role') problemas.push(relativo + ' → chave de servidor');
+        } catch (_) { /* não é um JWT legível */ }
+      });
+      if (Array.from(conteudo.matchAll(padraoSecret)).length) {
+        problemas.push(relativo + ' → sb_secret_');
+      }
+    }
+  }
+
+  lerPasta(RAIZ);
+  assert.deepStrictEqual(problemas, [], 'não pode haver chave de servidor no projeto');
+
+  // o .env é ignorado pelo git (é onde a chave vive na máquina do usuário)
+  const ignorados = fs.readFileSync(path.join(RAIZ, '.gitignore'), 'utf8');
+  assert.ok(/^\.env$/m.test(ignorados), '.env fora do controle de versão');
+});
+
+teste('Segurança: a chave de serviço não aparece no que o site recebe', () => {
+  const arquivosDoSite = [];
+  const coletar = (caminho) => {
+    for (const entrada of fs.readdirSync(caminho, { withFileTypes: true })) {
+      const completo = path.join(caminho, entrada.name);
+      if (entrada.isDirectory()) {
+        if (entrada.name !== 'vendor') coletar(completo);
+      } else if (/\.(js|html|css|json)$/i.test(entrada.name) && !/\.min\./i.test(entrada.name)) {
+        arquivosDoSite.push(completo);
+      }
+    }
+  };
+  coletar(path.join(RAIZ, 'public'));
+  assert.ok(arquivosDoSite.length > 5, 'arquivos do site encontrados: ' + arquivosDoSite.length);
+
+  arquivosDoSite.forEach((arquivo) => {
+    const conteudo = fs.readFileSync(arquivo, 'utf8');
+    const relativo = path.relative(RAIZ, arquivo);
+    assert.strictEqual(/SUPABASE_|service_role|sb_secret_/i.test(conteudo), false, 'sem credencial de banco em ' + relativo);
   });
 });
 
