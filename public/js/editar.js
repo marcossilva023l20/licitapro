@@ -643,9 +643,12 @@
       desenharItens();
       if (!silencioso && guardado) UI.toast('Documento salvo.', 'sucesso');
       if (window.App) window.App.recarregarLista();
-      // o endereço aponta para o documento salvo — mas só se a pessoa continua
-      // no editor: se ela já clicou em outra tela, não a puxamos de volta
-      if (!$('#view-editor').classList.contains('oculto')) {
+      // o endereço passa a apontar para o documento salvo — mas só quando a
+      // pessoa continua no editor. Se ela já foi para outra tela (clicou em
+      // "Minha empresa", por exemplo), o endereço é dela: mexer aqui a
+      // arrastaria de volta, e numa corrida a tela pedida nem aparecia.
+      const enderecoDoEditor = /^#\/documento(\/|$)/.test(window.location.hash || '');
+      if (enderecoDoEditor && !$('#view-editor').classList.contains('oculto')) {
         window.location.hash = '#/documento/' + estado.doc.id;
       }
       return estado.doc;

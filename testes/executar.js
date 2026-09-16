@@ -1654,13 +1654,26 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     descricao.value = 'RÁDIO DE TESTE DA CONTA';
     descricao.dispatchEvent(new w1.Event('input', { bubbles: true }));
     $1('#editor-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    // o endereço vira o do documento salvo: é o sinal de que o salvamento terminou
+    // (o rótulo "Salvo" também existe logo que o documento abre)
+    await ModoLocal.esperar(
+      () => /^#\/documento\/[^/]+$/.test(w1.location.hash) && w1.location.hash !== '#/documento/novo/proposta',
+      'documento salvo e endereço atualizado: ' + w1.location.hash,
+      15000
+    );
     await ModoLocal.esperar(() => $1('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
 
     // clicar em "Minha empresa" logo depois de salvar não pode ser desfeito pelo
     // salvamento: antes o editor devolvia o endereço do documento e a pessoa era
     // puxada de volta (numa corrida a tela pedida nem aparecia)
     w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
-    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa', 15000);
+    await ModoLocal.esperar(
+      () => !$1('#view-empresa').classList.contains('oculto'),
+      'tela da empresa (endereço: ' + w1.location.hash + ', painel: ' +
+        !$1('#view-painel').classList.contains('oculto') + ', editor: ' +
+        !$1('#view-editor').classList.contains('oculto') + ')',
+      15000
+    );
     await new Promise((resolve) => setTimeout(resolve, 400));
     assert.strictEqual($1('#view-empresa').classList.contains('oculto'), false, 'o salvamento não puxa a pessoa de volta');
     $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL';
