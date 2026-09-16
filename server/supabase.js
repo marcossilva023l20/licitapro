@@ -77,6 +77,26 @@ function orientacaoDaChave(chave) {
   return 'A chave informada não parece ser do Supabase (nem JWT, nem sb_secret_..., nem sb_publishable_...).';
 }
 
+/**
+ * Traduz o erro do banco numa dica curta do que fazer. É a mesma explicação na
+ * linha de comando (npm run supabase) e na tela ("Conectar banco de dados").
+ */
+function dicaParaErro(erroOuMensagem) {
+  const mensagem = String((erroOuMensagem && erroOuMensagem.message) || erroOuMensagem || '').trim();
+  if (!mensagem) return 'O banco não respondeu: confira o endereço do projeto, a chave e a internet.';
+  if (/relation|does not exist|42P01/i.test(mensagem)) {
+    return 'As tabelas ainda não existem neste projeto: rode supabase/esquema.sql no SQL Editor do Supabase.';
+  }
+  if (/401|403|permission denied|row-level security|JWT/i.test(mensagem)) {
+    return 'O banco recusou a chave: confira se ela é a chave de servidor (service_role / sb_secret_...) ' +
+      'ou rode supabase/politicas-anon.sql se quiser usar a chave pública.';
+  }
+  if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|fetch failed|timeout|abort/i.test(mensagem)) {
+    return 'Não há conexão com o Supabase a partir daqui: verifique a internet (e se o endereço do projeto está certo).';
+  }
+  return 'Detalhe: ' + mensagem;
+}
+
 /** Tabelas usadas pelo sistema (veja supabase/esquema.sql). */
 const TABELAS = {
   perfil: 'licitapro_perfil',
@@ -259,4 +279,5 @@ module.exports = {
   classificarChave,
   chaveDeServidor,
   orientacaoDaChave,
+  dicaParaErro,
 };

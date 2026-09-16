@@ -181,8 +181,15 @@ deploy, reinício e mudança de servidor.
    - **Project Settings → API keys → service_role** (clique em *Reveal*) → `SUPABASE_SERVICE_KEY`
      — é a chave de servidor, que ignora o RLS; pode usar também a *secret key*
      (`sb_secret_...`) do formato novo
-4. Informe as duas credenciais:
-   - **na sua máquina (jeito mais fácil):** rode
+4. Informe as duas credenciais — escolha o caminho mais confortável:
+   - **pela própria tela (sem terminal):** com o sistema aberto em
+     `http://localhost:3000` no seu computador, o painel mostra o botão
+     **“Conectar banco de dados”** embaixo da linha de situação. Cole a chave
+     (o endereço do projeto já vem preenchido), clique em **Salvar e testar** e o
+     sistema grava o `.env`, conecta na hora e passa a usar o banco — sem reiniciar.
+     Esse botão aparece **somente** quando o sistema roda na sua máquina
+     (localhost); de um endereço publicado ele não existe, por segurança.
+   - **pela linha de comando:** rode
      ```bash
      npm run supabase -- configurar
      ```
@@ -467,7 +474,9 @@ data/                   → dados gerados em execução (não versionado)
 | As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar foto do computador** |
 | A planilha não é reconhecida | use o modelo para download e mantenha os títulos da linha 1 |
 | O sistema diz que não está salvando no banco | rode `npm run supabase`: ele aponta o passo que falhou (`.env`, chave, tabelas ou gravação). No painel, a linha de situação mostra o mesmo motivo |
-| "Supabase não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço — veja a seção 4 |
+| "Supabase não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço. Em localhost, use o botão **“Conectar banco de dados”**; na hospedagem, cadastre as variáveis no painel do serviço — veja a seção 4 |
+| Não acho onde pegar a chave do projeto | Supabase → **Project Settings → API keys**: use a *service_role* (*Reveal*) ou a *secret key* (`sb_secret_...`). A chave *anon*/*publishable* é pública e o banco a recusa com o RLS ligado |
+| O botão "Conectar banco de dados" não aparece | ele só aparece quando o sistema roda na sua máquina (localhost) e o banco ainda não está ligado. No endereço publicado, informe as credenciais no painel da hospedagem |
 | As tabelas não existem no banco | rode `supabase/esquema.sql` no SQL Editor do projeto (`npm run supabase -- sql`) |
 | A chave anon é recusada | ela é pública: use a `service_role` ou rode `supabase/politicas-anon.sql` (veja a seção 4) |
 | Quero apagar todos os dados | pare o sistema e remova a pasta `data/` (e as linhas das tabelas no banco, se estiver usando Supabase) |

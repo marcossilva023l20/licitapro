@@ -14,6 +14,7 @@ garantirPastas();
 
 const store = require('./store');
 const Supabase = require('./supabase');
+const credenciais = require('./credenciais');
 const rotasPerfil = require('./routes/perfil');
 const rotasDocumentos = require('./routes/documentos');
 const rotasArquivos = require('./routes/arquivos');
@@ -41,16 +42,106 @@ app.use('/api/perfil', rotasPerfil);
 app.use('/api/documentos', rotasDocumentos);
 app.use('/api', rotasArquivos);
 
+/**
+ * O pedido veio da própria máquina (localhost)? Só nesse caso a tela pode
+ * gravar as credenciais do banco — assim o recurso não vira uma porta aberta
+ * para trocar as credenciais de um sistema publicado na internet.
+ *
+ * São duas conferências:
+ *   - o endereço da conexão é a própria máquina (e não o cabeçalho enviado pelo
+ *     cliente: com "trust proxy" ligado, req.ip poderia ser forjado);
+ *   - o endereço digitado no navegador também é local (localhost, 127.0.0.1,
+ *     [::1]) — um túnel/preview público tem outro nome, mesmo que passe por aqui.
+ */
+function ehLocal(req) {
+  const ip = String((req.socket && req.socket.remoteAddress) || '');
+  const daMaquina = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  if (!daMaquina) return false;
+  const host = String((req.headers && req.headers.host) || '').toLowerCase().replace(/:\d+$/, '');
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+}
+
 app.get('/api/health', (req, res) => {
   const banco = store.carregar();
+  const local = ehLocal(req);
   res.json({
     ok: true,
     armazenamento: store.modo(), // 'supabase' ou 'arquivo'
-    supabase: store.situacaoRemota(), // configurado / conectado / erro
+    // o endereço do projeto só vai para a própria máquina (é o que preenche o
+    // formulário de conectar o banco); a chave nunca sai do servidor
+    supabase: Object.assign(
+      store.situacaoRemota(), // configurado / conectado / erro
+      local ? { url: Supabase.lerConfiguracao().url || Supabase.URL_PADRAO } : {}
+    ),
     ultimoErroDeGravacao: store.ultimoErroRemoto(),
     documentos: banco.documentos.length,
     dadosEm: DATA_DIR,
+    // a tela pode ligar o banco aqui? (só quando o sistema roda na sua máquina)
+    configuravelAqui: local,
     versao: require('../package.json').version,
+  });
+});
+
+/**
+ * Liga o banco pela própria tela: grava as credenciais no .env e reconecta na
+ * hora, sem terminal e sem reiniciar o sistema. Só aceita pedidos feitos da
+ * própria máquina (veja ehLocal).
+ */
+app.post('/api/banco/configurar', async (req, res) => {
+  if (!ehLocal(req)) {
+    return res.status(403).json({
+      erro: 'Por segurança, as credenciais do banco só podem ser gravadas pela tela quando o ' +
+        'sistema está rodando na sua própria máquina (endereço localhost).',
+      ajuda: 'Neste endereço, informe as credenciais no painel da hospedagem (variáveis de ' +
+        'ambiente do serviço) ou rode "npm run supabase -- configurar" no servidor.',
+    });
+  }
+
+  const url = credenciais.limparEndereco(req.body && req.body.url);
+  const chave = String((req.body && req.body.chave) || '').trim();
+
+  if (chave.length < 20) {
+    return res.status(400).json({
+      erro: 'Cole a chave completa do projeto (a que dá acesso total). Ela é bem comprida — ' +
+        'confira se a cópia veio inteira.',
+    });
+  }
+  if (url && !credenciais.enderecoValido(url)) {
+    return res.status(400).json({
+      erro: 'O endereço do projeto não parece válido.',
+      ajuda: 'Ele é assim: https://xxxxxxxx.supabase.co (Project Settings → Data API).',
+    });
+  }
+  if (String(process.env.LICITAPRO_ARMAZENAMENTO || '').trim().toLowerCase() === 'arquivo') {
+    return res.status(409).json({
+      erro: 'O sistema está configurado para usar o arquivo local (LICITAPRO_ARMAZENAMENTO=arquivo).',
+      ajuda: 'Remova essa variável de ambiente (ou o .env) para que o banco passe a ser usado.',
+    });
+  }
+
+  const endereco = url || Supabase.lerConfiguracao().url || Supabase.URL_PADRAO;
+  let gravado;
+  try {
+    gravado = credenciais.gravarCredenciais({ url: endereco, chave });
+  } catch (erro) {
+    return res.status(500).json({ erro: 'Não consegui gravar o arquivo de credenciais: ' + erro.message });
+  }
+
+  // vale já nesta execução: o sistema reconecta sem precisar reiniciar
+  credenciais.aplicarNoAmbiente({ url: endereco, chave });
+  const modo = await prepararArmazenamento();
+  const situacao = store.situacaoRemota();
+  const conectado = modo === 'supabase' && situacao.conectado;
+  const tipoChave = Supabase.classificarChave(chave);
+
+  res.json({
+    ok: conectado,
+    arquivo: gravado.caminho,
+    armazenamento: modo,
+    supabase: situacao,
+    tipoChave,
+    aviso: Supabase.orientacaoDaChave(chave),
+    dica: conectado ? null : Supabase.dicaParaErro(situacao.erro),
   });
 });
 
@@ -219,3 +310,4 @@ if (require.main === module) iniciar();
 module.exports = app;
 module.exports.iniciar = iniciar;
 module.exports.prepararArmazenamento = prepararArmazenamento;
+module.exports.ehLocal = ehLocal;

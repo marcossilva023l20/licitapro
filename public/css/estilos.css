@@ -325,6 +325,42 @@ input[type="search"] { padding-left: 12px; }
 }
 .botao-link:hover { opacity: 1; }
 
+/* ------------------------------------------- conectar o banco pela própria tela
+   Bloco do painel que só aparece quando o sistema roda na máquina do usuário
+   (localhost): grava a chave do projeto no .env do servidor e testa na hora. */
+.conectar-banco { margin-top: 8px; }
+.conectar-banco .botao-link { color: var(--dourado-300); font-size: 0.85rem; }
+.form-banco {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 16px;
+  max-width: 520px;
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+}
+.titulo-banco {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--tinta-900);
+}
+.campo-banco { display: grid; gap: 5px; font-size: 0.8rem; color: var(--texto-fraco); }
+.campo-banco input { width: 100%; }
+.ajuda-banco { margin: 0; font-size: 0.78rem; color: var(--texto-fraco); line-height: 1.5; }
+.ajuda-banco code {
+  font-size: 0.78rem;
+  padding: 1px 5px;
+  border-radius: var(--raio-xs);
+  background: var(--superficie-2);
+  color: var(--tinta-800);
+}
+.acoes-banco { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mensagem-banco { font-size: 0.8rem; color: var(--texto-suave); }
+.mensagem-banco.ok { color: #86efac; }
+.mensagem-banco.erro { color: #fca5a5; }
+
 .texto-suave { color: var(--texto-suave); font-size: 0.85rem; }
 .link { font-weight: 600; font-size: 0.85rem; }
 .divisor { border: 0; border-top: 1px solid var(--borda); margin: 20px 0; }

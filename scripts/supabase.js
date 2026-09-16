@@ -23,48 +23,13 @@ const RAIZ = path.join(__dirname, '..');
 require(path.join(RAIZ, 'server', 'config')).carregarEnv();
 const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
 const store = require(path.join(RAIZ, 'server', 'store'));
+// as credenciais do .env são gravadas pelo mesmo código que a tela do sistema usa
+const credenciais = require(path.join(RAIZ, 'server', 'credenciais'));
 
 const CAMINHO_SQL = path.join(RAIZ, 'supabase', 'esquema.sql');
 const CAMINHO_POLITICAS = path.join(RAIZ, 'supabase', 'politicas-anon.sql');
 // onde ficam as credenciais (o ambiente pode apontar para outro arquivo: testes)
-const CAMINHO_ENV = process.env.LICITAPRO_ENV_FILE || path.join(RAIZ, '.env');
-
-/**
- * Grava (ou atualiza) as credenciais no arquivo .env, preservando o resto do
- * arquivo e os comentários. Só as chaves informadas são tocadas.
- */
-function atualizarEnv(valores) {
-  const existentes = fs.existsSync(CAMINHO_ENV)
-    ? fs.readFileSync(CAMINHO_ENV, 'utf8').split(/\r?\n/)
-    : [];
-  const pendentes = Object.assign({}, valores);
-  const saida = [];
-
-  existentes.forEach((linha) => {
-    const texto = linha.trim();
-    const igual = texto.indexOf('=');
-    const chave = igual > 0 ? texto.slice(0, igual).trim() : '';
-    const comentada = texto.startsWith('#');
-    if (!comentada && chave && Object.prototype.hasOwnProperty.call(pendentes, chave)) {
-      saida.push(chave + '=' + pendentes[chave]);
-      delete pendentes[chave];
-      return;
-    }
-    saida.push(linha);
-  });
-
-  const restantes = Object.keys(pendentes);
-  if (restantes.length) {
-    while (saida.length && saida[saida.length - 1].trim() === '') saida.pop();
-    if (saida.length) saida.push('');
-    saida.push('# Banco de dados (Supabase) — veja o README, seção 4');
-    restantes.forEach((chave) => saida.push(chave + '=' + pendentes[chave]));
-  }
-
-  const conteudo = saida.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
-  fs.writeFileSync(CAMINHO_ENV, conteudo, { mode: 0o600 }); // só o dono lê
-  return conteudo;
-}
+const CAMINHO_ENV = credenciais.caminhoEnv();
 
 /**
  * Faz as perguntas de uma vez só (uma única sessão de leitura: fechar e abrir
@@ -126,10 +91,9 @@ async function configurar() {
     return;
   }
 
-  atualizarEnv({ SUPABASE_URL: url, SUPABASE_SERVICE_KEY: chave });
+  credenciais.gravarCredenciais({ url, chave });
   // a conferência logo abaixo já usa o que acabou de ser gravado
-  process.env.SUPABASE_URL = url;
-  process.env.SUPABASE_SERVICE_KEY = chave;
+  credenciais.aplicarNoAmbiente({ url, chave });
   console.log('\nCredenciais gravadas em ' + CAMINHO_ENV + '.');
 
   const tipo = Supabase.classificarChave(chave);
@@ -171,8 +135,9 @@ function semCredenciais() {
   console.log('2. Informe as credenciais do projeto (Project Settings → Data API / API keys):');
   console.log('   SUPABASE_URL=https://xxxxxxxx.supabase.co');
   console.log('   SUPABASE_SERVICE_KEY=...   (service_role — só no servidor)');
-  console.log('\nNo seu computador, crie um arquivo .env na raiz com essas duas linhas.');
-  console.log('Na hospedagem (Render/Railway/Docker), cadastre as duas variáveis.\n');
+  console.log('\nNo seu computador, rode:  npm run supabase -- configurar   (ele grava o .env para você)');
+  console.log('Ou, com o sistema aberto em localhost, use o botão "Conectar banco de dados" no painel.');
+  console.log('Na hospedagem (Render/Railway/Docker), cadastre as duas variáveis no painel do serviço.\n');
 }
 
 /**
@@ -182,7 +147,7 @@ function semCredenciais() {
  */
 async function conferir() {
   const config = Supabase.lerConfiguracao();
-  const arquivoEnv = path.join(RAIZ, '.env');
+  const arquivoEnv = CAMINHO_ENV;
   const passos = [];
 
   const marcar = (ok, titulo, detalhe) => {
@@ -216,21 +181,10 @@ async function conferir() {
     await cliente.conferir();
     marcar(true, 'Conexão e tabelas: ok (' + Object.values(Supabase.TABELAS).join(', ') + ')');
   } catch (erro) {
-    const faltandoTabela = /relation|does not exist|42P01/i.test(erro.message);
-    const semPermissao = /401|403|permission denied|row-level security/i.test(erro.message);
-    const semRede = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|fetch failed|timeout/i.test(erro.message);
-    let dica;
-    if (faltandoTabela) {
-      dica = 'As tabelas ainda não existem neste projeto: rode supabase/esquema.sql no SQL Editor.\n' +
-             '        (veja todo o SQL com: npm run supabase -- sql)';
-    } else if (semPermissao) {
-      dica = 'O banco recusou a chave. Confira se ela é a service_role (ou sb_secret_...)\n' +
-             '        ou rode supabase/politicas-anon.sql se quiser usar a chave pública.';
-    } else if (semRede) {
-      dica = 'Não há conexão com o Supabase a partir daqui: verifique a internet/proxy\n' +
-             '        (e se o SUPABASE_URL está certo).';
-    } else {
-      dica = 'Detalhe: ' + erro.message;
+    // a dica é a mesma que o sistema mostra na tela (server/supabase.js)
+    let dica = Supabase.dicaParaErro(erro);
+    if (/as tabelas ainda não existem/i.test(dica)) {
+      dica += '\n        (veja todo o SQL com: npm run supabase -- sql)';
     }
     marcar(false, 'Conexão e tabelas', dica);
     return resumo(passos);

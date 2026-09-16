@@ -897,7 +897,13 @@ teste('HTTP: o login foi removido de vez (sem senha, sem sessão, sem usuários)
     const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
     assert.strictEqual(html.includes('tela-login'), false, 'sem tela de login no HTML');
     assert.strictEqual(html.includes('form-login'), false, 'sem formulário de login');
-    assert.strictEqual(html.includes('type="password"'), false, 'sem campo de senha');
+    // o único campo de senha permitido é o da chave do banco, que só aparece
+    // quando o sistema roda na própria máquina (conectar o banco pela tela)
+    const camposDeSenha = html.match(/type="password"/g) || [];
+    assert.ok(
+      camposDeSenha.length <= 1 && (camposDeSenha.length === 0 || html.includes('id="banco-chave"')),
+      'sem campo de senha de login'
+    );
     assert.strictEqual(html.includes('botao-sair'), false, 'sem botão de sair');
   } finally {
     servidor.close();
@@ -1671,16 +1677,15 @@ teste('Supabase: o esquema cria as tabelas usadas, com RLS, e sem chave no naveg
   assert.ok(!/create\s+policy/i.test(sql), 'sem política: a chave pública não lê nem grava');
   assert.ok(sql.includes('jsonb'), 'versão do sistema (empresa, itens e dados do documento) em jsonb');
 
-  // a chave de serviço é só do servidor: nunca aparece no que vai ao navegador
-  // (o site pode *citar* o Supabase no texto de aviso — o que não pode é ter
-  //  variável de credencial, chave ou o endereço do projeto)
+  // a chave de serviço é só do servidor: nunca aparece no que vai ao navegador.
+  // (o site pode *citar* o Supabase e o nome do tipo de chave no texto de ajuda
+  //  — o que não pode é ter a chave, uma variável com valor ou o endereço do
+  //  projeto; veja PADROES_DE_CREDENCIAL no fim do arquivo)
   ['public/index.html', 'public/js/app.js', 'public/js/modo-estatico.js', 'public/js/api.js'].forEach((relativo) => {
     const conteudo = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
-    assert.strictEqual(
-      /SUPABASE_[A-Z]|service_role|sb_secret_|sb_publishable_|supabase\.co/i.test(conteudo),
-      false,
-      'sem credencial de banco em ' + relativo
-    );
+    PADROES_DE_CREDENCIAL.forEach((padrao) => {
+      assert.strictEqual(padrao.test(conteudo), false, 'sem credencial de banco em ' + relativo);
+    });
   });
 });
 
@@ -2150,8 +2155,155 @@ teste('Segurança: a chave de serviço não aparece no que o site recebe', () =>
   arquivosDoSite.forEach((arquivo) => {
     const conteudo = fs.readFileSync(arquivo, 'utf8');
     const relativo = path.relative(RAIZ, arquivo);
-    assert.strictEqual(/SUPABASE_|service_role|sb_secret_/i.test(conteudo), false, 'sem credencial de banco em ' + relativo);
+    PADROES_DE_CREDENCIAL.forEach((padrao) => {
+      assert.strictEqual(padrao.test(conteudo), false, 'sem credencial de banco em ' + relativo);
+    });
   });
+});
+
+/**
+ * O que nunca pode aparecer no que o site recebe: a chave em si, uma variável
+ * já preenchida com ela ou o endereço do projeto. Citar o *nome* do tipo de
+ * chave no texto de ajuda (é o que orienta quem vai colar a chave na tela) não
+ * é credencial — e é conferido aqui de propósito: o valor é que é proibido.
+ */
+const PADROES_DE_CREDENCIAL = [
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // chave no formato JWT (anon ou service_role)
+  /sb_secret_[A-Za-z0-9_-]{10,}/, // secret key do projeto
+  /SUPABASE_[A-Z_]+\s*[:=]\s*['"]?[A-Za-z0-9._-]{12,}/, // variável já com o valor
+  /supabase\.co/i, // endereço do projeto
+];
+
+teste('Interface: o painel deixa ligar o banco pela tela (só na própria máquina)', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+    const clicar = (sel) => $(sel).dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(
+      () => !$('#situacao-dados').classList.contains('oculto') && $('#situacao-dados-texto').textContent.length > 0,
+      'situação dos dados no painel'
+    );
+
+    // sem banco e rodando em localhost: oferece conectar e já conhece o endereço
+    assert.strictEqual($('#conectar-banco').classList.contains('oculto'), false, 'oferece conectar o banco');
+    assert.ok(
+      /^https?:\/\/.+/.test($('#banco-url').value),
+      'endereço do projeto já preenchido: ' + $('#banco-url').value
+    );
+    assert.ok(/Conectar banco de dados/.test($('#situacao-dados-texto').textContent), 'a linha do painel indica o botão');
+
+    clicar('#banco-abrir');
+    assert.strictEqual($('#banco-form').classList.contains('oculto'), false, 'formulário de conexão aberto');
+
+    // sem a chave o formulário não manda nada
+    $('#banco-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.ok(/Cole a chave/.test($('#banco-mensagem').textContent), 'pede a chave: ' + $('#banco-mensagem').textContent);
+
+    clicar('#banco-cancelar');
+    assert.strictEqual($('#banco-form').classList.contains('oculto'), true, 'dá para fechar o formulário');
+  } finally {
+    servidor.close();
+  }
+});
+
+teste('Supabase: pela tela do sistema, a chave só pode ser gravada na própria máquina', async () => {
+  const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
+  const app = require(path.join(RAIZ, 'server', 'index.js'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+
+  // a decisão vem da conexão e do endereço digitado — cabeçalhos não convencem
+  const local = (host) => ({ socket: { remoteAddress: '127.0.0.1' }, headers: { host } });
+  assert.strictEqual(app.ehLocal(local('localhost:3000')), true, 'localhost');
+  assert.strictEqual(app.ehLocal(local('127.0.0.1:3000')), true, '127.0.0.1');
+  assert.strictEqual(app.ehLocal(local('[::1]:3000')), true, 'IPv6 local');
+  assert.strictEqual(app.ehLocal(local('licitapro.onrender.com')), false, 'endereço publicado');
+  assert.strictEqual(app.ehLocal(local('3000-abc.e2b.app')), false, 'preview/túnel público');
+  assert.strictEqual(
+    app.ehLocal({ socket: { remoteAddress: '10.0.0.7' }, headers: { host: 'localhost:3000' } }),
+    false,
+    'outra máquina da rede'
+  );
+  assert.strictEqual(
+    app.ehLocal({ socket: { remoteAddress: '203.0.113.9' }, headers: { host: 'localhost', 'x-forwarded-for': '127.0.0.1' } }),
+    false,
+    'cabeçalho forjado não passa'
+  );
+
+  // e, na prática: da própria máquina grava o .env, liga o banco e já usa
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-tela-'));
+  const arquivoEnv = path.join(pasta, '.env');
+  const anterior = process.env.LICITAPRO_ENV_FILE;
+  process.env.LICITAPRO_ENV_FILE = arquivoEnv;
+  const falso = await criarServidorDeMentira();
+  const servidor = await iniciarServidor();
+  try {
+    const semChave = await requisitar(servidor, '/api/banco/configurar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ url: falso.url }),
+    });
+    assert.strictEqual(semChave.status, 400, 'sem a chave não grava nada: ' + semChave.texto);
+    assert.strictEqual(fs.existsSync(arquivoEnv), false, 'nada foi gravado');
+
+    const enderecoRuim = await requisitar(servidor, '/api/banco/configurar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ url: 'endereco-sem-formato', chave: CHAVE_ESPERADA }),
+    });
+    assert.strictEqual(enderecoRuim.status, 400, 'endereço inválido é recusado');
+    assert.ok(/endereço/i.test(enderecoRuim.json.erro), 'explica o problema: ' + enderecoRuim.json.erro);
+
+    const resposta = await requisitar(servidor, '/api/banco/configurar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ url: falso.url, chave: CHAVE_ESPERADA }),
+    });
+    assert.strictEqual(resposta.status, 200, resposta.texto);
+    assert.strictEqual(resposta.json.ok, true, 'banco conectado: ' + resposta.texto);
+    assert.strictEqual(resposta.json.armazenamento, 'supabase', 'passou a gravar no banco');
+    assert.strictEqual(resposta.json.tipoChave, 'service_role', 'reconhece a chave de servidor');
+    assert.strictEqual(resposta.json.arquivo, arquivoEnv, 'gravou no arquivo indicado pelo ambiente');
+
+    const gravado = fs.readFileSync(arquivoEnv, 'utf8');
+    assert.ok(gravado.includes('SUPABASE_URL=' + falso.url), 'o endereço foi para o .env');
+    assert.ok(gravado.includes('SUPABASE_SERVICE_KEY=' + CHAVE_ESPERADA), 'a chave foi para o .env');
+    assert.strictEqual(gravado.includes('undefined'), false, 'nada de valor vazio no arquivo');
+
+    // o mesmo servidor já está no banco, sem reiniciar
+    const saude = await requisitar(servidor, '/api/health');
+    assert.strictEqual(saude.json.armazenamento, 'supabase', 'o site já está usando o banco');
+    assert.strictEqual(saude.json.supabase.conectado, true, 'e conectado');
+    assert.strictEqual(saude.json.configuravelAqui, true, 'a própria máquina pode configurar');
+    assert.strictEqual(
+      JSON.stringify(saude.json).includes(CHAVE_ESPERADA),
+      false,
+      'a chave nunca volta para o navegador'
+    );
+
+    // o que o usuário salvar agora vai para o banco de verdade
+    const salvar = await requisitar(servidor, '/api/perfil/empresa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ razaoSocial: 'D.E.J SOLUTIONS & GLOBAL' }),
+    });
+    assert.strictEqual(salvar.status, 200, salvar.texto);
+    await store.encerrar(); // espera o envio pendente para o banco
+    assert.ok(falso.contagem('licitapro_perfil') > 0, 'a empresa chegou no banco');
+  } finally {
+    servidor.close();
+    await falso.fechar();
+    if (anterior === undefined) delete process.env.LICITAPRO_ENV_FILE;
+    else process.env.LICITAPRO_ENV_FILE = anterior;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_KEY;
+    store.usarRemoto(null);
+    store.carregar();
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
 });
 
 // ------------------------------------------------------------------ início

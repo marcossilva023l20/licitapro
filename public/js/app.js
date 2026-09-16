@@ -34,6 +34,7 @@
   async function atualizarSituacaoDados() {
     const caixa = $('#situacao-dados');
     const texto = $('#situacao-dados-texto');
+    const areaBanco = $('#conectar-banco');
     if (!caixa || !texto) return;
 
     const modoLocal = window.ModoEstatico && window.ModoEstatico.ativo && window.ModoEstatico.ativo();
@@ -41,13 +42,15 @@
       caixa.className = 'situacao-dados aviso';
       texto.textContent =
         'Dados salvos neste navegador (sem servidor). Use "Baixar backup" no menu para guardar uma cópia.';
+      if (areaBanco) areaBanco.classList.add('oculto');
       return;
     }
 
     try {
       const saude = await API.get('/api/health');
       const banco = saude.supabase || {};
-      if (saude.armazenamento === 'supabase' && banco.conectado) {
+      const noBanco = saude.armazenamento === 'supabase' && banco.conectado;
+      if (noBanco) {
         caixa.className = 'situacao-dados ok';
         texto.textContent = 'Banco de dados conectado (Supabase): empresa e documentos salvos no banco.';
       } else if (banco.configurado) {
@@ -58,13 +61,87 @@
       } else {
         caixa.className = 'situacao-dados aviso';
         texto.textContent =
-          'Supabase não configurado: os dados estão sendo salvos no arquivo do servidor. ' +
-          'Veja o README (seção 4) para ligar o banco.';
+          'Supabase não configurado: os dados estão sendo salvos no arquivo do servidor.' +
+          (saude.configuravelAqui ? ' Use "Conectar banco de dados" aqui embaixo.' : ' Veja o README (seção 4).');
+      }
+
+      // o formulário de conectar o banco só faz sentido enquanto ele não está
+      // ligado — e só existe onde o servidor aceita (a própria máquina)
+      if (areaBanco) {
+        areaBanco.classList.toggle('oculto', !(saude.configuravelAqui && !noBanco));
+        const campoUrl = $('#banco-url');
+        if (campoUrl && !campoUrl.value && banco.url) campoUrl.value = banco.url;
       }
     } catch (erro) {
       caixa.className = 'situacao-dados erro';
       texto.textContent = 'Não consegui falar com o servidor para saber onde os dados estão: ' + erro.message;
+      if (areaBanco) areaBanco.classList.add('oculto');
     }
+  }
+
+  /**
+   * Liga o banco pela própria tela: grava as credenciais no .env do servidor e
+   * reconecta na hora. Aparece só em localhost (o servidor recusa de fora).
+   */
+  function ligarConexaoBanco() {
+    const abrir = $('#banco-abrir');
+    const cancelar = $('#banco-cancelar');
+    const form = $('#banco-form');
+    const mensagem = $('#banco-mensagem');
+    if (!form) return;
+
+    const escrever = (texto, tipo) => {
+      mensagem.textContent = texto || '';
+      mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+    };
+
+    if (abrir) {
+      abrir.addEventListener('click', () => {
+        form.classList.remove('oculto');
+        abrir.classList.add('oculto');
+        escrever('');
+        const campoUrl = $('#banco-url');
+        if (campoUrl) campoUrl.focus();
+      });
+    }
+    if (cancelar) {
+      cancelar.addEventListener('click', () => {
+        form.classList.add('oculto');
+        if (abrir) abrir.classList.remove('oculto');
+        escrever('');
+      });
+    }
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const url = $('#banco-url').value.trim();
+      const chave = $('#banco-chave').value.trim();
+      if (!chave) {
+        escrever('Cole a chave do projeto para continuar.', 'erro');
+        return;
+      }
+
+      const botao = $('#banco-salvar');
+      botao.disabled = true;
+      escrever('Testando a conexão...');
+      try {
+        const resposta = await API.post('/api/banco/configurar', { url, chave });
+        $('#banco-chave').value = '';
+        if (resposta.ok) {
+          escrever('Banco conectado! Os dados já estão sendo salvos nele.', 'ok');
+          UI.toast('Banco de dados conectado.', 'sucesso');
+        } else {
+          const motivo = (resposta.supabase && resposta.supabase.erro) || '';
+          escrever('Credenciais salvas, mas o banco ainda não respondeu.' +
+            (motivo ? ' ' + motivo : '') + (resposta.dica ? ' ' + resposta.dica : ''), 'erro');
+        }
+        await atualizarSituacaoDados();
+      } catch (erro) {
+        escrever(erro.message, 'erro');
+      } finally {
+        botao.disabled = false;
+      }
+    });
   }
 
   function mostrarApp() {
@@ -616,6 +693,7 @@
     if (jaIniciado) return; // evita ligar os eventos duas vezes
     jaIniciado = true;
     window.Editor.iniciar();
+    ligarConexaoBanco();
     ligarNavegacao();
     ligarAcoesDocumentos();
     ligarImportacao();
