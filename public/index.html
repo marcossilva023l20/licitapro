@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=23" />
+  <link rel="stylesheet" href="css/estilos.css?v=24" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -266,7 +266,7 @@
         </div>
 
         <div class="filtros">
-          <input type="search" id="filtro-busca" placeholder="Buscar por órgão, cliente, processo ou número..." />
+          <input type="search" id="filtro-busca" placeholder="Buscar por órgão, cliente ou número..." />
           <select id="filtro-tipo">
             <option value="">Todos os tipos</option>
             <option value="proposta">Propostas</option>
@@ -338,9 +338,6 @@
                 <label class="campo">Ano
                   <input type="number" id="campo-numero-ano" min="2000" max="2100" step="1" />
                 </label>
-                <label class="campo">Série / grupo (opcional)
-                  <input type="text" id="campo-numero-grupo" placeholder="Ex.: PE-17" />
-                </label>
                 <label class="campo">Data do documento
                   <input type="date" id="campo-data" />
                 </label>
@@ -355,11 +352,8 @@
                   <label class="campo">UASG
                     <input type="text" id="campo-orgao-uasg" placeholder="787010" />
                   </label>
-                  <label class="campo">Processo nº
-                    <input type="text" id="campo-orgao-processo" placeholder="44/2026" />
-                  </label>
                   <label class="campo">Modalidade
-                    <input type="text" id="campo-orgao-modalidade" placeholder="Pregão Eletrônico" />
+                    <select id="campo-orgao-modalidade"></select>
                   </label>
                   <label class="campo">Edital / Pregão
                     <input type="text" id="campo-orgao-pregao" placeholder="Pregão nº 17/2026" />
@@ -739,13 +733,13 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=23"></script>
-  <script src="js/api.js?v=23"></script>
-  <script src="js/ui.js?v=23"></script>
-  <script src="js/editar.js?v=23"></script>
-  <script src="js/app.js?v=23"></script>
-  <script src="js/config-nuvem.js?v=23"></script>
-  <script src="js/modo-estatico.js?v=23"></script>
-  <script src="js/nuvem.js?v=23"></script>
+  <script src="../shared/format.js?v=24"></script>
+  <script src="js/api.js?v=24"></script>
+  <script src="js/ui.js?v=24"></script>
+  <script src="js/editar.js?v=24"></script>
+  <script src="js/app.js?v=24"></script>
+  <script src="js/config-nuvem.js?v=24"></script>
+  <script src="js/modo-estatico.js?v=24"></script>
+  <script src="js/nuvem.js?v=24"></script>
 </body>
 </html>

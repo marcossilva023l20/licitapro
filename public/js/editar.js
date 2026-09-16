@@ -18,18 +18,146 @@
     itensImportados: null,
   };
 
+  /**
+   * Modalidades que a lista oferece de saída (as mais usadas nas compras
+   * públicas). A pessoa não fica presa a elas: escolhendo "adicionar nova", a
+   * que ela criar entra na lista e é lembrada neste navegador.
+   */
+  const MODALIDADES = [
+    'Pregão Eletrônico',
+    'Pregão Presencial',
+    'Dispensa de Licitação',
+    'Dispensa Eletrônica',
+    'Inexigibilidade de Licitação',
+    'Concorrência',
+    'Concorrência Eletrônica',
+    'Tomada de Preços',
+    'Convite',
+    'Leilão',
+    'Concurso',
+    'Credenciamento',
+    'Chamada Pública',
+    'Adesão a Ata de Registro de Preços',
+    'Cotação Eletrônica',
+  ];
+  const CHAVE_MODALIDADES = 'licitapro.modalidades.v1';
+  const MODALIDADE_NOVA = '__nova';
+
+  /** Modalidades criadas por quem usa o sistema (guardadas neste navegador). */
+  function modalidadesExtras() {
+    try {
+      const lista = JSON.parse(window.localStorage.getItem(CHAVE_MODALIDADES) || '[]');
+      return Array.isArray(lista) ? lista.filter((item) => typeof item === 'string' && item.trim()) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function guardarModalidadeExtra(nome) {
+    const lista = modalidadesExtras();
+    if (!MODALIDADES.includes(nome) && !lista.includes(nome)) {
+      lista.push(nome);
+      try {
+        window.localStorage.setItem(CHAVE_MODALIDADES, JSON.stringify(lista));
+      } catch (_) {
+        /* sem armazenamento: a opção vale só nesta aba */
+      }
+    }
+    return lista;
+  }
+
+  /** Monta o seletor de modalidade com a lista + as opções criadas aqui. */
+  function montarModalidades(valorAtual) {
+    const select = $('#campo-orgao-modalidade');
+    if (!select) return;
+    const valores = MODALIDADES.concat(modalidadesExtras());
+    if (valorAtual && !valores.includes(valorAtual)) valores.push(valorAtual);
+
+    // documento novo ainda não tem modalidade: começa na primeira da lista
+    const escolhido = valorAtual || select.value || MODALIDADES[0];
+    select.innerHTML = '';
+    valores.forEach((nome) => {
+      const opcao = document.createElement('option');
+      opcao.value = nome;
+      opcao.textContent = nome;
+      select.appendChild(opcao);
+    });
+    const nova = document.createElement('option');
+    nova.value = MODALIDADE_NOVA;
+    nova.textContent = '➕ Adicionar nova modalidade...';
+    select.appendChild(nova);
+    if (escolhido && escolhido !== MODALIDADE_NOVA) select.value = escolhido;
+  }
+
+  /** Pergunta o nome da modalidade nova e já a deixa escolhida no documento. */
+  function pedirNovaModalidade() {
+    const select = $('#campo-orgao-modalidade');
+    if (!select) return;
+    const anterior = (estado.doc && estado.doc.orgao && estado.doc.orgao.modalidade) || MODALIDADES[0];
+
+    const corpo = document.createElement('div');
+    const rotulo = document.createElement('label');
+    rotulo.className = 'campo campo-largo';
+    rotulo.textContent = 'Nome da modalidade';
+    const entrada = document.createElement('input');
+    entrada.type = 'text';
+    entrada.id = 'campo-nova-modalidade';
+    entrada.placeholder = 'Ex.: Dispensa de Licitação';
+    entrada.maxLength = 120;
+    rotulo.appendChild(entrada);
+    corpo.appendChild(rotulo);
+    const dica = document.createElement('p');
+    dica.className = 'texto-suave';
+    dica.textContent = 'Ela entra na lista e fica lembrada neste navegador para as próximas propostas.';
+    corpo.appendChild(dica);
+
+    const usar = () => {
+      const nome = entrada.value.trim();
+      if (!nome) {
+        entrada.focus();
+        UI.toast('Escreva o nome da modalidade.', 'aviso');
+        return;
+      }
+      guardarModalidadeExtra(nome);
+      montarModalidades(nome);
+      definir('orgao.modalidade', nome);
+      marcarSujo();
+      UI.fecharModal();
+      UI.toast('Modalidade "' + nome + '" adicionada à lista.', 'sucesso');
+    };
+
+    UI.abrirModal({
+      titulo: 'Adicionar modalidade',
+      corpo,
+      botoes: [
+        { texto: 'Adicionar', classe: 'botao-primario', acao: usar },
+        {
+          texto: 'Cancelar',
+          acao: () => {
+            select.value = anterior;
+            UI.fecharModal();
+          },
+        },
+      ],
+    });
+    entrada.addEventListener('keydown', (evento) => {
+      if (evento.key === 'Enter') {
+        evento.preventDefault();
+        usar();
+      }
+    });
+  }
+
   /** Campos do formulário mapeados para o caminho dentro do documento. */
   const CAMPOS = [
     { sel: '#campo-tipo', alvo: 'tipo' },
     { sel: '#campo-status', alvo: 'status' },
     { sel: '#campo-numero-sequencial', alvo: 'numero.sequencial', tipo: 'numero' },
     { sel: '#campo-numero-ano', alvo: 'numero.ano', tipo: 'numero' },
-    { sel: '#campo-numero-grupo', alvo: 'numero.grupo' },
     { sel: '#campo-data', alvo: 'data' },
 
     { sel: '#campo-orgao-nome', alvo: 'orgao.nome' },
     { sel: '#campo-orgao-uasg', alvo: 'orgao.uasg' },
-    { sel: '#campo-orgao-processo', alvo: 'orgao.processo' },
     { sel: '#campo-orgao-modalidade', alvo: 'orgao.modalidade' },
     { sel: '#campo-orgao-pregao', alvo: 'orgao.pregao' },
     { sel: '#campo-orgao-prazo', alvo: 'orgao.prazoEntrega' },
@@ -132,6 +260,7 @@
   // ------------------------------------------------------------ formulário
 
   function preencherFormulario() {
+    montarModalidades(obter('orgao.modalidade'));
     CAMPOS.forEach((campo) => {
       const elemento = $(campo.sel);
       if (!elemento) return;
@@ -142,6 +271,18 @@
         elemento.value = valor === 0 || valor ? valor : '';
       } else if (campo.tipo === 'moeda') {
         elemento.value = valor ? F.numero(valor, 2) : '';
+      } else if (elemento.tagName === 'SELECT') {
+        const texto = valor == null ? '' : String(valor);
+        // modalidade que não está na lista (documento antigo, ou criada em
+        // outro computador) entra como opção: o que está salvo nunca se perde
+        if (texto && !Array.from(elemento.options).some((o) => o.value === texto)) {
+          const opcao = document.createElement('option');
+          opcao.value = texto;
+          opcao.textContent = texto;
+          elemento.insertBefore(opcao, elemento.lastElementChild);
+        }
+        // vazio não apaga a lista: fica a primeira opção (o padrão)
+        if (texto) elemento.value = texto;
       } else {
         elemento.value = valor == null ? '' : valor;
       }
@@ -161,6 +302,8 @@
       else if (campo.tipo === 'numero') valor = elemento.value === '' ? 0 : Number(elemento.value);
       else if (campo.tipo === 'moeda') valor = elemento.value === '' ? 0 : F.paraNumero(elemento.value);
       else valor = elemento.value;
+      // a opção "adicionar nova modalidade" é um caminho da tela, não um dado
+      if (valor === MODALIDADE_NOVA) valor = obter(campo.alvo) || '';
       definir(campo.alvo, valor);
     });
     return estado.doc;
@@ -679,6 +822,8 @@
       else if (campo.tipo === 'numero') valor = alvo.value === '' ? 0 : Number(alvo.value);
       else if (campo.tipo === 'moeda') valor = alvo.value === '' ? 0 : F.paraNumero(alvo.value);
       else valor = alvo.value;
+      // "adicionar nova modalidade" é um caminho da tela, não um dado
+      if (valor === MODALIDADE_NOVA) return;
       definir(campo.alvo, valor);
       if (campo.alvo === 'tipo') {
         atualizarVisibilidadeTipo();
@@ -697,6 +842,9 @@
       }
       if (campo && campo.alvo === 'desconto.modo') {
         atualizarResumos();
+      }
+      if (alvo.id === 'campo-orgao-modalidade' && alvo.value === MODALIDADE_NOVA) {
+        pedirNovaModalidade();
       }
     });
 

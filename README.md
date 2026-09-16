@@ -24,7 +24,7 @@ Cabeçalho (logo, empresa, número e data)
    ↓
 Título do documento (PROPOSTA DE FORNECIMENTO / ORÇAMENTO Nº 001/2026)
    ↓
-Dados do órgão (UASG, processo, pregão, objeto, prazo)  — proposta
+Dados do órgão (UASG, modalidade, pregão, objeto, prazo)  — proposta
 Identificação do cliente (CNPJ, contato, endereço)      — orçamento
    ↓
 Dados do proponente (CNPJ, inscrição estadual, SIMPLES NACIONAL, telefone,
@@ -88,7 +88,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
 
    | Aba | O que faz |
    |---|---|
-   | Identificação | tipo de documento, número (sequencial/ano/série), data, dados do órgão ou do cliente |
+   | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
    | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Dados do proponente | dados da empresa para *este* documento (logo e assinatura) |
@@ -106,9 +106,12 @@ Desenvolvimento com recarga automática: `npm run dev`.
 
 ### Números automáticos
 
-A numeração é sequencial por tipo e ano (`001/2026`, `002/2026`, ...). O campo
-**Série / grupo** permite numeração separada (por exemplo `PE-17-001/2026`), útil quando
-você participa de vários pregões ao mesmo tempo.
+A numeração é sequencial por tipo e ano (`001/2026`, `002/2026`, ...).
+
+**Modalidade** é uma lista pronta (Pregão Eletrônico, Dispensa de Licitação, Concorrência,
+Inexigibilidade, Credenciamento, ...). A última opção da lista — *adicionar nova modalidade* —
+cria uma modalidade sua: ela passa a aparecer no seletor nos próximos documentos deste
+navegador, e a escolhida vai para o cabeçalho do PDF.
 
 ---
 

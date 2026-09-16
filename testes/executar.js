@@ -954,6 +954,76 @@ teste('HTTP: o login foi removido de vez (sem senha, sem sessão, sem usuários)
 
 const Navegador = require('./navegador');
 
+teste('Editor: modalidade é uma lista (com opção nova) e sem Série/grupo nem Processo', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+
+    await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel visível');
+    window.location.hash = '#/documento/novo/proposta';
+    await Navegador.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto');
+    await Navegador.esperar(() => $('#campo-numero-sequencial').value !== '', 'numeração carregada');
+
+    // 1. os campos que saíram da tela não existem mais
+    assert.strictEqual($('#campo-numero-grupo'), null, 'não há mais Série / grupo');
+    assert.strictEqual($('#campo-orgao-processo'), null, 'não há mais Processo nº');
+
+    // 2. a modalidade é uma lista com as duas opções pedidas
+    const select = $('#campo-orgao-modalidade');
+    assert.ok(select, 'a modalidade é um seletor');
+    assert.strictEqual(select.tagName, 'SELECT', 'e não mais um campo de digitação');
+    const opcoes = () => Array.from(select.options).map((o) => o.value);
+    assert.ok(opcoes().includes('Pregão Eletrônico'), 'tem Pregão Eletrônico: ' + opcoes().join(' | '));
+    assert.ok(opcoes().includes('Dispensa de Licitação'), 'tem Dispensa de Licitação');
+    assert.strictEqual(select.value, 'Pregão Eletrônico', 'já começa com a modalidade padrão');
+
+    // 3. e dá para acrescentar uma modalidade nova pela própria tela
+    select.value = '__nova';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await Navegador.esperar(() => !$('#modal').classList.contains('oculto'), 'pede o nome da nova modalidade');
+    $('#campo-nova-modalidade').value = 'Cotação Direta 2026';
+    const adicionar = Array.from(doc.querySelectorAll('#modal-rodape button')).find(
+      (b) => b.textContent === 'Adicionar'
+    );
+    assert.ok(adicionar, 'a janela tem o botão Adicionar');
+    adicionar.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(() => select.value === 'Cotação Direta 2026', 'a modalidade nova ficou escolhida');
+    assert.ok(opcoes().includes('Cotação Direta 2026'), 'e entrou na lista para as próximas: ' + opcoes().join(' | '));
+    assert.ok(!opcoes().includes('__nova') === false, 'a opção de criar continua na lista');
+    assert.ok(
+      select.options[select.options.length - 1].value === '__nova',
+      'a opção de criar fica por último'
+    );
+
+    // 4. salva e confere o que foi para o documento (o rótulo de criar nunca é dado)
+    $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Navegador.esperar(
+      () => window.location.hash.startsWith('#/documento/') && window.location.hash !== '#/documento/novo/proposta',
+      'documento salvo'
+    );
+    const id = window.location.hash.split('/')[2];
+    const salvo = await requisitar(servidor, '/api/documentos/' + id);
+    assert.strictEqual(salvo.json.documento.orgao.modalidade, 'Cotação Direta 2026', 'a modalidade escolhida foi gravada');
+    assert.strictEqual(salvo.json.documento.numero.grupo, '', 'sem série/grupo');
+    assert.strictEqual(salvo.json.documento.orgao.processo, '', 'sem número de processo');
+
+    // 5. abrindo outro documento, a lista continua com a modalidade criada
+    window.location.hash = '#/documento/novo/orcamento';
+    await Navegador.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor de novo');
+    await Navegador.esperar(
+      () => Array.from($('#campo-orgao-modalidade').options).some((o) => o.value === 'Cotação Direta 2026'),
+      'a modalidade criada continua na lista (lembrada no navegador)'
+    );
+    window.close();
+  } finally {
+    servidor.close();
+  }
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);
@@ -1008,11 +1078,11 @@ teste('Interface: abre no navegador, entra, cria proposta com item e salva', asy
     await Navegador.esperar(() => $('#resumo-total').textContent.includes('8.940,00'), 'total calculado em tela');
     assert.strictEqual($('#resumo-qtd-itens').textContent, '1');
 
-    // 5. dados do órgão
+    // 5. dados do órgão (a modalidade agora é escolhida numa lista)
     $('#campo-orgao-nome').value = 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA';
     $('#campo-orgao-nome').dispatchEvent(new window.Event('input', { bubbles: true }));
-    $('#campo-orgao-processo').value = '44/2026';
-    $('#campo-orgao-processo').dispatchEvent(new window.Event('input', { bubbles: true }));
+    $('#campo-orgao-modalidade').value = 'Dispensa de Licitação';
+    $('#campo-orgao-modalidade').dispatchEvent(new window.Event('change', { bubbles: true }));
 
     // 6. salva
     $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
