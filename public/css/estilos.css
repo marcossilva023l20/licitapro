@@ -381,6 +381,12 @@ input[type="search"] { padding-left: 12px; }
 }
 .nuvem-bloco[open] summary { margin-bottom: 8px; }
 .nuvem-bloco .form-banco { margin-top: 6px; }
+#nuvem-link-caixa {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  font-family: var(--fonte-mono, monospace);
+}
 .ajuda-banco code {
   font-size: 0.78rem;
   padding: 1px 5px;

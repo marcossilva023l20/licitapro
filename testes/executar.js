@@ -1304,6 +1304,43 @@ teste('Nuvem: liga no Supabase, cifra tudo e abre os documentos em outro computa
   }
 });
 
+teste('Nuvem: o link leva endereço e chave para o outro computador', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  try {
+    // no computador de origem, o link sai com o endereço e a chave pública
+    const origem = await ModoLocal.abrirSemServidor({
+      externo: [falso.url],
+      armazenamento: {
+        'licitapro.nuvem.v1': JSON.stringify({ url: falso.url, chave: CHAVE, codigo: 'codigo-secreto-123' }),
+      },
+    });
+    await ModoLocal.esperar(
+      () => origem.window.ModoEstatico && origem.window.ModoEstatico.ativo(),
+      'modo local na origem'
+    );
+    const link = origem.window.Nuvem.linkParaOutroComputador();
+    assert.ok(/[?]nuvem=/.test(link), 'o link leva os dados da nuvem: ' + link.slice(0, 70));
+    assert.strictEqual(/codigo-secreto-123/.test(link), false, 'o link não leva o código de acesso');
+    origem.window.close();
+
+    // no outro computador o formulário já chega preenchido (falta o código)
+    const outro = await ModoLocal.abrirSemServidor({ externo: [falso.url], base: link });
+    const w = outro.window;
+    const $ = (sel) => w.document.querySelector(sel);
+    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local no outro computador');
+    await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
+    await ModoLocal.esperar(() => $('#nuvem-url').value === falso.url, 'endereço preenchido pelo link');
+    assert.strictEqual($('#nuvem-chave').value, CHAVE, 'chave preenchida pelo link');
+    assert.strictEqual($('#nuvem-codigo').value, '', 'o código de acesso continua sendo digitado aqui');
+    assert.strictEqual($('#nuvem-bloco').open, true, 'o bloco da nuvem já abre aberto');
+    w.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
 teste('Nuvem: explica que falta rodar o nuvem.sql quando a tabela não existe', async () => {
   const { criarServidorDeMentira } = require('./nuvem-falsa');
   const falso = await criarServidorDeMentira({ chave: 'chave-publica-de-teste', semTabela: true });

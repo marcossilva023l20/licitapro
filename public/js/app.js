@@ -784,10 +784,17 @@
     };
 
     const config = window.Nuvem.lerConfig();
+    const doLink = window.Nuvem.configDoEndereco();
     if (config) {
       $('#nuvem-url').value = config.url || '';
       $('#nuvem-chave').value = config.chave || '';
       $('#nuvem-codigo').value = config.codigo || '';
+    }
+    // veio por um link de outro computador: já entra com endereço e chave
+    if (doLink) {
+      $('#nuvem-url').value = doLink.url;
+      $('#nuvem-chave').value = doLink.chave;
+      if (!$('#nuvem-bloco').open) $('#nuvem-bloco').open = true;
     }
 
     form.addEventListener('submit', async (evento) => {
@@ -810,6 +817,9 @@
           'ok'
         );
         UI.toast('Nuvem ligada: seus dados agora abrem em qualquer computador.', 'sucesso');
+        if (doLink && window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+        }
         await atualizarSituacaoDados();
       } catch (erro) {
         escrever(erro.message, 'erro');
@@ -833,6 +843,24 @@
         atualizarSituacaoDados();
       } catch (erro) {
         escrever(erro.message, 'erro');
+      }
+    });
+
+    $('#nuvem-link').addEventListener('click', async () => {
+      const link = window.Nuvem.linkParaOutroComputador();
+      if (!link) {
+        escrever('A nuvem ainda não está ligada neste computador.', 'erro');
+        return;
+      }
+      const caixa = $('#nuvem-link-caixa');
+      caixa.value = link;
+      caixa.classList.remove('oculto');
+      caixa.select();
+      try {
+        await navigator.clipboard.writeText(link);
+        escrever('Link copiado. Abra no outro computador e digite o seu código de acesso.', 'ok');
+      } catch (_) {
+        escrever('Copie o link que apareceu aqui embaixo e abra no outro computador.', 'ok');
       }
     });
 

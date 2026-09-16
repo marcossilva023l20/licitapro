@@ -244,7 +244,9 @@ guardar tudo no seu projeto Supabase — cifrado:
 2. Abra o site publicado, no painel clique em **“Guardar na nuvem (abrir de outro computador)”** e
    informe: **Project URL**, a **chave pública** (*anon*/*publishable* — pode circular, ela só abre
    o cofre) e um **código de acesso** inventado por você (mínimo 6 caracteres).
-3. Em qualquer outro computador, abra o mesmo endereço e digite os mesmos três valores.
+3. Em qualquer outro computador, abra o mesmo endereço e digite os mesmos três valores — ou use o
+   botão **“link para o outro computador”**: ele copia um endereço que já leva o Project URL e a
+   chave pública, e aí só falta digitar o código de acesso (o código nunca vai no link).
 
 Como funciona: antes de sair do navegador, documentos, empresa, padrões e numeração são cifrados
 com o seu código (**AES-256-GCM**, chave derivada por PBKDF2 com 150 mil iterações) e só então

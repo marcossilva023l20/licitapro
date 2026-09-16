@@ -155,7 +155,10 @@
 
   function explicarErro(situacao, texto) {
     if (situacao === 401 || situacao === 403) {
-      return 'O Supabase recusou a chave pública (código ' + situacao + '). Confira a chave anon/publishable do projeto.';
+      return (
+        'O Supabase recusou o pedido (código ' + situacao + '): confira a chave pública ' +
+        '(anon/publishable) e se as políticas do supabase/nuvem.sql foram rodadas no projeto.'
+      );
     }
     if (situacao === 404 || /does not exist|relation .* does not exist/i.test(texto)) {
       return 'A tabela do cofre ainda não existe no projeto: rode o supabase/nuvem.sql no SQL Editor.';
@@ -412,6 +415,35 @@
     }
   }
 
+  /**
+   * Link para abrir o sistema em outro computador já com o endereço e a chave
+   * pública preenchidos (o código de acesso não vai no link: ele é digitado).
+   */
+  function linkParaOutroComputador() {
+    const config = lerConfig();
+    if (!config) return '';
+    const dados = encodeURIComponent(JSON.stringify({ url: config.url, chave: config.chave }));
+    const endereco = window.location.origin + window.location.pathname.replace(/index\.html$/, '');
+    return endereco + '?nuvem=' + dados + '#/painel';
+  }
+
+  /**
+   * Endereço do projeto e chave que vierem no link (?nuvem=...): serve para
+   * levar a configuração de um computador para o outro sem digitar nada.
+   */
+  function configDoEndereco() {
+    try {
+      const parametros = new URLSearchParams(window.location.search || '');
+      const bruto = parametros.get('nuvem');
+      if (!bruto) return null;
+      const dados = JSON.parse(bruto);
+      if (!dados || !dados.url || !dados.chave) return null;
+      return { url: String(dados.url), chave: String(dados.chave) };
+    } catch (_) {
+      return null;
+    }
+  }
+
   window.Nuvem = {
     configurada,
     lerConfig,
@@ -423,6 +455,8 @@
     agendarEnvio,
     baixarImagem,
     juntar,
+    linkParaOutroComputador,
+    configDoEndereco,
     _interno: estado,
   };
 })();
