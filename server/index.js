@@ -6,12 +6,14 @@
  */
 
 const path = require('path');
+const http = require('http');
 const express = require('express');
 const { PORT, HOST, garantirPastas, DATA_DIR } = require('./config');
 
 garantirPastas();
 
 const store = require('./store');
+const Supabase = require('./supabase');
 const rotasPerfil = require('./routes/perfil');
 const rotasDocumentos = require('./routes/documentos');
 const rotasArquivos = require('./routes/arquivos');
@@ -43,6 +45,8 @@ app.get('/api/health', (req, res) => {
   const banco = store.carregar();
   res.json({
     ok: true,
+    armazenamento: store.modo(), // 'supabase' ou 'arquivo'
+    ultimoErroDeGravacao: store.ultimoErroRemoto(),
     documentos: banco.documentos.length,
     dadosEm: DATA_DIR,
     versao: require('../package.json').version,
@@ -99,21 +103,70 @@ app.use((erro, req, res, next) => {
   res.status(500).json({ erro: 'Erro interno: ' + (erro.message || 'desconhecido') });
 });
 
+/**
+ * Prepara o armazenamento antes de abrir o servidor: com o Supabase
+ * configurado, os dados são lidos do banco (e o banco vazio recebe o conteúdo
+ * de data/db.json, se houver). Sem Supabase, usa o arquivo local.
+ */
+async function prepararArmazenamento() {
+  if (!Supabase.configurado()) {
+    store.carregar();
+    return 'arquivo';
+  }
+  store.usarRemoto(Supabase.criarCliente());
+  await store.carregarRemoto();
+  store.perfil.obter(); // garante o perfil no banco no primeiro uso
+  return 'supabase';
+}
+
 /** Sobe o servidor (o sistema não tem login: abre direto no painel). */
 function iniciar(porta, host) {
-  store.perfil.obter(); // cria o perfil no primeiro uso
   const silencioso = Boolean(process.env.LICITAPRO_SILENCIOSO);
   // atenção: porta 0 é válida (porta aleatória livre), por isso não se usa "||"
   const portaFinal = porta === undefined || porta === null || porta === '' ? PORT : Number(porta);
-  const servidor = app.listen(portaFinal, host || HOST, () => {
-    if (silencioso) return;
-    console.log('');
-    console.log('  DEJ Solutions & Global — gerador de propostas e orçamentos');
-    console.log('  ---------------------------------------------------------');
-    console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
-    console.log(`  Dados em:  ${DATA_DIR}`);
-    console.log('');
-  });
+  const servidor = http.createServer(app);
+
+  function encerrar() {
+    store.salvarAgora();
+    // espera os envios pendentes para o banco antes de sair
+    store.encerrar()
+      .catch((erro) => console.error('[supabase] falha ao encerrar:', erro.message))
+      .finally(() => {
+        servidor.close(() => process.exit(0));
+        setTimeout(() => process.exit(0), 2000);
+      });
+  }
+
+  process.on('SIGINT', encerrar);
+  process.on('SIGTERM', encerrar);
+
+  prepararArmazenamento()
+    .then(() => {
+      servidor.listen(portaFinal, host || HOST, () => {
+        if (silencioso) return;
+        console.log('');
+        console.log('  DEJ Solutions & Global — gerador de propostas e orçamentos');
+        console.log('  ---------------------------------------------------------');
+        console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
+        if (store.modo() === 'supabase') {
+          const alvo = Supabase.lerConfiguracao().url;
+          console.log(`  Dados em:  Supabase (${alvo})`);
+          console.log(`  Cópia local: ${DATA_DIR}`);
+        } else {
+          console.log(`  Dados em:  ${DATA_DIR}`);
+        }
+        console.log('');
+      });
+    })
+    .catch((erro) => {
+      console.error('');
+      console.error('  Não foi possível usar o banco do Supabase: ' + erro.message);
+      console.error('  Confira SUPABASE_URL e SUPABASE_SERVICE_KEY e se o arquivo');
+      console.error('  supabase/esquema.sql já foi executado no projeto.');
+      console.error('  Para seguir sem o banco: LICITAPRO_ARMAZENAMENTO=arquivo npm start');
+      console.error('');
+      process.exit(1);
+    });
 
   servidor.on('error', (erro) => {
     if (erro.code === 'EADDRINUSE') {
@@ -125,14 +178,6 @@ function iniciar(porta, host) {
     throw erro;
   });
 
-  function encerrar() {
-    store.salvarAgora();
-    servidor.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000);
-  }
-
-  process.on('SIGINT', encerrar);
-  process.on('SIGTERM', encerrar);
   return servidor;
 }
 
@@ -143,3 +188,4 @@ if (require.main === module) iniciar();
 
 module.exports = app;
 module.exports.iniciar = iniciar;
+module.exports.prepararArmazenamento = prepararArmazenamento;

@@ -1,7 +1,7 @@
 # dependências
 node_modules/
 
-# dados gerados em tempo de execução (banco, sessões, uploads e cache de imagens)
+# dados gerados em tempo de execução (cópia local do banco, uploads e cache de imagens)
 data/
 
 # variáveis de ambiente

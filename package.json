@@ -10,7 +10,8 @@
     "testes": "node testes/executar.js",
     "modelo": "node scripts/gerar-modelo.js",
     "paginas": "node scripts/paginas.js",
-    "fontes": "node scripts/fontes-padrao.js"
+    "fontes": "node scripts/fontes-padrao.js",
+    "supabase": "node scripts/supabase.js"
   },
   "engines": {
     "node": ">=18"

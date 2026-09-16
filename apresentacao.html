@@ -123,6 +123,13 @@
           lote. O total sai em números e por extenso.</p>
         </article>
         <article class="cartao">
+          <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3.2" /><path d="M4 6v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2V6" /><path d="M4 12v6c0 1.8 3.6 3.2 8 3.2s8-1.4 8-3.2v-6" /></svg></span>
+          <h3>Banco no Supabase</h3>
+          <p>Com servidor, a empresa e as propostas podem ficar num banco Postgres do Supabase: os
+          dados sobrevivem a atualização, reinício e troca de servidor. Sem banco, tudo continua
+          funcionando com o arquivo local.</p>
+        </article>
+        <article class="cartao">
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7.5V12l3.2 2" /></svg></span>
           <h3>Histórico e numeração</h3>
           <p>Numeração automática (001/2026), status de rascunho a ganha/perdida, busca, filtros,
@@ -211,8 +218,9 @@
         <p class="subtitulo claro">
           São dois caminhos. <strong>Modo local (GitHub Pages)</strong>: o endereço já abre o sistema e roda
           tudo no navegador — ótimo para uso individual, sem instalar nada.
-          <strong>Com servidor</strong>: sem login, os documentos ficam guardados no servidor e podem ser
-          abertos de qualquer computador — proteja o endereço no proxy ou na plataforma de hospedagem.
+          <strong>Com servidor</strong>: sem login, os documentos ficam guardados no servidor (no
+          <strong>banco Supabase</strong> ou num arquivo) e podem ser abertos de qualquer computador —
+          proteja o endereço no proxy ou na plataforma de hospedagem.
           O repositório já vem com
           <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>
           para isso.
@@ -270,10 +278,11 @@ cd licitapro
 npm install
 npm start          # abre em http://localhost:3000
 
-npm run testes     # 44 testes automatizados
+npm run testes     # 50 testes automatizados
 npm run paginas    # regenera o index.html do GitHub Pages
 npm run fontes     # regenera as métricas da fonte Times
-npm run modelo     # gera a planilha-modelo (.xlsx)</code></pre>
+npm run modelo     # gera a planilha-modelo (.xlsx)
+npm run supabase   # confere o banco no Supabase (opcional)</code></pre>
       <p class="nota">Na primeira execução o sistema cria apenas o perfil (dados da empresa), na pasta
       <code>data/</code> — não há usuário nem senha para configurar.</p>
     </div>

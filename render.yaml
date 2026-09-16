@@ -30,6 +30,14 @@ services:
         value: /var/data
       # o sistema não tem login: se o endereço ficar público, proteja o acesso
       # na própria plataforma (ou use um proxy com senha na frente do serviço)
+
+      # banco no Supabase (opcional): preencha os dois no painel do Render e os
+      # dados passam a ficar no Postgres, em vez do disco da instância.
+      # Antes, rode supabase/esquema.sql no SQL Editor do projeto.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
     disk:
       name: licitapro-dados
       mountPath: /var/data

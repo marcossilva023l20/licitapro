@@ -1558,6 +1558,195 @@ teste('Modo local: com servidor disponível ele não interfere', async () => {
   }
 });
 
+// =============================================== 7. banco de dados (Supabase)
+
+/** Documento de arquivo antigo, com id (como os que o sistema grava). */
+function documentoComId(tipo, identificador) {
+  return Object.assign(documentoExemplo(tipo), {
+    id: identificador || '00000000-0000-4000-8000-000000000001',
+    atualizadoEm: new Date().toISOString(),
+  });
+}
+
+/** Prepara o armazenamento contra um Supabase de mentira e limpa tudo depois. */
+async function comBancoDeMentira(fn, estadoLocal, opcoes) {
+  const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+  const falso = await criarServidorDeMentira(opcoes);
+  const arquivo = path.join(process.env.LICITAPRO_DATA_DIR, 'db.json');
+  const backup = fs.existsSync(arquivo) ? fs.readFileSync(arquivo, 'utf8') : null;
+  if (estadoLocal) fs.writeFileSync(arquivo, JSON.stringify(estadoLocal, null, 2));
+  falso.cliente = Supabase.criarCliente({ url: falso.url, chave: CHAVE_ESPERADA });
+  store.usarRemoto(falso.cliente);
+  try {
+    await fn(falso, store, Supabase);
+  } finally {
+    store.usarRemoto(null);
+    store.esquecer();
+    if (backup !== null) fs.writeFileSync(arquivo, backup);
+    else fs.rmSync(arquivo, { force: true });
+    await falso.fechar();
+  }
+}
+
+teste('Supabase: sem credenciais o sistema usa o arquivo local', () => {
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  assert.strictEqual(Supabase.configurado({}), false, 'sem variáveis não usa o banco');
+  assert.strictEqual(Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co' }), false, 'a URL sozinha não basta');
+  assert.strictEqual(Supabase.configurado({ SUPABASE_SERVICE_KEY: 'chave' }), false, 'a chave sozinha não basta');
+  assert.strictEqual(
+    Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'chave' }),
+    true,
+    'com URL + chave de serviço o sistema usa o banco'
+  );
+  assert.strictEqual(
+    Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'chave', LICITAPRO_ARMAZENAMENTO: 'arquivo' }),
+    false,
+    'LICITAPRO_ARMAZENAMENTO=arquivo volta a usar o arquivo local'
+  );
+  // aceita também os nomes usados pelo painel do Supabase
+  assert.strictEqual(
+    Supabase.configurado({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'chave' }),
+    true,
+    'aceita SUPABASE_SERVICE_ROLE_KEY'
+  );
+});
+
+teste('Supabase: o esquema cria as tabelas usadas, com RLS, e sem chave no navegador', () => {
+  const Supabase = require(path.join(RAIZ, 'server', 'supabase'));
+  const sql = fs.readFileSync(path.join(RAIZ, 'supabase', 'esquema.sql'), 'utf8');
+
+  Object.values(Supabase.TABELAS).forEach((tabela) => {
+    assert.ok(sql.includes('public.' + tabela), 'tabela ' + tabela + ' no esquema');
+  });
+  assert.strictEqual(
+    (sql.match(/enable row level security/gi) || []).length,
+    3,
+    'RLS ligado nas três tabelas'
+  );
+  assert.ok(!/create\s+policy/i.test(sql), 'sem política: a chave pública não lê nem grava');
+  assert.ok(sql.includes('jsonb'), 'versão do sistema (empresa, itens e dados do documento) em jsonb');
+
+  // a chave de serviço é só do servidor: nunca aparece no que vai ao navegador
+  ['public/index.html', 'public/js/app.js', 'public/js/modo-estatico.js', 'public/js/api.js'].forEach((relativo) => {
+    const conteudo = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
+    assert.strictEqual(/SUPABASE|service_role|supabase\.co/i.test(conteudo), false, 'sem credencial de banco em ' + relativo);
+  });
+});
+
+teste('Supabase: banco vazio recebe o conteúdo local', async () => {
+  const local = {
+    perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
+    documentos: [documentoComId('orcamento')],
+    sequencia: { orcamento: { '2026': 4 } },
+  };
+  await comBancoDeMentira(async (falso, store) => {
+    await store.carregarRemoto();
+    await store.encerrar();
+
+    assert.strictEqual(falso.contagem('licitapro_perfil'), 1, 'perfil enviado');
+    assert.strictEqual(
+      falso.linhas('licitapro_perfil')[0].dados.empresa.razaoSocial,
+      'EMPRESA DO ARQUIVO',
+      'dados da empresa enviados'
+    );
+    assert.strictEqual(falso.contagem('licitapro_documentos'), 1, 'documento enviado');
+    assert.strictEqual(falso.contagem('licitapro_sequencia'), 1, 'numeração enviada');
+    assert.strictEqual(falso.linhas('licitapro_sequencia')[0].por_ano['2026'], 4, 'ano da numeração');
+  }, local);
+});
+
+teste('Supabase: empresa e documentos voltam do banco depois de um "redeploy"', async () => {
+  await comBancoDeMentira(async (falso, store) => {
+    await store.carregarRemoto(); // banco vazio → semeia com o conteúdo local
+
+    const empresa = {
+      razaoSocial: 'DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA',
+      nomeFantasia: 'DEJ Solutions & Global',
+      cnpj: '12.345.678/0001-90',
+      telefone: '(41) 99999-4040',
+      email: 'comercial@dejsolutions.com.br',
+    };
+    store.perfil.atualizar({ empresa });
+    const criado = store.documento.criar({
+      tipo: 'proposta',
+      numero: { sequencial: 5, ano: 2026, grupo: '' },
+      itens: [{ descricao: 'RÁDIO TRANSCEPTOR', quantidade: 6, precoVenda: 1490 }],
+      proponente: empresa,
+    });
+    store.documento.reservarNumero('proposta', 2026, '', 5);
+    await store.encerrar();
+
+    assert.strictEqual(falso.linhas('licitapro_perfil')[0].dados.empresa.cnpj, '12.345.678/0001-90', 'CNPJ no banco');
+    const gravado = falso.linhas('licitapro_documentos').find((l) => l.id === criado.id);
+    assert.ok(gravado, 'documento gravado no banco');
+    assert.strictEqual(gravado.dados.itens[0].descricao, 'RÁDIO TRANSCEPTOR', 'itens dentro do documento');
+
+    // simula o redeploy: memória zerada e arquivo local apagado
+    const arquivo = path.join(process.env.LICITAPRO_DATA_DIR, 'db.json');
+    store.usarRemoto(null);
+    store.esquecer();
+    fs.rmSync(arquivo, { force: true });
+    store.usarRemoto(falso.cliente);
+    await store.carregarRemoto();
+
+    const recarregado = store.carregar();
+    assert.strictEqual(recarregado.perfil.empresa.razaoSocial, 'DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA', 'empresa voltou do banco');
+    assert.strictEqual(recarregado.perfil.empresa.cnpj, '12.345.678/0001-90', 'CNPJ voltou do banco');
+    assert.strictEqual(recarregado.documentos.length, 2, 'os dois documentos voltaram do banco');
+    const devolvido = recarregado.documentos.find((d) => d.id === criado.id);
+    assert.ok(devolvido, 'o documento criado voltou com o mesmo id');
+    assert.strictEqual(devolvido.itens.length, 1, 'itens voltaram');
+    assert.strictEqual(recarregado.sequencia.proposta['2026'], 5, 'numeração voltou do banco');
+    assert.ok(fs.existsSync(arquivo), 'o arquivo local é recriado como cópia do banco');
+  }, {
+    perfil: { empresa: { razaoSocial: 'EMPRESA ANTIGA' }, padroes: {} },
+    documentos: [documentoComId('orcamento')],
+    sequencia: {},
+  });
+});
+
+teste('Supabase: excluir um documento apaga também no banco', async () => {
+  await comBancoDeMentira(async (falso, store) => {
+    store.esquecer();
+    await store.carregarRemoto();
+    const documento = store.documento.criar({ tipo: 'orcamento', numero: { sequencial: 1, ano: 2026, grupo: '' }, itens: [] });
+    await store.encerrar();
+    assert.strictEqual(falso.contagem('licitapro_documentos'), 2, 'os dois documentos no banco');
+
+    store.documento.remover(documento.id);
+    await store.encerrar();
+    assert.strictEqual(falso.contagem('licitapro_documentos'), 1, 'documento excluído saiu do banco');
+    assert.ok(!falso.linhas('licitapro_documentos').some((l) => l.id === documento.id), 'o id excluído não está lá');
+  }, {
+    perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
+    documentos: [documentoComId('orcamento')],
+    sequencia: {},
+  });
+});
+
+teste('Supabase: falha no banco é avisada e o arquivo local continua salvando', async () => {
+  await comBancoDeMentira(async (falso, store) => {
+    store.esquecer();
+    await store.carregarRemoto();
+    assert.strictEqual(store.ultimoErroRemoto(), null, 'sem erro antes do problema');
+
+    falso.falhar = true; // o banco "cai"
+    store.perfil.atualizar({ empresa: { razaoSocial: 'CONTINUA SALVANDO LOCAL' } });
+    const tudoCerto = await store.encerrar();
+
+    assert.strictEqual(tudoCerto, false, 'o encerramento informa que houve falha');
+    assert.ok(/500|banco fora do ar/.test(store.ultimoErroRemoto() || ''), 'o erro fica registrado para /api/health');
+    const arquivo = JSON.parse(fs.readFileSync(path.join(process.env.LICITAPRO_DATA_DIR, 'db.json'), 'utf8'));
+    assert.strictEqual(arquivo.perfil.empresa.razaoSocial, 'CONTINUA SALVANDO LOCAL', 'o dado não se perdeu');
+  }, {
+    perfil: { empresa: { razaoSocial: 'EMPRESA DO ARQUIVO' }, padroes: {} },
+    documentos: [],
+    sequencia: {},
+  });
+});
+
 // ------------------------------------------------------------------ início
 
 executar();

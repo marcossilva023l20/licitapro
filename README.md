@@ -159,6 +159,43 @@ Pode ser feito com o sistema em execução; para garantir a consistência, copie
 
 Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 
+### Banco de dados no Supabase (recomendado na hospedagem)
+
+No plano gratuito do Render o disco é apagado a cada reinício — e aí as propostas
+se perdem. Com o **Supabase**, os dados ficam num Postgres de verdade e sobrevivem a
+deploy, reinício e mudança de servidor.
+
+1. Crie o projeto em <https://supabase.com> (o plano gratuito já serve).
+2. No painel do projeto, abra **SQL Editor → New query**, cole o conteúdo de
+   [`supabase/esquema.sql`](supabase/esquema.sql) e clique em **Run**
+   (também dá para ver o SQL no terminal: `npm run supabase -- sql`).
+   Isso cria as tabelas `licitapro_perfil`, `licitapro_documentos` e
+   `licitapro_sequencia`, com RLS ligado — a chave pública não lê nada.
+3. Copie as credenciais do projeto:
+   - **Project Settings → Data API → Project URL** → `SUPABASE_URL`
+   - **Project Settings → API keys → service_role** → `SUPABASE_SERVICE_KEY`
+4. Informe as duas no serviço:
+   - **na sua máquina:** crie um arquivo `.env` na raiz (veja `.env.example`);
+   - **no Render/Railway/Docker:** cadastre as duas variáveis de ambiente.
+5. Suba o sistema e confira: `npm run supabase` (mostra a conexão, a empresa e a
+   quantidade de documentos no banco). O `/api/health` também responde
+   `"armazenamento": "supabase"`.
+
+O que acontece quando as variáveis estão definidas:
+
+- Ao subir, o sistema **lê tudo do banco** (perfil, documentos e numeração).
+- Se o banco estiver **vazio**, o conteúdo de `data/db.json` é enviado para lá
+  automaticamente — dá para migrar sem perder nada (ou forçar com
+  `npm run supabase -- enviar`).
+- Cada alteração é gravada no banco **e** numa cópia local em `data/db.json`.
+  Se o banco falhar, a alteração continua salva no arquivo e o erro aparece em
+  `/api/health` (`ultimoErroDeGravacao`).
+- Para voltar ao arquivo local: `LICITAPRO_ARMAZENAMENTO=arquivo`.
+
+> **A chave `service_role` dá acesso total ao banco: ela fica só no servidor.**
+> No GitHub Pages (modo local) o sistema continua guardando os documentos no
+> próprio navegador — o site publicado nunca recebe credencial do banco.
+
 ---
 
 ## 5. Configurações (variáveis de ambiente)
@@ -168,6 +205,9 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 | `PORT` | `3000` | porta do site |
 | `HOST` | `0.0.0.0` | interface de rede |
 | `LICITAPRO_DATA_DIR` | `./data` | pasta de dados |
+| `SUPABASE_URL` | — | endereço do projeto Supabase (liga o banco; veja a seção 4) |
+| `SUPABASE_SERVICE_KEY` | — | chave `service_role` do Supabase (só no servidor) |
+| `LICITAPRO_ARMAZENAMENTO` | automático | `arquivo` ignora o Supabase e usa só `data/db.json` |
 | `LICITAPRO_SILENCIOSO` | — | `1` não imprime o cabeçalho no terminal (usado nos testes) |
 
 ---
@@ -192,15 +232,17 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
    controle de acesso da própria plataforma).
 
 > **Sobre os dados:** no plano **gratuito** o disco é apagado a cada reinício, então as
-> propostas salvas se perdem — serve para testar/demonstrar. Para uso real, mantenha o bloco
-> `disk` do `render.yaml` (plano pago: instância ~US$ 7/mês + disco 1 GB ~US$ 0,25/mês);
-> os dados ficam em `/var/data` e o backup é o download dessa pasta.
+> propostas salvas se perdem — serve para testar/demonstrar. Para uso real há dois caminhos:
+> **Supabase** (grátis, veja a seção 4 — é o recomendado: os dados ficam num Postgres e
+> sobrevivem a qualquer reinício) ou o bloco `disk` do `render.yaml` (plano pago: instância
+> ~US$ 7/mês + disco 1 GB ~US$ 0,25/mês), com os dados em `/var/data`.
 
 ### Opção B — Railway
 
 1. <https://railway.app> → **New Project** → **Deploy from GitHub repo** → `licitapro`.
 2. O `railway.json` já define o comando de start e o healthcheck.
-3. Em **Variables**: `LICITAPRO_DATA_DIR=/var/data`.
+3. Em **Variables**: `LICITAPRO_DATA_DIR=/var/data` e, se for usar o Supabase,
+   `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`.
 4. Em **Volumes**, monte um volume em `/var/data` (sem volume os dados se perdem no deploy).
 5. Em **Settings → Networking → Generate Domain** para gerar a URL pública.
 
@@ -292,7 +334,9 @@ A página de apresentação do projeto fica em `apresentacao.html`
 - Uploads são validados como JPEG/PNG reais (arquivo corrompido é recusado, não derruba o PDF).
 - Download de imagens externas bloqueia endereços de rede interna (proteção contra SSRF) e
   limita tamanho/tipo de arquivo.
-- Não há senha para perder: o banco guarda só o perfil da empresa e os documentos.
+- Não há senha de usuário: o banco guarda só o perfil da empresa e os documentos.
+- No Supabase, a chave usada é a `service_role` e fica **apenas no servidor**; as tabelas
+  têm RLS ligado e nenhuma política, então a chave pública do projeto não lê nem grava nada.
 
 ---
 
@@ -313,6 +357,13 @@ Cobre também a **identidade visual**: paleta da marca no PDF, dourado nos títu
 respeito à cor escolhida pelo usuário e a marca d'água (opção ligada/desligada e a
 transparência dentro do arquivo).
 
+Cobre o **banco no Supabase** com um servidor de mentira que imita a API REST: o
+esquema do repositório (tabelas + RLS), o envio do conteúdo local para um banco vazio,
+a volta dos dados depois de um "redeploy" (memória zerada e arquivo apagado), a exclusão
+de documento refletida no banco e a falha de conexão — que avisa e mantém o dado salvo
+no arquivo local. Um teste garante também que nenhuma credencial de banco aparece no
+que vai para o navegador.
+
 Também cobre o **modo local** (GitHub Pages): a página da raiz publicada abre o sistema sem
 servidor, importa uma planilha `.xlsx` de verdade, gera um PDF válido (`%PDF-`) no navegador,
 salva/restaura backup, guarda as fotos dos produtos e — quando existe servidor — o modo local
@@ -326,7 +377,8 @@ fica desligado.
 server/
   index.js              → servidor Express, middlewares e rotas
   config.js             → caminhos e portas
-  store.js              → banco de dados em JSON (gravação atômica) — perfil único e documentos
+  store.js              → dados do sistema (perfil único) — Supabase ou arquivo JSON
+  supabase.js           → cliente da API REST do Supabase (sem dependência nova)
   documento-schema.js   → validação/normalização das propostas e orçamentos
   pdf.js                → montagem do PDF (proposta, orçamento e catálogo)
   importar.js           → leitura das planilhas enviadas

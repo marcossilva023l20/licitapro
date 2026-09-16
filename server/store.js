@@ -1,10 +1,8 @@
 'use strict';
 
 /**
- * Banco de dados simples em arquivo JSON, com gravação atômica.
- *
- * O sistema é de uso único (não há login): existe um único perfil, que guarda
- * os dados da empresa e os padrões usados nos documentos.
+ * Guarda os dados do sistema. Não há login: existe um único perfil, com os
+ * dados da empresa e os padrões usados nos documentos.
  *
  * Estrutura:
  * {
@@ -12,6 +10,15 @@
  *   documentos: [ { id, tipo, numero, ... } ],
  *   sequencia:  { "<tipo>[:<grupo>]": { "<ano>": 12 } }
  * }
+ *
+ * Onde os dados ficam:
+ *  - **Supabase** (quando SUPABASE_URL e SUPABASE_SERVICE_KEY estão definidas):
+ *    é a fonte de verdade. Tudo é lido do banco ao subir o servidor e cada
+ *    alteração é enviada para lá (as chamadas das rotas continuam síncronas —
+ *    o estado vive em memória e o banco é atualizado em seguida).
+ *  - **data/db.json** (padrão, e também quando não há Supabase): arquivo local
+ *    com gravação atômica. Mesmo com o Supabase ligado, o arquivo continua
+ *    sendo gravado como cópia local — útil para inspecionar e para backup.
  */
 
 const fs = require('fs');
@@ -21,6 +28,13 @@ const { DB_FILE, garantirPastas } = require('./config');
 let db = null;
 let timerGravar = null;
 let gravando = false;
+
+// ------------------------------------------------------------ Supabase
+let remoto = null;                 // cliente do Supabase (quando configurado)
+let remotoModo = 'arquivo';        // 'arquivo' | 'supabase'
+let filaRemota = Promise.resolve(); // serializa os envios ao banco
+let removidosRemotos = new Set();   // documentos excluídos (para apagar no banco)
+let erroRemoto = null;              // última falha de gravação (aparece no /api/health)
 
 const VAZIO = () => ({ perfil: null, documentos: [], sequencia: {} });
 
@@ -59,7 +73,9 @@ function carregar() {
   garantirPastas();
   if (!fs.existsSync(DB_FILE)) {
     db = VAZIO();
-    gravarAgora();
+    // arquivo novo: grava só a cópia local (com Supabase ligado o conteúdo
+    // verdadeiro vem do banco, em carregarRemoto())
+    try { gravarArquivo(); } catch (_) { /* segue sem arquivo */ }
     return db;
   }
   try {
@@ -76,6 +92,7 @@ function carregar() {
     // o dono do documento não existe mais: o banco é de um perfil só
     const tinhaDono = db.documentos.some((d) => d.usuarioId !== undefined);
     db.documentos.forEach((d) => { delete d.usuarioId; });
+    garantirIds(db.documentos);
 
     if (eraAntigo || tinhaDono) salvarAgora();
   } catch (erro) {
@@ -88,11 +105,21 @@ function carregar() {
   return db;
 }
 
-function gravarAgora() {
+function gravarArquivo() {
   garantirPastas();
   const temporario = `${DB_FILE}.tmp-${process.pid}`;
   fs.writeFileSync(temporario, JSON.stringify(db, null, 2), 'utf8');
   fs.renameSync(temporario, DB_FILE);
+}
+
+/** Grava a cópia local e, se houver banco configurado, envia para ele. */
+function gravarAgora() {
+  try {
+    gravarArquivo();
+  } catch (erro) {
+    console.error('[store] falha ao gravar o arquivo local:', erro.message);
+  }
+  agendarEnvioRemoto();
 }
 
 /** Marca o banco como alterado (gravação em disco agrupada, ~120ms). */
@@ -116,6 +143,121 @@ function salvarAgora() {
 
 function id() {
   return require('crypto').randomUUID();
+}
+
+/**
+ * Documento sem id (arquivo antigo ou editado à mão) ganha um: a chave primária
+ * do banco é um uuid e não pode ficar vazia.
+ */
+function garantirIds(documentos) {
+  (documentos || []).forEach((documento) => {
+    if (!documento.id) documento.id = id();
+  });
+  return documentos;
+}
+
+// ----------------------------------------------------- Supabase (remoto)
+
+/** Liga o banco do Supabase neste armazenamento (usado no start e nos testes). */
+function usarRemoto(cliente) {
+  remoto = cliente || null;
+  remotoModo = remoto ? 'supabase' : 'arquivo';
+  erroRemoto = null;
+  return remoto;
+}
+
+function modo() {
+  return remotoModo;
+}
+
+function ultimoErroRemoto() {
+  return erroRemoto ? erroRemoto.message : null;
+}
+
+/** Envia o estado atual para o banco (uma gravação por vez). */
+function agendarEnvioRemoto() {
+  if (!remoto) return filaRemota;
+  const enviar = () => enviarRemoto();
+  filaRemota = filaRemota.then(enviar, enviar);
+  return filaRemota;
+}
+
+async function enviarRemoto() {
+  if (!remoto) return;
+  const Supabase = require('./supabase');
+  const remover = new Set(removidosRemotos);
+  try {
+    await Supabase.gravarEstado(remoto, db || VAZIO(), remover);
+    remover.forEach((documentoId) => removidosRemotos.delete(documentoId));
+    erroRemoto = null;
+  } catch (erro) {
+    erroRemoto = erro;
+    console.error('[supabase] falha ao gravar os dados:', erro.message);
+    console.error('[supabase] os dados continuam salvos em ' + DB_FILE + ' e serão reenviados na próxima alteração.');
+  }
+}
+
+/**
+ * Carrega o estado do banco. Se o banco estiver vazio, aproveita o que já
+ * existe em data/db.json (primeiro uso depois de configurar o Supabase) e
+ * envia esse conteúdo para lá.
+ */
+async function carregarRemoto() {
+  if (!remoto) return false;
+  const Supabase = require('./supabase');
+  const estado = await Supabase.lerEstado(remoto);
+
+  if (estado.vazio) {
+    const local = lerArquivoLocal();
+    db = local || VAZIO();
+    await Supabase.gravarEstado(remoto, db, new Set());
+    if (local) {
+      console.log('[supabase] banco vazio: enviei o conteúdo de ' + DB_FILE + ' para lá.');
+    }
+  } else {
+    db = Object.assign(VAZIO(), {
+      perfil: estado.perfil || null,
+      documentos: estado.documentos,
+      sequencia: estado.sequencia || {},
+    });
+    db.documentos.forEach((d) => { delete d.usuarioId; });
+    garantirIds(db.documentos);
+    gravarArquivo(); // cópia local do que veio do banco
+  }
+  remotoModo = 'supabase';
+  return true;
+}
+
+/** Lê o arquivo local (se existir), sem mexer no estado em memória. */
+function lerArquivoLocal() {
+  try {
+    if (!fs.existsSync(DB_FILE)) return null;
+    const dados = JSON.parse(fs.readFileSync(DB_FILE, 'utf8') || '{}');
+    const base = Object.assign(VAZIO(), migrar(dados));
+    base.documentos = Array.isArray(base.documentos) ? base.documentos : [];
+    base.sequencia = base.sequencia && typeof base.sequencia === 'object' ? base.sequencia : {};
+    base.documentos.forEach((d) => { delete d.usuarioId; });
+    garantirIds(base.documentos);
+    if (!base.perfil && base.documentos.length === 0) return null;
+    return base;
+  } catch (erro) {
+    console.error('[store] não consegui ler ' + DB_FILE + ':', erro.message);
+    return null;
+  }
+}
+
+/** Espera os envios pendentes (usado ao encerrar o servidor e nos testes). */
+async function encerrar() {
+  if (!remoto) return true;
+  await agendarEnvioRemoto();
+  return !erroRemoto;
+}
+
+/** Esquece o estado em memória (próxima leitura vem do banco/arquivo). */
+function esquecer() {
+  db = null;
+  removidosRemotos = new Set();
+  erroRemoto = null;
 }
 
 // ------------------------------------------------------------------- perfil
@@ -224,6 +366,7 @@ const documento = {
     const antes = db.documentos.length;
     db.documentos = db.documentos.filter((d) => d.id !== did);
     if (db.documentos.length !== antes) {
+      if (remoto) removidosRemotos.add(did); // apaga também no banco
       salvarAgora();
       return true;
     }
@@ -249,4 +392,18 @@ const documento = {
   },
 };
 
-module.exports = { carregar, salvar, salvarAgora, perfil, documento, empresaPadrao, padroesPadrao };
+module.exports = {
+  carregar,
+  salvar,
+  salvarAgora,
+  perfil,
+  documento,
+  empresaPadrao,
+  padroesPadrao,
+  usarRemoto,
+  modo,
+  ultimoErroRemoto,
+  carregarRemoto,
+  encerrar,
+  esquecer,
+};
