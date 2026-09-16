@@ -1860,6 +1860,14 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
   assert.ok(!$('#local-exportar').classList.contains('oculto'), 'backup disponível no menu');
   assert.ok(!$('#local-importar').classList.contains('oculto'), 'restauração disponível no menu');
   assert.ok(!$('#local-drive').classList.contains('oculto'), 'explicação da cópia no Drive no menu');
+  // o botão do Drive não promete integração: explica o caminho que funciona (arquivo → Drive)
+  $('#local-drive').click();
+  assert.ok(!$('#modal').classList.contains('oculto'), 'a explicação da cópia no Drive abre');
+  const explicacaoDrive = $('#modal-corpo').textContent;
+  assert.match(explicacaoDrive, /Baixar backup/, 'a explicação aponta o backup em arquivo');
+  assert.match(explicacaoDrive, /Supabase/, 'a explicação diz o que abre em qualquer computador');
+  window.UI.fecharModal();
+  assert.ok($('#modal').classList.contains('oculto'), 'a explicação fecha');
   // sem aviso de boas-vindas: a primeira abertura não mostra toast nenhum
   await ModoLocal.esperar(() => $('#view-painel') && !$('#view-painel').classList.contains('oculto'), 'painel', 8000);
   await new Promise((r) => setTimeout(r, 900)); // o aviso antigo aparecia depois de 600 ms
