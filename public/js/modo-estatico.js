@@ -207,7 +207,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '5';
+  const VERSAO_ARQUIVOS = '6';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -710,12 +710,10 @@
     if (estado.ativo) return;
     estado.ativo = true;
 
-    const primeiraVez = bancoSemDados();
     lerBanco();
     gravarBanco();
     prepararInterfaceLocal();
     interceptarModelo();
-    if (primeiraVez) avisarPrimeiroAcesso();
 
     // As bibliotecas (pdfmake/xlsx) só são baixadas quando necessárias.
     try {
@@ -729,31 +727,6 @@
         );
       }
     }
-  }
-
-  /** Ainda não há perfil nem documentos: é o primeiro uso neste navegador. */
-  function bancoSemDados() {
-    try {
-      const bruto = window.localStorage.getItem(CHAVE_BANCO);
-      if (!bruto) return true;
-      const dados = JSON.parse(bruto);
-      const empresa = (dados && dados.usuario && dados.usuario.empresa) || {};
-      return !empresa.razaoSocial && (!dados.documentos || dados.documentos.length === 0);
-    } catch (_) {
-      return true;
-    }
-  }
-
-  function avisarPrimeiroAcesso() {
-    setTimeout(() => {
-      if (window.UI && window.UI.toast) {
-        window.UI.toast(
-          'Modo local ativado. Comece em "Minha empresa" preenchendo os dados que saem no PDF ' +
-          '(razão social, CNPJ, endereço, logo e assinatura).',
-          'sucesso', 12000
-        );
-      }
-    }, 600);
   }
 
   // ------------------------------------------------------------- fachada

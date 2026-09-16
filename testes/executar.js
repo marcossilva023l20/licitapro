@@ -1172,6 +1172,14 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
   // e as ações do modo local ficam no menu do usuário
   assert.ok(!$('#local-exportar').classList.contains('oculto'), 'backup disponível no menu');
   assert.ok(!$('#local-importar').classList.contains('oculto'), 'restauração disponível no menu');
+  // sem aviso de boas-vindas: a primeira abertura não mostra toast nenhum
+  await ModoLocal.esperar(() => $('#view-painel') && !$('#view-painel').classList.contains('oculto'), 'painel', 8000);
+  await new Promise((r) => setTimeout(r, 900)); // o aviso antigo aparecia depois de 600 ms
+  const caixa = $('#caixa-toasts');
+  assert.ok(
+    !caixa || caixa.children.length === 0,
+    'nenhum aviso aparece ao abrir: ' + (caixa ? caixa.textContent.trim().slice(0, 80) : '')
+  );
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta direto', 10000);
   assert.ok($('#tela-login').classList.contains('oculto'), 'no modo local não se pede senha');
   assert.ok($('#botao-sair').classList.contains('oculto'), 'sem botão "Sair" no modo local');
