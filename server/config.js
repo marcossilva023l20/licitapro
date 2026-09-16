@@ -17,7 +17,6 @@ const DATA_DIR = process.env.LICITAPRO_DATA_DIR
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const CACHE_IMG_DIR = path.join(DATA_DIR, 'cache-imagens');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
-const SECRET_FILE = path.join(DATA_DIR, 'secret.key');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -31,17 +30,6 @@ function garantirPastas() {
   }
 }
 
-/** Segredo usado para assinar os cookies de sessão (gerado uma única vez). */
-function segredo() {
-  garantirPastas();
-  if (process.env.LICITAPRO_SECRET) return process.env.LICITAPRO_SECRET;
-  if (!fs.existsSync(SECRET_FILE)) {
-    const crypto = require('crypto');
-    fs.writeFileSync(SECRET_FILE, crypto.randomBytes(48).toString('hex'), { mode: 0o600 });
-  }
-  return fs.readFileSync(SECRET_FILE, 'utf8').trim();
-}
-
 module.exports = {
   RAIZ,
   DATA_DIR,
@@ -52,5 +40,4 @@ module.exports = {
   HOST,
   NOME_ARQUIVO_MODELO,
   garantirPastas,
-  segredo,
 };

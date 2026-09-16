@@ -345,172 +345,6 @@ input[type="search"] { padding-left: 12px; }
 .marca p { margin: 0; color: rgba(232, 236, 239, 0.86); font-size: 0.82rem; }
 .marca strong { color: #fff; font-size: 1.02rem; letter-spacing: -0.01em; }
 
-/* ------------------------------------------------------ 6. tela de entrada */
-
-.tela-login {
-  position: relative;
-  min-height: 100vh;
-  padding: 40px 20px;
-  /* grid (e não flex) para o conteúdo nunca ficar cortado em telas baixas */
-  display: grid;
-  place-items: center;
-}
-.login-fundo {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background:
-    radial-gradient(760px 520px at 8% -8%, rgba(30, 75, 119, 0.55) 0%, transparent 62%),
-    radial-gradient(900px 620px at 104% 4%, rgba(11, 31, 51, 0.42) 0%, transparent 58%),
-    radial-gradient(680px 520px at 78% 108%, rgba(143, 174, 203, 0.24) 0%, transparent 60%),
-    radial-gradient(660px 460px at 2% 106%, rgba(198, 161, 91, 0.24) 0%, transparent 62%),
-    linear-gradient(158deg, #102a43 0%, #0b1f33 48%, #08182a 100%);
-}
-.login-fundo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 46px 46px;
-  mask-image: radial-gradient(900px 620px at 22% 8%, #000 0%, transparent 78%);
-  -webkit-mask-image: radial-gradient(900px 620px at 22% 8%, #000 0%, transparent 78%);
-}
-.login-conteudo { position: relative; z-index: 1; width: 100%; max-width: 1120px; }
-.login-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 26px; flex-wrap: wrap; }
-.login-rodape { margin-top: 22px; color: rgba(203, 213, 225, 0.66); font-size: 0.78rem; text-align: center; }
-
-.login-grade {
-  display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
-  gap: 34px;
-  align-items: start;
-}
-.login-apresentacao h2 {
-  color: #fff;
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
-  line-height: 1.2;
-  margin-bottom: 18px;
-  letter-spacing: -0.025em;
-  max-width: 22ch;
-}
-.lista-beneficios { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 11px; }
-.lista-beneficios li {
-  position: relative;
-  padding-left: 36px;
-  color: #d8e5ea;
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-.lista-beneficios li::before {
-  content: "✓";
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(143, 174, 203, 0.16);
-  border: 1px solid rgba(143, 174, 203, 0.4);
-  color: var(--marca-300);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-.lista-beneficios strong { color: #fff; font-weight: 650; }
-
-/* mini documento decorativo */
-.login-previa {
-  margin: 0 0 22px;
-  padding: 14px 16px;
-  border-radius: var(--raio-lg);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 20px 40px -28px rgba(0, 0, 0, 0.7);
-  max-width: 430px;
-}
-.login-previa-topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding-bottom: 9px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  margin-bottom: 9px;
-}
-.login-previa-topo em { font-style: normal; color: var(--dourado-300); font-weight: 800; }
-.login-previa-linha {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  color: #cfdbe6;
-  font-size: 0.83rem;
-  padding: 3px 0;
-}
-.login-previa-linha b { color: #fff; font-weight: 600; }
-.login-previa-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 9px;
-  padding-top: 9px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.22);
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-.login-previa-total span { color: var(--dourado-300); font-variant-numeric: tabular-nums; }
-
-.cartao-destaque {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 15px 18px;
-  border-radius: var(--raio-lg);
-  background: linear-gradient(140deg, rgba(30, 75, 119, 0.22), rgba(11, 31, 51, 0.12));
-  border: 1px solid rgba(143, 174, 203, 0.32);
-  backdrop-filter: blur(8px);
-  max-width: 430px;
-}
-.cartao-destaque strong { display: block; color: #fff; font-size: 0.92rem; }
-.cartao-destaque p { color: #c3d1de; font-size: 0.81rem; margin: 2px 0 0; }
-
-.login-caixa {
-  background: var(--superficie);
-  border-radius: var(--raio-xl);
-  padding: 26px 26px 24px;
-  box-shadow: var(--sombra-3);
-  border: 1px solid rgba(216, 184, 115, 0.28);
-}
-.login-caixa::before {
-  content: "";
-  display: block;
-  height: 4px;
-  width: 62px;
-  border-radius: var(--raio-pill);
-  background: linear-gradient(90deg, var(--dourado-300), var(--dourado-600));
-  margin: -6px 0 18px;
-}
-
-.abas {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 20px;
-  padding: 4px;
-  background: #0b1f33;
-  border-radius: var(--raio);
-}
 .aba {
   flex: 1;
   border: 0;
@@ -527,18 +361,7 @@ input[type="search"] { padding-left: 12px; }
 .aba:hover { color: var(--texto); }
 .aba.ativa { background: #1e4b77; color: #ffffff; box-shadow: var(--sombra-1); }
 
-.formulario { display: flex; flex-direction: column; gap: 14px; }
-.formulario label { display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem; font-weight: 650; color: var(--texto-suave); }
 
-.aviso-erro, .aviso-ok {
-  margin: 0;
-  padding: 10px 13px;
-  border-radius: var(--raio-xs);
-  font-size: 0.83rem;
-  font-weight: 550;
-}
-.aviso-erro { background: rgba(220, 38, 38, 0.18); color: #fca5a5; }
-.aviso-ok { background: rgba(34, 197, 94, 0.16); color: #86efac; }
 
 /* ------------------------------------------------------------ 7. aplicação */
 
@@ -1270,10 +1093,6 @@ input[type="search"] { padding-left: 12px; }
 }
 
 @media (max-width: 900px) {
-  .tela-login { padding: 26px 16px; align-items: start; }
-  .login-grade { grid-template-columns: 1fr; gap: 26px; }
-  .login-apresentacao h2 { max-width: none; }
-  .lista-beneficios li { font-size: 0.88rem; }
   .conteudo { padding: 20px 16px 48px; }
   .grade-2 { grid-template-columns: 1fr; }
   .so-mobile { display: inline-flex; }

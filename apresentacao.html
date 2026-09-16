@@ -7,7 +7,7 @@
   <meta name="description" content="Sistema web que importa a planilha de itens do edital e gera a proposta de licitação e o orçamento em PDF, prontos para envio." />
   <meta name="theme-color" content="#0B1F33" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="site/apresentacao.css?v=7" />
+  <link rel="stylesheet" href="site/apresentacao.css?v=8" />
 </head>
 <body>
   <header class="topo">
@@ -53,8 +53,9 @@
         <p class="aviso">
           <strong>Já dá para usar:</strong> o endereço do GitHub Pages abre o próprio sistema, funcionando
           <strong>direto no navegador</strong> (modo local — sem servidor). Nesse modo os documentos ficam
-          salvos no seu navegador, com backup em arquivo. Para <strong>vários usuários</strong> com login e
-          senha, publique com servidor Node — veja <a href="#publicar">como publicar</a>.
+          salvos no seu navegador, com backup em arquivo. Para guardar os dados no servidor e acessar de
+          qualquer computador, publique com servidor Node — veja <a href="#publicar">como publicar</a>.
+          O sistema <strong>abre direto, sem login</strong>.
         </p>
       </div>
 
@@ -129,9 +130,10 @@
         </article>
         <article class="cartao">
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 4.5 5.5v6c0 4.4 3.1 8.3 7.5 10 4.4-1.7 7.5-5.6 7.5-10v-6z" /><path d="m9 12 2 2 4-4" /></svg></span>
-          <h3>Login por usuário</h3>
-          <p>Cada pessoa entra com e-mail e senha (criptografada) e vê apenas as próprias propostas.
-          A empresa é cadastrada uma única vez e preenche todos os documentos.</p>
+          <h3>Sem login</h3>
+          <p>O sistema abre direto no painel: não há usuário nem senha para criar ou guardar. A empresa é
+          cadastrada uma única vez em <em>Minha empresa</em> — com razão social, CNPJ, inscrição estadual,
+          endereço, logo e assinatura — e esses dados entram no cabeçalho de todos os documentos.</p>
         </article>
         <article class="cartao">
           <span class="cartao-icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4.5 20.5h15" /></svg></span>
@@ -209,8 +211,9 @@
         <p class="subtitulo claro">
           São dois caminhos. <strong>Modo local (GitHub Pages)</strong>: o endereço já abre o sistema e roda
           tudo no navegador — ótimo para uso individual, sem instalar nada.
-          <strong>Com servidor</strong>: login e senha para várias pessoas, cada uma com os seus documentos,
-          e os dados guardados no servidor. O repositório já vem com
+          <strong>Com servidor</strong>: sem login, os documentos ficam guardados no servidor e podem ser
+          abertos de qualquer computador — proteja o endereço no proxy ou na plataforma de hospedagem.
+          O repositório já vem com
           <code>render.yaml</code>, <code>railway.json</code>, <code>Procfile</code> e <code>Dockerfile</code>
           para isso.
         </p>
@@ -233,9 +236,9 @@
         </article>
         <article class="passo">
           <span class="passo-numero">3</span>
-          <h3>Informe o seu login</h3>
-          <p>Preencha <code>LICITAPRO_ADMIN_EMAIL</code>, <code>LICITAPRO_ADMIN_SENHA</code> e
-          <code>LICITAPRO_ADMIN_NOME</code>. Esses dados serão o primeiro acesso ao sistema.</p>
+          <h3>Proteja o endereço</h3>
+          <p>Não há login: quem abre a URL usa o sistema. Se o serviço ficar na internet, ponha uma senha na
+          frente (proxy, túnel ou a própria hospedagem) ou deixe o acesso restrito à sua rede.</p>
         </article>
         <article class="passo">
           <span class="passo-numero">4</span>
@@ -270,10 +273,9 @@ npm start          # abre em http://localhost:3000
 npm run testes     # 44 testes automatizados
 npm run paginas    # regenera o index.html do GitHub Pages
 npm run fontes     # regenera as métricas da fonte Times
-npm run modelo     # gera a planilha-modelo (.xlsx)
-npm run usuarios   # lista usuários / troca senha</code></pre>
-      <p class="nota">Na primeira execução o sistema cria o primeiro acesso e mostra e-mail e senha no
-      terminal (e em <code>data/primeiro-acesso.txt</code>).</p>
+npm run modelo     # gera a planilha-modelo (.xlsx)</code></pre>
+      <p class="nota">Na primeira execução o sistema cria apenas o perfil (dados da empresa), na pasta
+      <code>data/</code> — não há usuário nem senha para configurar.</p>
     </div>
   </section>
 

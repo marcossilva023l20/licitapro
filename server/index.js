@@ -7,14 +7,12 @@
 
 const path = require('path');
 const express = require('express');
-const { PORT, HOST, garantirPastas, segredo, DATA_DIR } = require('./config');
+const { PORT, HOST, garantirPastas, DATA_DIR } = require('./config');
 
 garantirPastas();
-segredo(); // garante a chave de assinatura das sessões
 
-const Auth = require('./auth');
 const store = require('./store');
-const rotasAuth = require('./routes/auth');
+const rotasPerfil = require('./routes/perfil');
 const rotasDocumentos = require('./routes/documentos');
 const rotasArquivos = require('./routes/arquivos');
 
@@ -27,22 +25,6 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// cookies (sem dependência externa)
-app.use((req, res, next) => {
-  const cabecalho = req.headers.cookie || '';
-  const cookies = {};
-  cabecalho.split(';').forEach((par) => {
-    const indice = par.indexOf('=');
-    if (indice > 0) {
-      const chave = par.slice(0, indice).trim();
-      const valor = par.slice(indice + 1).trim();
-      if (chave) cookies[chave] = decodeURIComponent(valor);
-    }
-  });
-  req.cookies = cookies;
-  next();
-});
-
 // cabeçalhos de segurança básicos
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -53,7 +35,7 @@ app.use((req, res, next) => {
 
 // -------------------------------------------------------------------- rotas
 
-app.use('/api/auth', rotasAuth);
+app.use('/api/perfil', rotasPerfil);
 app.use('/api/documentos', rotasDocumentos);
 app.use('/api', rotasArquivos);
 
@@ -61,7 +43,6 @@ app.get('/api/health', (req, res) => {
   const banco = store.carregar();
   res.json({
     ok: true,
-    usuarios: banco.usuarios.length,
     documentos: banco.documentos.length,
     dadosEm: DATA_DIR,
     versao: require('../package.json').version,
@@ -118,9 +99,9 @@ app.use((erro, req, res, next) => {
   res.status(500).json({ erro: 'Erro interno: ' + (erro.message || 'desconhecido') });
 });
 
-/** Cria o usuário inicial e sobe o servidor. */
+/** Sobe o servidor (o sistema não tem login: abre direto no painel). */
 function iniciar(porta, host) {
-  const primeiroAcesso = Auth.criarUsuarioInicialSeNecessario();
+  store.perfil.obter(); // cria o perfil no primeiro uso
   const silencioso = Boolean(process.env.LICITAPRO_SILENCIOSO);
   // atenção: porta 0 é válida (porta aleatória livre), por isso não se usa "||"
   const portaFinal = porta === undefined || porta === null || porta === '' ? PORT : Number(porta);
@@ -132,10 +113,6 @@ function iniciar(porta, host) {
     console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
     console.log(`  Dados em:  ${DATA_DIR}`);
     console.log('');
-    if (primeiroAcesso) {
-      console.log(`  Primeiro acesso: ${primeiroAcesso.email} (veja a senha acima)`);
-      console.log('');
-    }
   });
 
   servidor.on('error', (erro) => {

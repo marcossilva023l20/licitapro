@@ -2,15 +2,13 @@
 
 const express = require('express');
 const XLSX = require('xlsx');
-const Auth = require('../auth');
-const { documento: Documento, usuario: Usuario } = require('../store');
+const { documento: Documento, perfil: Perfil } = require('../store');
 const Esquema = require('../documento-schema');
 const Pdf = require('../pdf');
 const Formato = require('../../shared/format');
 const { COLUNAS } = require('../colunas');
 
 const rotas = express.Router();
-rotas.use(Auth.exigirLogin);
 
 const LIMITE_TEXTO = 200;
 
@@ -38,7 +36,7 @@ function resumo(doc) {
 
 rotas.get('/', (req, res) => {
   const { tipo, status, busca, ano } = req.query;
-  let lista = Documento.listarPorUsuario(req.usuario.id).map(resumo);
+  let lista = Documento.listar().map(resumo);
 
   if (tipo) lista = lista.filter((d) => d.tipo === tipo);
   if (status) lista = lista.filter((d) => d.status === status);
@@ -72,14 +70,14 @@ rotas.get('/proximo-numero', (req, res) => {
   const tipo = req.query.tipo === 'orcamento' ? 'orcamento' : 'proposta';
   const ano = Number(req.query.ano) || new Date().getFullYear();
   const grupo = String(req.query.grupo || '').slice(0, 30);
-  const sequencial = Documento.proximoNumero(req.usuario.id, tipo, ano, grupo);
+  const sequencial = Documento.proximoNumero(tipo, ano, grupo);
   res.json({ sequencial, ano, grupo, numeroFormatado: Formato.numeroDocumento(sequencial, ano) });
 });
 
 // ------------------------------------------------------------------- CRUD
 
 rotas.get('/:id', (req, res) => {
-  const doc = Documento.porId(req.usuario.id, req.params.id);
+  const doc = Documento.porId(req.params.id);
   if (!doc) return res.status(404).json({ erro: 'Documento não encontrado.' });
   res.json({ documento: doc, totais: Pdf.calcularTotais(doc) });
 });
@@ -92,39 +90,39 @@ rotas.post('/', (req, res) => {
   const grupo = String(numeroEnviado.grupo || '').slice(0, 30);
 
   let sequencial = Number(numeroEnviado.sequencial) || 0;
-  if (!sequencial) sequencial = Documento.proximoNumero(req.usuario.id, tipo, ano, grupo);
+  if (!sequencial) sequencial = Documento.proximoNumero(tipo, ano, grupo);
 
-  const saneado = Esquema.sanear(Object.assign({}, dados, { numero: { sequencial, ano, grupo } }), req.usuario, tipo);
+  const saneado = Esquema.sanear(Object.assign({}, dados, { numero: { sequencial, ano, grupo } }), Perfil.obter(), tipo);
   const criado = Documento.criar(saneado);
-  Documento.reservarNumero(req.usuario.id, tipo, ano, grupo, sequencial);
+  Documento.reservarNumero(tipo, ano, grupo, sequencial);
   res.status(201).json({ documento: criado });
 });
 
 rotas.put('/:id', (req, res) => {
-  const atual = Documento.porId(req.usuario.id, req.params.id);
+  const atual = Documento.porId(req.params.id);
   if (!atual) return res.status(404).json({ erro: 'Documento não encontrado.' });
 
-  const saneado = Esquema.sanear(req.body || {}, req.usuario, atual.tipo, atual);
-  const salvo = Documento.substituir(req.usuario.id, req.params.id, saneado);
+  const saneado = Esquema.sanear(req.body || {}, Perfil.obter(), atual.tipo, atual);
+  const salvo = Documento.substituir(req.params.id, saneado);
   if (saneado.numero) {
-    Documento.reservarNumero(req.usuario.id, saneado.tipo, saneado.numero.ano, saneado.numero.grupo, saneado.numero.sequencial);
+    Documento.reservarNumero(saneado.tipo, saneado.numero.ano, saneado.numero.grupo, saneado.numero.sequencial);
   }
   res.json({ documento: salvo, totais: Pdf.calcularTotais(salvo) });
 });
 
 rotas.delete('/:id', (req, res) => {
-  const removeu = Documento.remover(req.usuario.id, req.params.id);
+  const removeu = Documento.remover(req.params.id);
   if (!removeu) return res.status(404).json({ erro: 'Documento não encontrado.' });
   res.json({ ok: true });
 });
 
 rotas.post('/:id/duplicar', (req, res) => {
-  const origem = Documento.porId(req.usuario.id, req.params.id);
+  const origem = Documento.porId(req.params.id);
   if (!origem) return res.status(404).json({ erro: 'Documento não encontrado.' });
 
   const ano = new Date().getFullYear();
   const grupo = (origem.numero && origem.numero.grupo) || '';
-  const sequencial = Documento.proximoNumero(req.usuario.id, origem.tipo, ano, grupo);
+  const sequencial = Documento.proximoNumero(origem.tipo, ano, grupo);
 
   const copia = Esquema.sanear(
     Object.assign({}, origem, {
@@ -133,12 +131,12 @@ rotas.post('/:id/duplicar', (req, res) => {
       id: undefined,
       itens: (origem.itens || []).map((i) => Object.assign({}, i, { id: undefined })),
     }),
-    req.usuario,
+    Perfil.obter(),
     origem.tipo
   );
   delete copia.id;
   const criado = Documento.criar(copia);
-  Documento.reservarNumero(req.usuario.id, origem.tipo, ano, grupo, sequencial);
+  Documento.reservarNumero(origem.tipo, ano, grupo, sequencial);
   res.status(201).json({ documento: criado });
 });
 
@@ -150,7 +148,7 @@ function nomeArquivoSeguro(nome) {
 }
 
 async function responderPdf(res, doc, paraDownload) {
-  const empresa = (Usuario.porId(doc.usuarioId) || {}).empresa || {};
+  const empresa = Perfil.obter().empresa || {};
   // Relatório das fotos que não entraram no PDF: a tela usa para avisar o usuário.
   const fotosIgnoradas = [];
   const buffer = await Pdf.gerarPdf(doc, empresa, { relatorio: fotosIgnoradas });
@@ -171,7 +169,7 @@ async function responderPdf(res, doc, paraDownload) {
 }
 
 rotas.get('/:id/pdf', async (req, res) => {
-  const doc = Documento.porId(req.usuario.id, req.params.id);
+  const doc = Documento.porId(req.params.id);
   if (!doc) return res.status(404).json({ erro: 'Documento não encontrado.' });
   const paraDownload = req.query.download === '1' || req.query.download === 'true';
   const docParaPdf = req.query.status ? doc : doc;
@@ -186,7 +184,7 @@ rotas.get('/:id/pdf', async (req, res) => {
 /** Pré-visualização: gera o PDF a partir dos dados em tela, sem salvar. */
 rotas.post('/previa-pdf', async (req, res) => {
   const payload = req.body || {};
-  const saneado = Esquema.sanear(payload, req.usuario, payload.tipo);
+  const saneado = Esquema.sanear(payload, Perfil.obter(), payload.tipo);
   try {
     await responderPdf(res, saneado, false);
   } catch (erro) {
@@ -198,7 +196,7 @@ rotas.post('/previa-pdf', async (req, res) => {
 // --------------------------------------------------------- exportar planilha
 
 rotas.get('/:id/planilha', (req, res) => {
-  const doc = Documento.porId(req.usuario.id, req.params.id);
+  const doc = Documento.porId(req.params.id);
   if (!doc) return res.status(404).json({ erro: 'Documento não encontrado.' });
 
   const cabecalho = COLUNAS.map((c) => c.titulo);

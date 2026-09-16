@@ -49,8 +49,6 @@ async function executar() {
 // ------------------------------------------------------------------ dados
 
 process.env.LICITAPRO_DATA_DIR = process.env.LICITAPRO_DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-teste-'));
-process.env.LICITAPRO_ADMIN_EMAIL = 'teste@licitapro.local';
-process.env.LICITAPRO_ADMIN_SENHA = 'senha-de-teste';
 process.env.LICITAPRO_SILENCIOSO = '1';
 
 const RAIZ = path.join(__dirname, '..');
@@ -694,29 +692,39 @@ function requisitar(servidor, caminho, opcoes = {}) {
 
 async function iniciarServidor() {
   const app = require(path.join(RAIZ, 'server', 'index.js'));
-  // iniciar() cria o usuário inicial (quando necessário) e sobe o servidor
+  // iniciar() cria o perfil (primeiro uso) e sobe o servidor
   return new Promise((resolver) => {
     const servidor = app.iniciar(0, '127.0.0.1');
     servidor.on('listening', () => resolver(servidor));
   });
 }
 
-teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async () => {
+teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async () => {
   const servidor = await iniciarServidor();
   try {
-    // login
-    const login = await requisitar(servidor, '/api/auth/login', {
+    // o sistema abre direto: nenhuma rota pede senha nem exige sessão
+    const perfil = await requisitar(servidor, '/api/perfil');
+    assert.strictEqual(perfil.status, 200, perfil.texto);
+    assert.ok(perfil.json.perfil.empresa && perfil.json.perfil.padroes, 'perfil com empresa e padrões');
+    const listaInicial = await requisitar(servidor, '/api/documentos');
+    assert.strictEqual(listaInicial.status, 200, 'documentos acessíveis sem login: ' + listaInicial.texto);
+
+    // os dados da empresa são gravados sem senha
+    const salvarEmpresa = await requisitar(servidor, '/api/perfil/empresa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', cnpj: '65.180.352/0001-11' }),
+    });
+    assert.strictEqual(salvarEmpresa.status, 200, salvarEmpresa.texto);
+    assert.strictEqual(salvarEmpresa.json.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL');
+
+    // a API antiga de login não existe mais
+    const loginAntigo = await requisitar(servidor, '/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       corpo: JSON.stringify({ email: 'teste@licitapro.local', senha: 'senha-de-teste' }),
     });
-    assert.strictEqual(login.status, 200, 'login deveria funcionar: ' + login.texto);
-    const cookie = String(login.headers['set-cookie'][0]).split(';')[0];
-    assert.ok(cookie.startsWith('licitapro_sessao='), 'cookie de sessão ausente');
-
-    // acesso protegido
-    const semLogin = await requisitar(servidor, '/api/documentos');
-    assert.strictEqual(semLogin.status, 401);
+    assert.strictEqual(loginAntigo.status, 404, 'a rota de login deve ter sido removida');
 
     // modelo para download (público)
     const modelo = await requisitar(servidor, '/api/modelo-planilha');
@@ -742,7 +750,6 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     ]);
     const importacao = await requisitar(servidor, '/api/importar', {
       method: 'POST',
-      cookies: cookie,
       headers: { 'Content-Type': `multipart/form-data; boundary=${fronteira}`, 'Content-Length': partes.length },
       corpo: partes,
     });
@@ -751,14 +758,13 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     assert.strictEqual(importacao.json.itens[0].precoVenda, 1490);
 
     // próximo número
-    const proximo = await requisitar(servidor, '/api/documentos/proximo-numero?tipo=proposta', { cookies: cookie });
+    const proximo = await requisitar(servidor, '/api/documentos/proximo-numero?tipo=proposta');
     assert.strictEqual(proximo.json.sequencial, 1);
 
     // criar documento
     const doc = documentoExemplo('proposta');
     const criacao = await requisitar(servidor, '/api/documentos', {
       method: 'POST',
-      cookies: cookie,
       headers: { 'Content-Type': 'application/json' },
       corpo: JSON.stringify(doc),
     });
@@ -767,13 +773,13 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     assert.ok(id, 'o documento deveria receber um id');
 
     // listagem
-    const lista = await requisitar(servidor, '/api/documentos', { cookies: cookie });
+    const lista = await requisitar(servidor, '/api/documentos');
     assert.strictEqual(lista.json.documentos.length, 1);
     assert.strictEqual(lista.json.totais.quantidade, 1);
     assert.strictEqual(lista.json.totais.valor, 10380.61);
 
     // PDF
-    const pdf = await requisitar(servidor, `/api/documentos/${id}/pdf?download=1`, { cookies: cookie });
+    const pdf = await requisitar(servidor, `/api/documentos/${id}/pdf?download=1`);
     assert.strictEqual(pdf.status, 200, pdf.texto);
     assert.strictEqual(pdf.headers['content-type'], 'application/pdf');
     assert.strictEqual(pdf.corpo.subarray(0, 5).toString(), '%PDF-');
@@ -782,7 +788,6 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     // pré-visualização (sem salvar)
     const previa = await requisitar(servidor, '/api/documentos/previa-pdf', {
       method: 'POST',
-      cookies: cookie,
       headers: { 'Content-Type': 'application/json' },
       corpo: JSON.stringify(doc),
     });
@@ -790,7 +795,7 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     assert.strictEqual(previa.corpo.subarray(0, 5).toString(), '%PDF-');
 
     // exportar itens para planilha
-    const planilha = await requisitar(servidor, `/api/documentos/${id}/planilha`, { cookies: cookie });
+    const planilha = await requisitar(servidor, `/api/documentos/${id}/planilha`);
     assert.strictEqual(planilha.status, 200);
     const livro = XLSX.read(planilha.corpo, { type: 'buffer' });
     const linhas = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 });
@@ -798,7 +803,7 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     assert.strictEqual(linhas.length, 3, 'cabeçalho + 2 itens');
 
     // duplicar
-    const copia = await requisitar(servidor, `/api/documentos/${id}/duplicar`, { method: 'POST', cookies: cookie, corpo: '' });
+    const copia = await requisitar(servidor, `/api/documentos/${id}/duplicar`, { method: 'POST', corpo: '' });
     assert.strictEqual(copia.status, 201);
     // o documento de exemplo traz o número 004/2026, então a numeração reservada
     // já contabiliza esse número e a cópia recebe o seguinte.
@@ -807,7 +812,6 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     // atualizar status
     const atualizacao = await requisitar(servidor, `/api/documentos/${id}`, {
       method: 'PUT',
-      cookies: cookie,
       headers: { 'Content-Type': 'application/json' },
       corpo: JSON.stringify({ status: 'ganha' }),
     });
@@ -815,9 +819,9 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
     assert.strictEqual(atualizacao.json.documento.itens.length, 2, 'os itens devem ser mantidos ao atualizar parcialmente');
 
     // excluir
-    const exclusao = await requisitar(servidor, `/api/documentos/${id}`, { method: 'DELETE', cookies: cookie });
+    const exclusao = await requisitar(servidor, `/api/documentos/${id}`, { method: 'DELETE' });
     assert.strictEqual(exclusao.status, 200);
-    const listaFinal = await requisitar(servidor, '/api/documentos', { cookies: cookie });
+    const listaFinal = await requisitar(servidor, '/api/documentos');
     assert.strictEqual(listaFinal.json.documentos.length, 1);
 
     // página inicial (SPA)
@@ -838,93 +842,40 @@ teste('HTTP: fluxo completo (login, importar, salvar, PDF e planilha)', async ()
   }
 });
 
-teste('HTTP: cadastro e alteração de senha', async () => {
+teste('HTTP: o login foi removido de vez (sem senha, sem sessão, sem usuários)', async () => {
   const servidor = await iniciarServidor();
   try {
-    const cadastro = await requisitar(servidor, '/api/auth/registrar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ nome: 'Maria Souza', email: 'maria@exemplo.com.br', senha: 'segredo123' }),
+    // nenhuma rota de autenticação responde
+    for (const rota of ['/api/auth/eu', '/api/auth/login', '/api/auth/registrar', '/api/auth/senha', '/api/auth/perfil']) {
+      const resposta = await requisitar(servidor, rota);
+      assert.strictEqual(resposta.status, 404, rota + ' deveria não existir mais');
+    }
+
+    // nenhuma resposta manda cookie de sessão
+    const perfil = await requisitar(servidor, '/api/perfil');
+    assert.strictEqual(perfil.headers['set-cookie'], undefined, 'não há mais cookie de sessão');
+
+    // o banco não guarda senha nem lista de usuários
+    const banco = JSON.parse(fs.readFileSync(path.join(process.env.LICITAPRO_DATA_DIR, 'db.json'), 'utf8'));
+    assert.strictEqual(banco.usuarios, undefined, 'sem lista de usuários no banco');
+    assert.ok(banco.perfil, 'o perfil único existe');
+    assert.strictEqual(JSON.stringify(banco).includes('senhaHash'), false, 'nenhuma senha guardada');
+
+    // código do servidor não tem mais nada de autenticação
+    const arquivos = ['index.js', 'store.js'].map((f) => path.join(RAIZ, 'server', f));
+    arquivos.forEach((f) => {
+      const conteudo = fs.readFileSync(f, 'utf8');
+      assert.strictEqual(/scrypt|criarSessao|exigirLogin|senhaHash/.test(conteudo), false, 'sem autenticação em ' + path.basename(f));
     });
-    assert.strictEqual(cadastro.status, 201, cadastro.texto);
-    const cookie = String(cadastro.headers['set-cookie'][0]).split(';')[0];
+    assert.strictEqual(fs.existsSync(path.join(RAIZ, 'server', 'auth.js')), false, 'server/auth.js foi removido');
+    assert.strictEqual(fs.existsSync(path.join(RAIZ, 'server', 'routes', 'auth.js')), false, 'routes/auth.js foi removido');
 
-    const repetido = await requisitar(servidor, '/api/auth/registrar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ nome: 'Maria Souza', email: 'maria@exemplo.com.br', senha: 'segredo123' }),
-    });
-    assert.strictEqual(repetido.status, 409);
-
-    const senhaErrada = await requisitar(servidor, '/api/auth/senha', {
-      method: 'PUT',
-      cookies: cookie,
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ senhaAtual: 'errada', senhaNova: 'novasenha1' }),
-    });
-    assert.strictEqual(senhaErrada.status, 400);
-
-    const troca = await requisitar(servidor, '/api/auth/senha', {
-      method: 'PUT',
-      cookies: cookie,
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ senhaAtual: 'segredo123', senhaNova: 'novasenha1' }),
-    });
-    assert.strictEqual(troca.status, 200);
-
-    const novoLogin = await requisitar(servidor, '/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ email: 'maria@exemplo.com.br', senha: 'novasenha1' }),
-    });
-    assert.strictEqual(novoLogin.status, 200);
-
-    const antigoLogin = await requisitar(servidor, '/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify({ email: 'maria@exemplo.com.br', senha: 'segredo123' }),
-    });
-    assert.strictEqual(antigoLogin.status, 401);
-  } finally {
-    servidor.close();
-  }
-});
-
-teste('HTTP: cada usuário só enxerga os próprios documentos', async () => {
-  const servidor = await iniciarServidor();
-  try {
-    const criarConta = async (nome, email, senha) => {
-      const r = await requisitar(servidor, '/api/auth/registrar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        corpo: JSON.stringify({ nome, email, senha }),
-      });
-      return String(r.headers['set-cookie'][0]).split(';')[0];
-    };
-
-    const cookieA = await criarConta('Usuário A', 'a@exemplo.com.br', 'senha123');
-    const cookieB = await criarConta('Usuário B', 'b@exemplo.com.br', 'senha123');
-
-    const doc = documentoExemplo('orcamento');
-    const criacao = await requisitar(servidor, '/api/documentos', {
-      method: 'POST',
-      cookies: cookieA,
-      headers: { 'Content-Type': 'application/json' },
-      corpo: JSON.stringify(doc),
-    });
-    const id = criacao.json.documento.id;
-
-    const listaB = await requisitar(servidor, '/api/documentos', { cookies: cookieB });
-    assert.strictEqual(listaB.json.documentos.length, 0);
-
-    const lerB = await requisitar(servidor, '/api/documentos/' + id, { cookies: cookieB });
-    assert.strictEqual(lerB.status, 404);
-
-    const pdfB = await requisitar(servidor, `/api/documentos/${id}/pdf`, { cookies: cookieB });
-    assert.strictEqual(pdfB.status, 404);
-
-    const excluirB = await requisitar(servidor, '/api/documentos/' + id, { method: 'DELETE', cookies: cookieB });
-    assert.strictEqual(excluirB.status, 404);
+    // e a tela de login não existe no HTML
+    const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
+    assert.strictEqual(html.includes('tela-login'), false, 'sem tela de login no HTML');
+    assert.strictEqual(html.includes('form-login'), false, 'sem formulário de login');
+    assert.strictEqual(html.includes('type="password"'), false, 'sem campo de senha');
+    assert.strictEqual(html.includes('botao-sair'), false, 'sem botão de sair');
   } finally {
     servidor.close();
   }
@@ -949,18 +900,11 @@ teste('Interface: abre no navegador, entra, cria proposta com item e salva', asy
     const doc = window.document;
     const $ = (sel) => doc.querySelector(sel);
 
-    // 1. tela de login aparece
-    await Navegador.esperar(() => !$('#tela-login').classList.contains('oculto'), 'tela de login');
-    await Navegador.esperar(() => $('#lista-colunas-modelo').children.length === 0 || true, 'scripts carregados');
-
-    // 2. login
-    $('#form-login [name="email"]').value = 'teste@licitapro.local';
-    $('#form-login [name="senha"]').value = 'senha-de-teste';
-    $('#form-login').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-
-    await Navegador.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação visível após login');
+    // 1. não existe tela de login: o sistema abre direto no painel
     await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel visível');
-    assert.strictEqual($('#nome-usuario').textContent.length > 0, true, 'nome do usuário no topo');
+    assert.strictEqual($('#tela-login'), null, 'sem tela de login no HTML');
+    assert.strictEqual($('#app').classList.contains('oculto'), false, 'aplicação visível sem senha');
+    assert.strictEqual($('#nome-usuario').textContent.length > 0, true, 'nome da empresa no topo');
 
     // 3. nova proposta
     $('#botao-nova-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -1013,6 +957,44 @@ teste('Interface: abre no navegador, entra, cria proposta com item e salva', asy
   }
 });
 
+teste('Interface: "Minha empresa" grava os dados sem login e eles aparecem no topo', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+
+    await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel visível');
+    assert.ok($('#nome-usuario').textContent.trim().length > 0, 'sempre há um nome no topo');
+
+    // abre a tela e preenche os dados que saem no PDF
+    window.location.hash = '#/empresa';
+    await Navegador.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+    assert.strictEqual($('#perfil-nome'), null, 'não existe mais campo de usuário');
+    assert.strictEqual($('#senha-atual'), null, 'não existe mais campo de senha');
+
+    $('#emp-razao').value = 'DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA';
+    $('#emp-fantasia').value = 'DEJ Solutions & Global';
+    $('#emp-cnpj').value = '12.345.678/0001-90';
+    $('#emp-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    // no topo vale o nome fantasia (e, sem ele, a razão social)
+    await Navegador.esperar(
+      () => $('#nome-usuario').textContent === 'DEJ Solutions & Global',
+      'nome fantasia no topo depois de salvar'
+    );
+
+    // os dados foram para o servidor (sem sessão): uma nova carga já os encontra
+    const perfil = await requisitar(servidor, '/api/perfil');
+    assert.strictEqual(perfil.json.perfil.empresa.razaoSocial, 'DEJ SOLUTIONS COMÉRCIO E SERVIÇOS LTDA');
+    assert.strictEqual(perfil.json.perfil.empresa.cnpj, '12.345.678/0001-90');
+    window.close();
+  } finally {
+    servidor.close();
+  }
+});
+
 teste('Interface: importar planilha e criar proposta com os itens', async () => {
   const servidor = await Navegador.subirServidor();
   try {
@@ -1021,11 +1003,7 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
     const doc = window.document;
     const $ = (sel) => doc.querySelector(sel);
 
-    await Navegador.esperar(() => !$('#tela-login').classList.contains('oculto'), 'tela de login');
-    $('#form-login [name="email"]').value = 'teste@licitapro.local';
-    $('#form-login [name="senha"]').value = 'senha-de-teste';
-    $('#form-login').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    await Navegador.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação visível');
+    await Navegador.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação visível sem login');
 
     // resposta simulada do servidor para o envio da planilha
     window.API.enviarArquivo = async () => ({
@@ -1230,8 +1208,8 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
     'nenhum aviso aparece ao abrir: ' + (caixa ? caixa.textContent.trim().slice(0, 80) : '')
   );
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta direto', 10000);
-  assert.ok($('#tela-login').classList.contains('oculto'), 'no modo local não se pede senha');
-  assert.ok($('#botao-sair').classList.contains('oculto'), 'sem botão "Sair" no modo local');
+  assert.strictEqual($('#tela-login'), null, 'não existe tela de login em lugar nenhum');
+  assert.strictEqual($('#botao-sair'), null, 'sem botão "Sair" em lugar nenhum');
   assert.strictEqual(
     window.document.documentElement.getAttribute('data-modo'), 'local',
     'interface marcada como modo local'
@@ -1434,12 +1412,12 @@ teste('Modo local: fotos — envio do computador, conversão e recusas', async (
   );
 
   // 4. o logo da empresa passa pelo mesmo caminho
-  await window.API.pedir('/api/auth/empresa', {
+  await window.API.pedir('/api/perfil/empresa', {
     method: 'PUT',
     corpo: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', logo: envio.caminho },
   });
-  const perfil = await window.API.pedir('/api/auth/eu');
-  assert.strictEqual(perfil.usuario.empresa.logo, envio.caminho, 'logo guardada no perfil');
+  const perfil = await window.API.pedir('/api/perfil');
+  assert.strictEqual(perfil.perfil.empresa.logo, envio.caminho, 'logo guardada no perfil');
 
   // 5. no gerador de PDF: PNG é entregue como está...
   const pronto = await window.ImagensNavegador.prepararParaPdf(envio.caminho);
@@ -1514,7 +1492,8 @@ teste('GitHub Pages: a raiz do site publica o sistema (não uma página só de a
     'navegação interna permanece na raiz do site'
   );
   assert.ok(raiz.includes('js/modo-estatico.js'), 'a raiz carrega o modo local');
-  assert.ok(raiz.includes('id="tela-login"'), 'a raiz é a tela do sistema');
+  assert.ok(raiz.includes('id="view-painel"'), 'a raiz é a tela do sistema');
+  assert.ok(!raiz.includes('tela-login'), 'a raiz não tem tela de login');
 
   // a página de apresentação continua existindo, ao lado do sistema
   const apresentacao = fs.readFileSync(path.join(RAIZ, 'apresentacao.html'), 'utf8');
@@ -1569,7 +1548,7 @@ teste('Modo local: com servidor disponível ele não interfere', async () => {
     const { window } = await Navegador.abrirNavegador(porta);
     const $ = (sel) => window.document.querySelector(sel);
     await Navegador.esperar(() => window.ModoEstatico, 'script do modo local carregado');
-    await Navegador.esperar(() => !$('#tela-login').classList.contains('oculto'), 'tela de login');
+    await Navegador.esperar(() => !$('#view-painel').classList.contains('oculto'), 'painel aberto pelo servidor');
     assert.strictEqual(window.ModoEstatico.ativo(), false, 'modo local desligado quando há servidor');
     assert.strictEqual($('#banner-modo-local'), null, 'sem aviso de modo local');
     assert.ok($('#local-exportar').classList.contains('oculto'), 'backup do modo local fica escondido com servidor');

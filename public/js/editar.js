@@ -910,8 +910,8 @@
 
   async function novo(tipo) {
     try {
-      const inicial = await window.API.get('/api/auth/eu');
-      const usuario = inicial.usuario || {};
+      const inicial = await window.API.get('/api/perfil');
+      const perfil = (inicial && inicial.perfil) || {};
       const proximo = await window.API.get('/api/documentos/proximo-numero?tipo=' + tipo);
       estado.doc = {
         tipo,
@@ -920,15 +920,15 @@
         data: F.dataISO(new Date()),
         orgao: {},
         cliente: {},
-        proponente: Object.assign({}, usuario.empresa || {}),
+        proponente: Object.assign({}, perfil.empresa || {}),
         itens: [],
         condicoes: {
-          validadeDias: (usuario.padroes && usuario.padroes.validadeDias) || 60,
-          condicoesPagamento: (usuario.padroes && usuario.padroes.condicoesPagamento) || '',
-          prazoEntrega: (usuario.padroes && usuario.padroes.prazoEntrega) || 'Conforme Edital.',
-          garantia: (usuario.padroes && usuario.padroes.garantia) || '',
-          observacoes: (usuario.padroes && usuario.padroes.observacoes) || '',
-          local: (usuario.padroes && usuario.padroes.cidadeUf) || '',
+          validadeDias: (perfil.padroes && perfil.padroes.validadeDias) || 60,
+          condicoesPagamento: (perfil.padroes && perfil.padroes.condicoesPagamento) || '',
+          prazoEntrega: (perfil.padroes && perfil.padroes.prazoEntrega) || 'Conforme Edital.',
+          garantia: (perfil.padroes && perfil.padroes.garantia) || '',
+          observacoes: (perfil.padroes && perfil.padroes.observacoes) || '',
+          local: (perfil.padroes && perfil.padroes.cidadeUf) || '',
         },
         desconto: { modo: 'nenhum', valor: 0 },
         acrescimo: { ativo: false, descricao: 'Frete / Instalação', valor: 0 },

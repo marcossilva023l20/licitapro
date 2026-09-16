@@ -28,16 +28,8 @@ services:
       # pasta onde ficam banco, uploads e cache (precisa ser o caminho do disco)
       - key: LICITAPRO_DATA_DIR
         value: /var/data
-      # preencha estes três no painel do Render (ficam como "secret")
-      - key: LICITAPRO_ADMIN_EMAIL
-        sync: false
-      - key: LICITAPRO_ADMIN_SENHA
-        sync: false
-      - key: LICITAPRO_ADMIN_NOME
-        sync: false
-      # deixe "0" para que só você crie contas (uso interno)
-      - key: LICITAPRO_REGISTRO_ABERTO
-        value: "1"
+      # o sistema não tem login: se o endereço ficar público, proteja o acesso
+      # na própria plataforma (ou use um proxy com senha na frente do serviço)
     disk:
       name: licitapro-dados
       mountPath: /var/data

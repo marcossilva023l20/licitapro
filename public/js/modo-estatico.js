@@ -39,9 +39,6 @@
 
   function perfilPadrao() {
     return {
-      id: 'local',
-      nome: 'Meu usuário local',
-      email: '',
       criadoEm: new Date().toISOString(),
       empresa: {
         razaoSocial: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', simplesNacional: true,
@@ -62,7 +59,7 @@
   }
 
   function bancoVazio() {
-    return { versao: 1, usuario: perfilPadrao(), documentos: [], sequencia: {} };
+    return { versao: 2, perfil: perfilPadrao(), documentos: [], sequencia: {} };
   }
 
   function lerBanco() {
@@ -71,7 +68,16 @@
       const bruto = window.localStorage.getItem(CHAVE_BANCO);
       const dados = bruto ? JSON.parse(bruto) : null;
       estado.banco = dados && dados.documentos ? dados : bancoVazio();
-      if (dados && dados.usuario) estado.banco.usuario = Object.assign(perfilPadrao(), dados.usuario);
+      // dados salvos antes (quando havia login no sistema) guardavam "usuario":
+      // o que importa — empresa e padrões — passa a viver em "perfil"
+      const anterior = dados && (dados.perfil || dados.usuario);
+      if (anterior) estado.banco.perfil = Object.assign(perfilPadrao(), anterior);
+      if (!estado.banco.perfil) estado.banco.perfil = perfilPadrao();
+      delete estado.banco.usuario;
+      estado.banco.versao = 2;
+      if (estado.banco.documentos) {
+        estado.banco.documentos.forEach((d) => { delete d.usuarioId; });
+      }
     } catch (erro) {
       console.warn('[modo local] não consegui ler os dados salvos:', erro.message);
       estado.banco = bancoVazio();
@@ -207,7 +213,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '7';
+  const VERSAO_ARQUIVOS = '8';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -312,13 +318,12 @@
   }
 
   function sanear(payload, tipoSugerido, anterior) {
-    const usuario = lerBanco().usuario;
-    return Esquema().sanear(payload, usuario, tipoSugerido, anterior);
+    return Esquema().sanear(payload, lerBanco().perfil, tipoSugerido, anterior);
   }
 
   function nomeArquivoPdf(documento) {
     const banco = lerBanco();
-    const nome = Pdf().nomeArquivo(documento, banco.usuario.empresa || {});
+    const nome = Pdf().nomeArquivo(documento, banco.perfil.empresa || {});
     return window.Formato.slug(nome.replace(/\.pdf$/i, '')) + '.pdf';
   }
 
@@ -332,7 +337,7 @@
     const banco = lerBanco();
     const motor = motorPdf();
     const fotosIgnoradas = [];
-    const buffer = await motor.gerarPdf(documento, banco.usuario.empresa || {}, { relatorio: fotosIgnoradas });
+    const buffer = await motor.gerarPdf(documento, banco.perfil.empresa || {}, { relatorio: fotosIgnoradas });
     return {
       blob: new Blob([buffer], { type: 'application/pdf' }),
       fotosIgnoradas: fotosIgnoradas.length,
@@ -347,8 +352,9 @@
 
   // -------------------------------------------------------------- rotas
 
-  function usuarioPublico() {
-    return copiar(lerBanco().usuario);
+  function perfilPublico() {
+    const perfil = lerBanco().perfil;
+    return { empresa: copiar(perfil.empresa || {}), padroes: copiar(perfil.padroes || {}) };
   }
 
   async function responder(metodo, caminho, corpo) {
@@ -358,43 +364,19 @@
     const busca = url.searchParams;
     const banco = lerBanco();
 
-    // ------------------------------------------------------- autenticação
-    if (rota === '/api/auth/eu') return { autenticado: true, usuario: usuarioPublico() };
+    // ------------------------------------------------------------ perfil
+    if (rota === '/api/perfil' && metodo === 'GET') return { perfil: perfilPublico() };
 
-    if (rota === '/api/auth/login' || rota === '/api/auth/registrar') {
-      if (corpo && corpo.email) {
-        banco.usuario.email = String(corpo.email).trim();
-        if (!banco.usuario.nome || banco.usuario.nome === 'Meu usuário local') {
-          banco.usuario.nome = corpo.nome || banco.usuario.email;
-        }
-        gravarBanco();
-      }
-      return { usuario: usuarioPublico() };
-    }
-
-    if (rota === '/api/auth/logout') return { ok: true };
-
-    if (rota === '/api/auth/perfil' && metodo === 'PUT') {
-      banco.usuario.nome = String((corpo && corpo.nome) || banco.usuario.nome);
-      if (corpo && corpo.email !== undefined) banco.usuario.email = String(corpo.email);
+    if (rota === '/api/perfil/empresa' && metodo === 'PUT') {
+      banco.perfil.empresa = Object.assign(banco.perfil.empresa, copiar(corpo || {}));
       gravarBanco();
-      return { usuario: usuarioPublico() };
+      return { empresa: copiar(banco.perfil.empresa) };
     }
 
-    if (rota === '/api/auth/senha' && metodo === 'PUT') {
-      throw Object.assign(new Error('No modo local (sem servidor) não existe senha: os dados ficam neste navegador.'), { status: 400 });
-    }
-
-    if (rota === '/api/auth/empresa' && metodo === 'PUT') {
-      banco.usuario.empresa = Object.assign(banco.usuario.empresa, copiar(corpo || {}));
+    if (rota === '/api/perfil/padroes' && metodo === 'PUT') {
+      banco.perfil.padroes = Object.assign(banco.perfil.padroes, copiar(corpo || {}));
       gravarBanco();
-      return { empresa: copiar(banco.usuario.empresa) };
-    }
-
-    if (rota === '/api/auth/padroes' && metodo === 'PUT') {
-      banco.usuario.padroes = Object.assign(banco.usuario.padroes, copiar(corpo || {}));
-      gravarBanco();
-      return { padroes: copiar(banco.usuario.padroes) };
+      return { padroes: copiar(banco.perfil.padroes) };
     }
 
     // -------------------------------------------------------- documentos
@@ -630,7 +612,8 @@
       throw new Error('Este arquivo não é um backup do DEJ Solutions & Global.');
     }
     estado.banco = conteudo.banco;
-    estado.banco.usuario = Object.assign(perfilPadrao(), estado.banco.usuario || {});
+    estado.banco.perfil = Object.assign(perfilPadrao(), estado.banco.perfil || estado.banco.usuario || {});
+    delete estado.banco.usuario;
     gravarBanco();
 
     const imagens = conteudo.imagens || {};
@@ -648,12 +631,9 @@
 
   /**
    * Ajustes de interface do modo local. Não há aviso fixo na tela: o backup e a
-   * restauração ficam no menu do usuário (itens data-modo-local), e o que
-   * depende de servidor sai de cena.
+   * restauração ficam no menu do topo (itens data-modo-local).
    */
   function prepararInterfaceLocal() {
-    // recursos que dependem de servidor não fazem sentido no modo local
-    document.querySelectorAll('[data-somente-servidor]').forEach((elemento) => elemento.classList.add('oculto'));
     document.documentElement.setAttribute('data-modo', 'local');
 
     const menu = document.getElementById('lista-usuario');

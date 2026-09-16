@@ -9,7 +9,7 @@
   const $$ = UI.$$;
 
   const estado = {
-    usuario: null,
+    perfil: null,
     documentos: [],
     totais: { quantidade: 0, valor: 0, ganhas: 0, enviadas: 0 },
     itensImportados: [],
@@ -20,67 +20,17 @@
 
   // ------------------------------------------------------------- entrada
 
-  function mostrarLogin() {
-    $('#tela-login').classList.remove('oculto');
-    $('#app').classList.add('oculto');
+  /** Nome que aparece no topo: o da empresa; sem cadastro, um rótulo neutro. */
+  function nomeDaEmpresa() {
+    const empresa = (estado.perfil && estado.perfil.empresa) || {};
+    return empresa.nomeFantasia || empresa.razaoSocial || 'Minha empresa';
   }
 
   function mostrarApp() {
-    $('#tela-login').classList.add('oculto');
-    $('#app').classList.remove('oculto');
-    $('#nome-usuario').textContent = F.primeiroNome(estado.usuario.nome) || estado.usuario.email;
-    $('#avatar-usuario').textContent = F.iniciais(estado.usuario.nome || estado.usuario.email);
-    $('#saudacao').textContent = 'Bem-vindo, ' + (F.primeiroNome(estado.usuario.nome) || 'usuário') + '. O que vamos montar hoje?';
-  }
-
-  function ligarFormularioLogin() {
-    UI.ligarAbas('.login-caixa', 'aba', (aba) => {
-      $('#form-login').classList.toggle('oculto', aba !== 'entrar');
-      $('#form-criar').classList.toggle('oculto', aba !== 'criar');
-    });
-
-    $('#form-login').addEventListener('submit', async (evento) => {
-      evento.preventDefault();
-      const formulario = evento.target;
-      const erro = $('[data-erro]', formulario);
-      erro.classList.add('oculto');
-      try {
-        const resposta = await API.post('/api/auth/login', {
-          email: formulario.querySelector('[name="email"]').value,
-          senha: formulario.querySelector('[name="senha"]').value,
-        });
-        estado.usuario = resposta.usuario;
-        mostrarApp();
-        window.location.hash = '#/painel';
-        rotear();
-        UI.toast('Bem-vindo de volta!', 'sucesso');
-      } catch (e) {
-        erro.textContent = e.message;
-        erro.classList.remove('oculto');
-      }
-    });
-
-    $('#form-criar').addEventListener('submit', async (evento) => {
-      evento.preventDefault();
-      const formulario = evento.target;
-      const erro = $('[data-erro]', formulario);
-      erro.classList.add('oculto');
-      try {
-        const resposta = await API.post('/api/auth/registrar', {
-          nome: formulario.querySelector('[name="nome"]').value,
-          email: formulario.querySelector('[name="email"]').value,
-          senha: formulario.querySelector('[name="senha"]').value,
-        });
-        estado.usuario = resposta.usuario;
-        mostrarApp();
-        window.location.hash = '#/empresa';
-        rotear();
-        UI.toast('Conta criada! Comece preenchendo os dados da sua empresa.', 'sucesso');
-      } catch (e) {
-        erro.textContent = e.message;
-        erro.classList.remove('oculto');
-      }
-    });
+    const nome = nomeDaEmpresa();
+    $('#nome-usuario').textContent = nome;
+    $('#avatar-usuario').textContent = F.iniciais(nome) || 'DEJ';
+    $('#saudacao').textContent = 'O que vamos montar hoje: uma proposta ou um orçamento?';
   }
 
   // -------------------------------------------------------------- rotas
@@ -98,7 +48,7 @@
   }
 
   function rotear() {
-    if (!estado.usuario) return;
+    if (!estado.perfil) return;
     const hash = window.location.hash || '#/painel';
     const partes = hash.replace(/^#\//, '').split('/').filter(Boolean);
     const primeira = partes[0] || 'painel';
@@ -507,8 +457,8 @@
   ];
 
   function carregarEmpresa() {
-    estado.empresa = Object.assign({}, estado.usuario.empresa || {});
-    estado.padroes = Object.assign({}, estado.usuario.padroes || {});
+    estado.empresa = Object.assign({}, (estado.perfil && estado.perfil.empresa) || {});
+    estado.padroes = Object.assign({}, (estado.perfil && estado.perfil.padroes) || {});
 
     CAMPOS_EMPRESA.forEach(([chave, sel]) => {
       $(sel).value = estado.empresa[chave] == null ? '' : estado.empresa[chave];
@@ -523,8 +473,6 @@
     });
     if (estado.empresa.logo) UI.aplicarImagem($('#emp-previa-logo'), estado.empresa.logo);
     if (estado.empresa.assinatura) UI.aplicarImagem($('#emp-previa-assinatura'), estado.empresa.assinatura);
-    $('#perfil-nome').value = estado.usuario.nome || '';
-    $('#perfil-email').value = estado.usuario.email || '';
   }
 
 
@@ -534,8 +482,10 @@
       CAMPOS_EMPRESA.forEach(([chave, sel]) => { empresa[chave] = $(sel).value.trim(); });
       empresa.simplesNacional = $('#emp-simples').checked;
       try {
-        const resposta = await API.put('/api/auth/empresa', empresa);
-        estado.usuario.empresa = resposta.empresa;
+        const resposta = await API.put('/api/perfil/empresa', empresa);
+        estado.empresa = Object.assign(estado.empresa, resposta.empresa);
+        estado.perfil.empresa = resposta.empresa;
+        mostrarApp(); // o nome da empresa também aparece no topo
         UI.toast('Dados da empresa salvos.', 'sucesso');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
@@ -547,37 +497,9 @@
       CAMPOS_PADROES.forEach(([chave, sel]) => { padroes[chave] = $(sel).value; });
       padroes.validadeDias = Number(padroes.validadeDias) || 0;
       try {
-        const resposta = await API.put('/api/auth/padroes', padroes);
-        estado.usuario.padroes = resposta.padroes;
+        const resposta = await API.put('/api/perfil/padroes', padroes);
+        estado.perfil.padroes = resposta.padroes;
         UI.toast('Padrões salvos.', 'sucesso');
-      } catch (erro) {
-        UI.toast(erro.message, 'erro');
-      }
-    });
-
-    $('#perfil-salvar').addEventListener('click', async () => {
-      try {
-        const resposta = await API.put('/api/auth/perfil', {
-          nome: $('#perfil-nome').value,
-          email: $('#perfil-email').value,
-        });
-        estado.usuario = Object.assign(estado.usuario, resposta.usuario);
-        mostrarApp();
-        UI.toast('Dados de acesso atualizados.', 'sucesso');
-      } catch (erro) {
-        UI.toast(erro.message, 'erro');
-      }
-    });
-
-    $('#senha-salvar').addEventListener('click', async () => {
-      try {
-        await API.put('/api/auth/senha', {
-          senhaAtual: $('#senha-atual').value,
-          senhaNova: $('#senha-nova').value,
-        });
-        $('#senha-atual').value = '';
-        $('#senha-nova').value = '';
-        UI.toast('Senha alterada com sucesso.', 'sucesso');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       }
@@ -629,15 +551,6 @@
       if (!evento.target.closest('.usuario-menu')) $('#lista-usuario').classList.add('oculto');
     });
 
-    $('#botao-sair').addEventListener('click', async () => {
-      try {
-        await API.post('/api/auth/logout');
-      } catch (_) { /* ignora */ }
-      estado.usuario = null;
-      mostrarLogin();
-      window.location.hash = '';
-    });
-
     const abrirNovo = (tipo) => {
       const destino = '#/documento/novo/' + tipo;
       if (window.location.hash === destino) rotear(); // mesmo endereço não dispara hashchange
@@ -658,25 +571,20 @@
     if (jaIniciado) return; // evita ligar os eventos duas vezes
     jaIniciado = true;
     window.Editor.iniciar();
-    ligarFormularioLogin();
     ligarNavegacao();
     ligarAcoesDocumentos();
     ligarImportacao();
     ligarEmpresa();
 
     try {
-      const resposta = await API.get('/api/auth/eu');
-      if (resposta.autenticado) {
-        estado.usuario = resposta.usuario;
-        mostrarApp();
-        if (!window.location.hash) window.location.hash = '#/painel';
-        rotear();
-      } else {
-        mostrarLogin();
-      }
+      // não há login: o sistema abre direto no painel com os dados da empresa
+      const resposta = await API.get('/api/perfil');
+      estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
+      mostrarApp();
+      if (!window.location.hash) window.location.hash = '#/painel';
+      rotear();
     } catch (erro) {
-      mostrarLogin();
-      UI.toast('Não foi possível falar com o servidor: ' + erro.message, 'erro');
+      UI.toast('Não foi possível carregar os dados do sistema: ' + erro.message, 'erro');
     }
   }
 

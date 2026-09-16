@@ -3,11 +3,14 @@
 /**
  * Banco de dados simples em arquivo JSON, com gravação atômica.
  *
+ * O sistema é de uso único (não há login): existe um único perfil, que guarda
+ * os dados da empresa e os padrões usados nos documentos.
+ *
  * Estrutura:
  * {
- *   usuarios:  [ { id, nome, email, senhaHash, empresa: {...}, padroes: {...}, criadoEm } ],
- *   documentos:[ { id, usuarioId, tipo, numero, ... } ],
- *   sequencia: { "<usuarioId>": { "<tipo>": { "<ano>": 12 } } }
+ *   perfil:     { empresa: {...}, padroes: {...}, criadoEm },
+ *   documentos: [ { id, tipo, numero, ... } ],
+ *   sequencia:  { "<tipo>[:<grupo>]": { "<ano>": 12 } }
  * }
  */
 
@@ -19,7 +22,37 @@ let db = null;
 let timerGravar = null;
 let gravando = false;
 
-const VAZIO = () => ({ usuarios: [], documentos: [], sequencia: {} });
+const VAZIO = () => ({ perfil: null, documentos: [], sequencia: {} });
+
+/**
+ * Converte bancos antigos (quando o sistema tinha login) para o formato atual:
+ * o primeiro usuário vira o perfil — sem senha, sem nome de usuário — e a
+ * numeração, que era por usuário, passa a ser única.
+ */
+function migrar(dados) {
+  if (dados.perfil || !Array.isArray(dados.usuarios)) return dados;
+  const antigo = dados.usuarios[0];
+  delete dados.usuarios;
+  if (antigo) {
+    dados.perfil = {
+      empresa: antigo.empresa || undefined,
+      padroes: antigo.padroes || undefined,
+      criadoEm: antigo.criadoEm,
+    };
+  }
+  // sequencia: { usuarioId: { tipo: { ano: n } } }  →  { tipo: { ano: n } }
+  const plana = {};
+  Object.values(dados.sequencia || {}).forEach((porTipo) => {
+    Object.entries(porTipo || {}).forEach(([tipo, porAno]) => {
+      plana[tipo] = plana[tipo] || {};
+      Object.entries(porAno || {}).forEach(([ano, n]) => {
+        plana[tipo][ano] = Math.max(Number(plana[tipo][ano] || 0), Number(n || 0));
+      });
+    });
+  });
+  dados.sequencia = plana;
+  return dados;
+}
 
 function carregar() {
   if (db) return db;
@@ -32,10 +65,19 @@ function carregar() {
   try {
     const bruto = fs.readFileSync(DB_FILE, 'utf8');
     const dados = JSON.parse(bruto || '{}');
-    db = Object.assign(VAZIO(), dados);
-    db.usuarios = Array.isArray(db.usuarios) ? db.usuarios : [];
+
+    // banco do tempo em que havia login: converte e grava já no formato novo,
+    // para o arquivo não ficar guardando senha e usuário que não são mais usados
+    const eraAntigo = !dados.perfil && Array.isArray(dados.usuarios);
+    db = Object.assign(VAZIO(), migrar(dados));
     db.documentos = Array.isArray(db.documentos) ? db.documentos : [];
     db.sequencia = db.sequencia && typeof db.sequencia === 'object' ? db.sequencia : {};
+
+    // o dono do documento não existe mais: o banco é de um perfil só
+    const tinhaDono = db.documentos.some((d) => d.usuarioId !== undefined);
+    db.documentos.forEach((d) => { delete d.usuarioId; });
+
+    if (eraAntigo || tinhaDono) salvarAgora();
   } catch (erro) {
     // Arquivo corrompido: preserva o original e começa limpo, para não travar o site.
     const backup = `${DB_FILE}.corrompido-${Date.now()}`;
@@ -76,40 +118,29 @@ function id() {
   return require('crypto').randomUUID();
 }
 
-// ---------------------------------------------------------------- usuários
+// ------------------------------------------------------------------- perfil
 
-const usuario = {
-  listar() {
-    return carregar().usuarios;
-  },
-  porId(uid) {
-    return carregar().usuarios.find((u) => u.id === uid) || null;
-  },
-  porEmail(email) {
-    const alvo = String(email || '').trim().toLowerCase();
-    return carregar().usuarios.find((u) => u.email === alvo) || null;
-  },
-  criar({ nome, email, senhaHash }) {
+/**
+ * Perfil único do sistema (não há login). É criado na primeira gravação, já com
+ * os campos da empresa e os padrões de documento vazios.
+ */
+const perfil = {
+  obter() {
     const db = carregar();
-    const novo = {
-      id: id(),
-      nome: String(nome || '').trim(),
-      email: String(email || '').trim().toLowerCase(),
-      senhaHash,
-      criadoEm: new Date().toISOString(),
-      empresa: empresaPadrao(),
-      padroes: padroesPadrao(),
-    };
-    db.usuarios.push(novo);
-    salvarAgora();
-    return novo;
+    if (!db.perfil) {
+      db.perfil = { empresa: empresaPadrao(), padroes: padroesPadrao(), criadoEm: new Date().toISOString() };
+      salvarAgora();
+    } else {
+      db.perfil.empresa = Object.assign(empresaPadrao(), db.perfil.empresa || {});
+      db.perfil.padroes = Object.assign(padroesPadrao(), db.perfil.padroes || {});
+    }
+    return db.perfil;
   },
-  atualizar(uid, alteracoes) {
-    const u = usuario.porId(uid);
-    if (!u) return null;
-    Object.assign(u, alteracoes);
+  atualizar(alteracoes) {
+    const atual = perfil.obter();
+    Object.assign(atual, alteracoes);
     salvarAgora();
-    return u;
+    return atual;
   },
 };
 
@@ -152,14 +183,14 @@ function padroesPadrao() {
 // ------------------------------------------------------------- documentos
 
 const documento = {
-  /** Lista (sem os itens, para ficar leve) os documentos de um usuário. */
-  listarPorUsuario(uid) {
+  /** Lista (sem os itens, para ficar leve) todos os documentos, do mais novo ao mais antigo. */
+  listar() {
     return carregar()
-      .documentos.filter((d) => d.usuarioId === uid)
+      .documentos.slice()
       .sort((a, b) => String(b.atualizadoEm || '').localeCompare(String(a.atualizadoEm || '')));
   },
-  porId(uid, did) {
-    return carregar().documentos.find((d) => d.id === did && d.usuarioId === uid) || null;
+  porId(did) {
+    return carregar().documentos.find((d) => d.id === did) || null;
   },
   criar(dados) {
     const db = carregar();
@@ -176,23 +207,22 @@ const documento = {
     salvarAgora();
     return novo;
   },
-  substituir(uid, did, dados) {
+  substituir(did, dados) {
     const db = carregar();
-    const indice = db.documentos.findIndex((d) => d.id === did && d.usuarioId === uid);
+    const indice = db.documentos.findIndex((d) => d.id === did);
     if (indice === -1) return null;
     const atualizado = Object.assign({}, db.documentos[indice], dados, {
       id: did,
-      usuarioId: uid,
       atualizadoEm: new Date().toISOString(),
     });
     db.documentos[indice] = atualizado;
     salvarAgora();
     return atualizado;
   },
-  remover(uid, did) {
+  remover(did) {
     const db = carregar();
     const antes = db.documentos.length;
-    db.documentos = db.documentos.filter((d) => !(d.id === did && d.usuarioId === uid));
+    db.documentos = db.documentos.filter((d) => d.id !== did);
     if (db.documentos.length !== antes) {
       salvarAgora();
       return true;
@@ -200,25 +230,23 @@ const documento = {
     return false;
   },
 
-  /** Próximo número sequencial (por usuário, tipo e ano). */
-  proximoNumero(uid, tipo, ano, grupo) {
+  /** Próximo número sequencial (por tipo, grupo e ano). */
+  proximoNumero(tipo, ano, grupo) {
     const db = carregar();
     const chave = grupo ? `${tipo}:${grupo}` : tipo;
-    db.sequencia[uid] = db.sequencia[uid] || {};
-    db.sequencia[uid][chave] = db.sequencia[uid][chave] || {};
-    const atual = Number(db.sequencia[uid][chave][ano] || 0);
+    db.sequencia[chave] = db.sequencia[chave] || {};
+    const atual = Number(db.sequencia[chave][ano] || 0);
     return atual + 1;
   },
 
-  reservarNumero(uid, tipo, ano, grupo, numero) {
+  reservarNumero(tipo, ano, grupo, numero) {
     const db = carregar();
     const chave = grupo ? `${tipo}:${grupo}` : tipo;
-    db.sequencia[uid] = db.sequencia[uid] || {};
-    db.sequencia[uid][chave] = db.sequencia[uid][chave] || {};
-    const atual = Number(db.sequencia[uid][chave][ano] || 0);
-    db.sequencia[uid][chave][ano] = Math.max(atual, Number(numero) || 0);
+    db.sequencia[chave] = db.sequencia[chave] || {};
+    const atual = Number(db.sequencia[chave][ano] || 0);
+    db.sequencia[chave][ano] = Math.max(atual, Number(numero) || 0);
     salvarAgora();
   },
 };
 
-module.exports = { carregar, salvar, salvarAgora, usuario, documento, empresaPadrao, padroesPadrao };
+module.exports = { carregar, salvar, salvarAgora, perfil, documento, empresaPadrao, padroesPadrao };

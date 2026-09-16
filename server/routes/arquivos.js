@@ -5,7 +5,6 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const Auth = require('../auth');
 const { UPLOADS_DIR, garantirPastas } = require('../config');
 const Importador = require('../importar');
 const Modelo = require('../modeloImportacao');
@@ -54,7 +53,7 @@ rotas.get('/modelo-planilha', (req, res) => {
 
 // -------------------------------------------------------- importar planilha
 
-rotas.post('/importar', Auth.exigirLogin, (req, res) => {
+rotas.post('/importar', (req, res) => {
   uploadPlanilha(req, res, (erro) => {
     if (erro) return res.status(400).json({ erro: erro.message });
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo recebido.' });
@@ -69,7 +68,7 @@ rotas.post('/importar', Auth.exigirLogin, (req, res) => {
 
 // -------------------------------------------------------- imagem no servidor
 
-rotas.post('/uploads', Auth.exigirLogin, (req, res) => {
+rotas.post('/uploads', (req, res) => {
   uploadImagem(req, res, (erro) => {
     if (erro) return res.status(400).json({ erro: erro.message });
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo recebido.' });
@@ -88,7 +87,7 @@ rotas.post('/uploads', Auth.exigirLogin, (req, res) => {
   });
 });
 
-rotas.get('/uploads/:arquivo', Auth.exigirLogin, (req, res) => {
+rotas.get('/uploads/:arquivo', (req, res) => {
   const nome = path.basename(req.params.arquivo);
   if (!/^[a-f0-9-]{36}\.(jpg|jpeg|png)$/i.test(nome)) {
     return res.status(400).json({ erro: 'Arquivo inválido.' });
@@ -101,7 +100,7 @@ rotas.get('/uploads/:arquivo', Auth.exigirLogin, (req, res) => {
 });
 
 /** Busca a imagem de um link (Drive, site do fornecedor) e devolve com cache. */
-rotas.get('/imagem', Auth.exigirLogin, async (req, res) => {
+rotas.get('/imagem', async (req, res) => {
   const url = String(req.query.url || '').trim();
   if (!url) return res.status(400).json({ erro: 'Informe o endereço da imagem.' });
   const baixada = await Imagens.baixarImagem(url);

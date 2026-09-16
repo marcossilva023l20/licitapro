@@ -9,9 +9,11 @@ preenchimento.
 
 > **Usar agora:** <https://marcossilva023l20.github.io/licitapro/> — o endereço do GitHub Pages
 > abre o próprio sistema, rodando **no navegador (modo local)**, sem servidor. Nesse modo os
-> documentos ficam salvos no navegador e há backup/restauração em arquivo. Para **vários usuários**
-> com login e senha, publique com servidor — veja
+> documentos ficam salvos no navegador e há backup/restauração em arquivo. Para guardar os dados
+> no servidor e abrir de qualquer computador, publique com servidor — veja
 > **[6. Publicando na internet](#6-publicando-na-internet-hospedagem)** (Render, Railway, Docker ou VPS).
+>
+> O sistema **não tem login**: abre direto no painel, sem usuário nem senha.
 
 O PDF usa a fonte **Times New Roman** (a família Times, uma das fontes padrão do PDF — o
 arquivo não precisa embutir a fonte e abre igual em qualquer leitor). A estrutura segue o
@@ -52,25 +54,13 @@ npm install       # instala as dependências
 npm start         # sobe o site em http://localhost:3000
 ```
 
-Na primeira execução o sistema cria automaticamente o **primeiro acesso** e mostra
-o e-mail e a senha no terminal:
+Na primeira execução o sistema cria apenas o **perfil** (o registro dos dados da empresa)
+dentro da pasta `data/` — não existe usuário nem senha para configurar. Quem abrir o
+endereço já cai no painel.
 
-```
-=============================================================
- Primeiro acesso criado:
-   E-mail: admin@licitapro.com.br
-   Senha : (senha aleatória mostrada aqui)
- (troque a senha em "Minha empresa → Meu acesso" após entrar)
-=============================================================
-```
-
-> Para definir você mesmo o primeiro acesso, use as variáveis de ambiente:
-> ```bash
-> LICITAPRO_ADMIN_EMAIL=seu@email.com LICITAPRO_ADMIN_SENHA=suasenha npm start
-> ```
-
-Depois disso, outras pessoas podem criar a própria conta pela tela de login
-(aba **Criar conta**). Cada usuário vê apenas os próprios documentos.
+> **Atenção:** sem login, qualquer pessoa que abrir o endereço usa o sistema. Se o serviço
+> ficar exposto na internet, proteja o acesso na frente dele (senha no proxy/Nginx, túnel
+> autenticado ou a opção de acesso restrito da plataforma de hospedagem).
 
 Desenvolvimento com recarga automática: `npm run dev`.
 
@@ -118,7 +108,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
 
 ### Números automáticos
 
-A numeração é sequencial por usuário, tipo e ano (`001/2026`, `002/2026`, ...). O campo
+A numeração é sequencial por tipo e ano (`001/2026`, `002/2026`, ...). O campo
 **Série / grupo** permite numeração separada (por exemplo `PE-17-001/2026`), útil quando
 você participa de vários pregões ao mesmo tempo.
 
@@ -159,9 +149,7 @@ Tudo fica em `data/` na raiz do projeto (fora do controle de versão):
 
 ```
 data/
-  db.json          → usuários, empresas e documentos (propostas/orçamentos)
-  sessoes.json     → sessões ativas
-  secret.key       → chave de assinatura dos cookies
+  db.json          → perfil (dados da empresa) e documentos (propostas/orçamentos)
   uploads/         → logos, assinaturas e fotos enviadas do computador
   cache-imagens/   → imagens baixadas de links externos
 ```
@@ -180,11 +168,6 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 | `PORT` | `3000` | porta do site |
 | `HOST` | `0.0.0.0` | interface de rede |
 | `LICITAPRO_DATA_DIR` | `./data` | pasta de dados |
-| `LICITAPRO_ADMIN_EMAIL` | `admin@licitapro.com.br` | e-mail do primeiro usuário criado |
-| `LICITAPRO_ADMIN_SENHA` | senha aleatória | senha do primeiro usuário |
-| `LICITAPRO_ADMIN_NOME` | `Administrador` | nome do primeiro usuário |
-| `LICITAPRO_SECRET` | gerado em `data/secret.key` | chave de assinatura das sessões |
-| `LICITAPRO_REGISTRO_ABERTO` | `1` | `0` desativa "Criar conta" (uso interno) |
 | `LICITAPRO_SILENCIOSO` | — | `1` não imprime o cabeçalho no terminal (usado nos testes) |
 
 ---
@@ -192,7 +175,7 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 ## 6. Publicando na internet (hospedagem)
 
 > **O site precisa de um servidor Node.** O GitHub Pages só publica arquivos estáticos, e o
-> O sistema tem backend (login, banco, upload de arquivos e geração de PDF). Então o código
+> O sistema tem backend (banco, upload de arquivos e geração de PDF). Então o código
 > fica no **GitHub**, mas a hospedagem roda num serviço que executa Node — Render, Railway,
 > Fly.io ou uma VPS. Este repositório já vem preparado: `render.yaml`, `railway.json`,
 > `Procfile` e `Dockerfile`.
@@ -203,9 +186,10 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 2. Crie a conta em <https://render.com> e conecte ao GitHub.
 3. **New +** → **Blueprint** → escolha o repositório `licitapro`.
    O Render lê o `render.yaml` e configura comando de start, healthcheck e disco.
-4. Informe nas variáveis o seu `LICITAPRO_ADMIN_EMAIL`, `LICITAPRO_ADMIN_SENHA` e
-   `LICITAPRO_ADMIN_NOME` — esse será o seu login no site.
-5. Aguarde o deploy e acesse a URL gerada (`https://licitapro-xxxx.onrender.com`).
+4. Aguarde o deploy e acesse a URL gerada (`https://licitapro-xxxx.onrender.com`): o sistema
+   abre direto no painel, sem login.
+5. Se o endereço for público, proteja o acesso (senha no proxy, túnel autenticado ou o
+   controle de acesso da própria plataforma).
 
 > **Sobre os dados:** no plano **gratuito** o disco é apagado a cada reinício, então as
 > propostas salvas se perdem — serve para testar/demonstrar. Para uso real, mantenha o bloco
@@ -216,8 +200,7 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 
 1. <https://railway.app> → **New Project** → **Deploy from GitHub repo** → `licitapro`.
 2. O `railway.json` já define o comando de start e o healthcheck.
-3. Em **Variables**: `LICITAPRO_ADMIN_EMAIL`, `LICITAPRO_ADMIN_SENHA` e
-   `LICITAPRO_DATA_DIR=/var/data`.
+3. Em **Variables**: `LICITAPRO_DATA_DIR=/var/data`.
 4. Em **Volumes**, monte um volume em `/var/data` (sem volume os dados se perdem no deploy).
 5. Em **Settings → Networking → Generate Domain** para gerar a URL pública.
 
@@ -227,8 +210,6 @@ Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 docker build -t licitapro .
 docker run -d --restart unless-stopped --name licitapro -p 80:3000 \
   -v /var/lib/licitapro:/app/data \
-  -e LICITAPRO_ADMIN_EMAIL=seu@email.com \
-  -e LICITAPRO_ADMIN_SENHA=umaSenhaForte \
   licitapro
 ```
 
@@ -243,11 +224,9 @@ pm2 save && pm2 startup
 
 ### Depois de publicar
 
-- **Troque a senha** do primeiro acesso em *Minha empresa → Meu acesso*.
-- Para uso interno, defina `LICITAPRO_REGISTRO_ABERTO=0` e ninguém cria conta sozinho.
-- **HTTPS**: Render e Railway já fornecem. Em VPS, use Nginx/Caddy como proxy reverso; o
-  sistema marca o cookie de sessão como `Secure` quando recebe `X-Forwarded-Proto: https`
-  (no Nginx: `proxy_set_header X-Forwarded-Proto $scheme;`).
+- **Proteja o endereço**: como não há login, use uma senha no proxy reverso (Nginx/Caddy),
+  um túnel autenticado (Cloudflare Access, Tailscale) ou o controle de acesso da plataforma.
+- **HTTPS**: Render e Railway já fornecem. Em VPS, use Nginx/Caddy como proxy reverso.
 - **Domínio próprio**: aponte o DNS para o serviço (no Render: *Settings → Custom Domain*).
 - **Backup**: copie de tempos em tempos a pasta de dados (`data/` ou `/var/data`), que contém
   o banco `db.json`, os uploads (logo, assinatura, fotos) e o cache de imagens.
@@ -268,8 +247,8 @@ backend: o GitHub Pages publica apenas arquivos estáticos.
 |---|---|---|
 | Onde ficam os documentos | No navegador usado (localStorage) | No servidor (arquivo `db.json`) |
 | Fotos e logos | No navegador (IndexedDB) | Em `data/uploads` |
-| Login e senha | Não (o acesso é o do próprio navegador) | Sim, vários usuários isolados |
-| Vários usuários | Não — cada navegador tem os seus dados | Sim |
+| Acesso | Direto, sem login | Direto, sem login (proteja o endereço) |
+| Abrir de outro computador | Não — cada navegador tem os seus dados | Sim, pelo endereço do site |
 | Backup | Botão *Baixar backup* / *Restaurar backup* | Cópia da pasta de dados |
 
 Como funciona (e por que é seguro): o navegador guarda os documentos **naquele computador e
@@ -307,13 +286,13 @@ A página de apresentação do projeto fica em `apresentacao.html`
 
 ## 7. Segurança
 
-- Senhas guardadas com **scrypt** (sal por usuário) — nunca em texto puro.
-- Sessões por cookie `HttpOnly` + `SameSite=Lax` assinado com HMAC; expiram em 30 dias.
-- Bloqueio temporário após 10 tentativas de login erradas por IP/e-mail.
-- Todo documento é isolado por usuário: consultas, PDF, planilha e exclusão verificam o dono.
+- **Não há autenticação**: o sistema abre direto. Proteja o endereço por fora (proxy com
+  senha, túnel autenticado ou acesso restrito na hospedagem) quando ele for público.
+- Cabeçalhos `X-Content-Type-Options`, `X-Frame-Options` e `Referrer-Policy` em todas as respostas.
+- Uploads são validados como JPEG/PNG reais (arquivo corrompido é recusado, não derruba o PDF).
 - Download de imagens externas bloqueia endereços de rede interna (proteção contra SSRF) e
   limita tamanho/tipo de arquivo.
-- Perdeu a senha? No servidor: `npm run usuarios -- senha email@x.com novaSenha`.
+- Não há senha para perder: o banco guarda só o perfil da empresa e os documentos.
 
 ---
 
@@ -325,8 +304,9 @@ npm run testes
 
 Cobre formatação brasileira (moeda, por extenso, máscaras), geração do modelo de planilha,
 importação de arquivos (xlsx, csv, cabeçalhos alternativos, arquivos inválidos), cálculo de
-totais, geração dos PDFs de proposta e orçamento, rotas HTTP (autenticação, CRUD, PDF,
-planilha, isolamento entre usuários) e testes de navegador com **jsdom** que fazem login,
+totais, geração dos PDFs de proposta e orçamento, rotas HTTP (CRUD, PDF, planilha — inclusive
+um teste que garante que o **login não voltou**: nenhuma rota de senha/sessão, nenhum campo de
+senha no HTML, banco sem usuários) e testes de navegador com **jsdom** que abrem o sistema,
 criam proposta, adicionam itens, conferem os cálculos, salvam e abrem a pré-visualização.
 
 Cobre também a **identidade visual**: paleta da marca no PDF, dourado nos títulos,
@@ -345,9 +325,8 @@ fica desligado.
 ```
 server/
   index.js              → servidor Express, middlewares e rotas
-  config.js             → caminhos, portas e segredo das sessões
-  store.js              → banco de dados em JSON (gravação atômica)
-  auth.js               → senhas (scrypt), sessões e cookie assinado
+  config.js             → caminhos e portas
+  store.js              → banco de dados em JSON (gravação atômica) — perfil único e documentos
   documento-schema.js   → validação/normalização das propostas e orçamentos
   pdf.js                → montagem do PDF (proposta, orçamento e catálogo)
   importar.js           → leitura das planilhas enviadas
@@ -388,7 +367,6 @@ data/                   → dados gerados em execução (não versionado)
 | "A porta 3000 já está em uso" | rode com outra porta: `PORT=3001 npm start` |
 | As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar foto do computador** |
 | A planilha não é reconhecida | use o modelo para download e mantenha os títulos da linha 1 |
-| Esqueci a senha | `npm run usuarios -- senha email@x.com novaSenha` |
 | Quero apagar todos os dados | pare o sistema e remova a pasta `data/` |
 | O PDF sai sem o catálogo | confira a aba **Layout do PDF** → "Incluir página de catálogo" |
 | A logo não aparece no cabeçalho | envie a imagem em *Minha empresa* e marque "Usar logo no cabeçalho" |
@@ -454,8 +432,8 @@ public/marca/logo.png      (o servidor também aceita logo.jpg / logo.jpeg)
   (8% de opacidade, atrás do texto, em todas as páginas).
 - **Desligar a marca d'água:** no editor, em *Opções do documento*, desmarque
   **"Usar a logo da empresa como marca d'água"** (a opção fica salva no documento).
-- **Cada usuário pode ter a própria logo** (Minha empresa → Logo): ela vale para os
-  documentos daquele usuário; o arquivo em `public/marca/` é o padrão do site.
+- **A logo da empresa** vem de *Minha empresa → Logo* e vale para todos os documentos;
+  o arquivo em `public/marca/` é o padrão do site.
 
 Formato ideal: **PNG com fundo transparente**. JPG também funciona — fundo branco ou bem
 claro é o que menos aparece no documento.

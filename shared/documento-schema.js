@@ -59,12 +59,11 @@ function sanearItens(itens) {
   return itens.slice(0, 800).map((item, i) => itemNovo(item, i));
 }
 
-function documentoBase(usuario, tipo, extras) {
+function documentoBase(perfil, tipo, extras) {
   const agora = new Date();
   return Object.assign(
     {
       id: null,
-      usuarioId: usuario.id,
       tipo: TIPOS.includes(tipo) ? tipo : 'proposta',
       numero: { sequencial: 1, ano: agora.getFullYear(), grupo: '' },
       status: 'rascunho',
@@ -76,18 +75,18 @@ function documentoBase(usuario, tipo, extras) {
         pregao: '',
         modalidade: 'Pregão Eletrônico',
         objeto: '',
-        prazoEntrega: (usuario.padroes && usuario.padroes.prazoEntrega) || 'Conforme Edital.',
+        prazoEntrega: (perfil.padroes && perfil.padroes.prazoEntrega) || 'Conforme Edital.',
       },
       cliente: { nome: '', cnpjCpf: '', contato: '', telefone: '', email: '', endereco: '' },
-      proponente: Object.assign({}, usuario.empresa || {}),
+      proponente: Object.assign({}, perfil.empresa || {}),
       itens: [],
       condicoes: {
-        validadeDias: (usuario.padroes && usuario.padroes.validadeDias) || 60,
-        condicoesPagamento: (usuario.padroes && usuario.padroes.condicoesPagamento) || '',
-        prazoEntrega: (usuario.padroes && usuario.padroes.prazoEntrega) || 'Conforme Edital.',
-        garantia: (usuario.padroes && usuario.padroes.garantia) || '',
-        observacoes: (usuario.padroes && usuario.padroes.observacoes) || '',
-        local: (usuario.padroes && usuario.padroes.cidadeUf) || '',
+        validadeDias: (perfil.padroes && perfil.padroes.validadeDias) || 60,
+        condicoesPagamento: (perfil.padroes && perfil.padroes.condicoesPagamento) || '',
+        prazoEntrega: (perfil.padroes && perfil.padroes.prazoEntrega) || 'Conforme Edital.',
+        garantia: (perfil.padroes && perfil.padroes.garantia) || '',
+        observacoes: (perfil.padroes && perfil.padroes.observacoes) || '',
+        local: (perfil.padroes && perfil.padroes.cidadeUf) || '',
       },
       desconto: { modo: 'nenhum', valor: 0 },
       acrescimo: { ativo: false, descricao: 'Frete / Instalação', valor: 0 },
@@ -111,10 +110,10 @@ function documentoBase(usuario, tipo, extras) {
 }
 
 /** Junta os dados enviados pelo site com um documento base (ou com o documento anterior). */
-function sanear(payload, usuario, tipoSugerido, anterior) {
+function sanear(payload, perfil, tipoSugerido, anterior) {
   const p = payload || {};
   const tipo = TIPOS.includes(p.tipo) ? p.tipo : anterior ? anterior.tipo : TIPOS.includes(tipoSugerido) ? tipoSugerido : 'proposta';
-  const base = documentoBase(usuario, tipo);
+  const base = documentoBase(perfil, tipo);
   const atual = anterior || base;
 
   const numeroAnterior = atual.numero || base.numero;
@@ -132,7 +131,6 @@ function sanear(payload, usuario, tipoSugerido, anterior) {
 
   return {
     id: atual.id || null,
-    usuarioId: usuario.id,
     tipo,
     numero: {
       sequencial: Number(numeroEnviado.sequencial || numeroAnterior.sequencial) || 1,
