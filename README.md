@@ -36,8 +36,6 @@ Desconto / acréscimo + TOTAL + valor total por extenso
    ↓
 CONDIÇÕES (validade, pagamento, prazo de entrega, garantia, observações)
    ↓
-Declaração de aceitação das condições do edital
-   ↓
 CATÁLOGO (descrição comercial + foto de cada produto)
    ↓
 Local, data e bloco de assinatura do representante legal
@@ -94,7 +92,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Dados do proponente | dados da empresa para *este* documento (logo e assinatura) |
-   | Layout do PDF | catálogo, fotos, dados bancários, valor por extenso, assinatura, declaração, cor do documento |
+   | Layout do PDF | catálogo, fotos, dados bancários, valor por extenso, assinatura, cor do documento |
 
    Recursos úteis: **margem sobre o custo** (aplica custo + X% em todos os itens),
    **duplicar item**, **reordenar**, **pré-visualização** do PDF lado a lado e salvamento automático.
@@ -180,9 +178,13 @@ deploy, reinício e mudança de servidor.
 4. Informe as duas no serviço:
    - **na sua máquina:** crie um arquivo `.env` na raiz (veja `.env.example`);
    - **no Render/Railway/Docker:** cadastre as duas variáveis de ambiente.
-5. Suba o sistema e confira: `npm run supabase` (mostra a conexão, a empresa e a
-   quantidade de documentos no banco). O `/api/health` também responde
-   `"armazenamento": "supabase"`.
+5. Suba o sistema e confira: **`npm run supabase`** — ele faz uma conferência passo a
+   passo (arquivo `.env`, endereço, tipo de chave, conexão, tabelas, **gravação de
+   verdade**, conteúdo e cópia local) e diz exatamente onde está o problema, se houver.
+   No painel do sistema aparece a mesma informação em uma linha:
+   *"Banco de dados conectado (Supabase)"*, *"Supabase não configurado…"* ou
+   *"O banco (Supabase) não está recebendo os dados: <motivo>"*. O `/api/health` também
+   responde `"armazenamento"` e o estado do banco.
 
 O que acontece quando as variáveis estão definidas:
 
@@ -198,7 +200,10 @@ O que acontece quando as variáveis estão definidas:
   o sistema tenta o banco de novo. Quando ele volta, banco e arquivo são
   sincronizados automaticamente (e o documento criado durante a queda vai para
   o banco).
-- `npm run supabase` mostra a conexão, o tipo de chave e o que está gravado.
+- `npm run supabase` mostra a conexão, o tipo de chave, testa a gravação e o que está gravado.
+- **No painel** do sistema há uma linha dizendo onde os dados estão sendo salvos — é a forma
+  mais rápida de saber se está indo para o banco, para o arquivo ou (no modo local) para o
+  próprio navegador.
 - Para voltar ao arquivo local: `LICITAPRO_ARMAZENAMENTO=arquivo`.
 
 > **A chave `service_role` dá acesso total ao banco: ela fica só no servidor.**
@@ -447,7 +452,11 @@ data/                   → dados gerados em execução (não versionado)
 | "A porta 3000 já está em uso" | rode com outra porta: `PORT=3001 npm start` |
 | As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar foto do computador** |
 | A planilha não é reconhecida | use o modelo para download e mantenha os títulos da linha 1 |
-| Quero apagar todos os dados | pare o sistema e remova a pasta `data/` |
+| O sistema diz que não está salvando no banco | rode `npm run supabase`: ele aponta o passo que falhou (`.env`, chave, tabelas ou gravação). No painel, a linha de situação mostra o mesmo motivo |
+| "Supabase não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço — veja a seção 4 |
+| As tabelas não existem no banco | rode `supabase/esquema.sql` no SQL Editor do projeto (`npm run supabase -- sql`) |
+| A chave anon é recusada | ela é pública: use a `service_role` ou rode `supabase/politicas-anon.sql` (veja a seção 4) |
+| Quero apagar todos os dados | pare o sistema e remova a pasta `data/` (e as linhas das tabelas no banco, se estiver usando Supabase) |
 | O PDF sai sem o catálogo | confira a aba **Layout do PDF** → "Incluir página de catálogo" |
 | A logo não aparece no cabeçalho | envie a imagem em *Minha empresa* e marque "Usar logo no cabeçalho" |
 | (GitHub Pages) os documentos sumiram | eles ficam no navegador usado; restaure pelo **Restaurar backup** |

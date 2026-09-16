@@ -58,19 +58,114 @@ function semCredenciais() {
   console.log('Na hospedagem (Render/Railway/Docker), cadastre as duas variáveis.\n');
 }
 
+/**
+ * Conferência passo a passo: cada etapa diz "ok" ou onde parou e o que fazer.
+ * É o caminho mais rápido para descobrir por que o sistema não está gravando
+ * no banco.
+ */
 async function conferir() {
   const config = Supabase.lerConfiguracao();
+  const arquivoEnv = path.join(RAIZ, '.env');
+  const passos = [];
+
+  const marcar = (ok, titulo, detalhe) => {
+    passos.push({ ok, titulo, detalhe });
+    console.log(`  ${ok ? 'ok  ' : 'FALHA'} ${titulo}${detalhe ? '\n        ' + detalhe : ''}`);
+  };
+
+  console.log('\nConferindo o banco de dados (Supabase)\n' + '-'.repeat(52));
+
+  // 1. arquivo .env
+  marcar(true, 'Arquivo .env: ' + (fs.existsSync(arquivoEnv) ? 'encontrado' : 'não existe (usando variáveis de ambiente)'),
+    fs.existsSync(arquivoEnv) ? arquivoEnv : 'Na hospedagem, as variáveis ficam no painel do serviço.');
+
+  // 2. endereço e chave
+  if (!config.configurado) {
+    marcar(false, 'Credenciais do projeto', 'Informe SUPABASE_URL e SUPABASE_SERVICE_KEY (veja .env.example).');
+    return resumo(passos);
+  }
+  marcar(true, 'Endereço do projeto: ' + config.url);
+  const tipo = Supabase.classificarChave(config.chave);
+  marcar(
+    Supabase.chaveDeServidor(config.chave),
+    'Chave: ' + tipo,
+    Supabase.orientacaoDaChave(config.chave) || 'Chave de servidor: pode ler e gravar sem depender das políticas.'
+  );
+
   const cliente = Supabase.criarCliente();
-  console.log('\nSupabase: ' + config.url);
-  mostrarChave();
-  await cliente.conferir();
+
+  // 3. conexão
+  try {
+    await cliente.conferir();
+    marcar(true, 'Conexão e tabelas: ok (' + Object.values(Supabase.TABELAS).join(', ') + ')');
+  } catch (erro) {
+    const faltandoTabela = /relation|does not exist|42P01/i.test(erro.message);
+    const semPermissao = /401|403|permission denied|row-level security/i.test(erro.message);
+    const semRede = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|fetch failed|timeout/i.test(erro.message);
+    let dica;
+    if (faltandoTabela) {
+      dica = 'As tabelas ainda não existem neste projeto: rode supabase/esquema.sql no SQL Editor.\n' +
+             '        (veja todo o SQL com: npm run supabase -- sql)';
+    } else if (semPermissao) {
+      dica = 'O banco recusou a chave. Confira se ela é a service_role (ou sb_secret_...)\n' +
+             '        ou rode supabase/politicas-anon.sql se quiser usar a chave pública.';
+    } else if (semRede) {
+      dica = 'Não há conexão com o Supabase a partir daqui: verifique a internet/proxy\n' +
+             '        (e se o SUPABASE_URL está certo).';
+    } else {
+      dica = 'Detalhe: ' + erro.message;
+    }
+    marcar(false, 'Conexão e tabelas', dica);
+    return resumo(passos);
+  }
+
+  // 4. escrita de verdade: grava e apaga uma linha de teste
+  try {
+    const agora = new Date().toISOString();
+    await cliente.salvar('licitapro_sequencia', [{ chave: '__teste__', por_ano: {}, atualizado_em: agora }], 'chave');
+    await cliente.apagar('licitapro_sequencia', 'chave=eq.__teste__');
+    marcar(true, 'Gravação: ok (linha de teste criada e removida)');
+  } catch (erro) {
+    marcar(false, 'Gravação', 'O banco não aceitou gravar: ' + erro.message);
+    return resumo(passos);
+  }
+
+  // 5. conteúdo
   const estado = await Supabase.lerEstado(cliente);
   const empresa = (estado.perfil && estado.perfil.empresa) || {};
-  console.log('  Conexão: ok (tabelas encontradas)');
-  console.log('  Empresa: ' + (empresa.razaoSocial || empresa.nomeFantasia || '(não cadastrada)'));
-  console.log('  Documentos: ' + estado.documentos.length);
-  const anos = Object.values(estado.sequencia || {}).length;
-  console.log('  Numeração: ' + (anos ? 'ok' : 'vazia'));
+  marcar(true, 'Empresa cadastrada no banco: ' + (empresa.razaoSocial || empresa.nomeFantasia || '(nenhuma ainda)'));
+  marcar(true, 'Documentos no banco: ' + estado.documentos.length);
+  marcar(true, 'Numeração: ' + (Object.keys(estado.sequencia || {}).length ? 'ok' : 'vazia'));
+
+  const local = path.join(RAIZ, 'data', 'db.json');
+  if (fs.existsSync(local)) {
+    try {
+      const dados = JSON.parse(fs.readFileSync(local, 'utf8'));
+      const quantidade = (dados.documentos || []).length;
+      if (quantidade !== estado.documentos.length) {
+        marcar(false, 'Cópia local diferente do banco',
+          'data/db.json tem ' + quantidade + ' documento(s) e o banco tem ' + estado.documentos.length + '.\n' +
+          '        Ao subir o sistema, os dois são unidos (nada é perdido). Para enviar agora:\n' +
+          '        npm run supabase -- enviar');
+      } else {
+        marcar(true, 'Cópia local: em dia com o banco');
+      }
+    } catch (_) { /* arquivo ilegível: o sistema avisa ao subir */ }
+  }
+
+  return resumo(passos);
+}
+
+function resumo(passos) {
+  const falhas = passos.filter((p) => !p.ok).length;
+  console.log('-'.repeat(52));
+  if (falhas) {
+    console.log('Resultado: ' + falhas + ' problema(s) acima — o sistema está salvando no arquivo');
+    console.log('local (data/db.json) enquanto isso. O painel do sistema mostra o mesmo aviso.');
+  } else {
+    console.log('Resultado: tudo certo — o sistema está gravando no banco Supabase.');
+    console.log('No painel do sistema aparece "Banco de dados conectado (Supabase)".');
+  }
   console.log('');
 }
 

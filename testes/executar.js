@@ -244,7 +244,7 @@ function documentoExemplo(tipo) {
     acrescimo: { ativo: true, descricao: 'Frete / Instalação', valor: 150 },
     opcoes: {
       mostrarCatalogo: true, mostrarFotos: true, mostrarDadosBancarios: true, mostrarPorExtenso: true,
-      mostrarAssinatura: true, mostrarDeclaracao: true, quebrarPaginaCatalogo: true, logoNoCabecalho: true,
+      mostrarAssinatura: true, quebrarPaginaCatalogo: true, logoNoCabecalho: true,
       mostrarLinkCompra: false, cor: '#0B1F33', marcaDagua: true,
     },
   };
@@ -637,11 +637,34 @@ teste('PDF: respeita as opções de layout (sem catálogo e sem assinatura)', as
   const doc = documentoExemplo('proposta');
   doc.opcoes.mostrarCatalogo = false;
   doc.opcoes.mostrarAssinatura = false;
-  doc.opcoes.mostrarDeclaracao = false;
   const definicao = await Pdf.montarDefinicao(doc, {});
   const texto = JSON.stringify(definicao.content);
   assert.ok(!texto.includes('CATÁLOGO'), 'o catálogo não deveria aparecer');
   assert.ok(!texto.includes('REPRESENTANTE LEGAL DA EMPRESA'), 'a assinatura não deveria aparecer');
+});
+
+teste('PDF: a declaração de aceitação não existe mais (a pedido do usuário)', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+
+  for (const tipo of ['proposta', 'orcamento']) {
+    const doc = documentoExemplo(tipo);
+    const definicao = await Pdf.montarDefinicao(doc, {});
+    const texto = JSON.stringify(definicao.content);
+    assert.ok(!texto.includes('Declaramos que conhecemos'), 'sem o texto da declaração em ' + tipo);
+    assert.ok(!texto.includes('instrumento convocatório'), 'sem menção ao instrumento convocatório em ' + tipo);
+    assert.ok(!texto.includes('irreajustáveis'), 'sem a cláusula de preços firmes em ' + tipo);
+  }
+
+  // a opção saiu do esquema: mandar mostrarDeclaracao no documento não faz nada
+  const saneado = Esquema.sanear({ tipo: 'proposta', opcoes: { mostrarDeclaracao: true } }, {}, 'proposta');
+  assert.strictEqual(saneado.opcoes.mostrarDeclaracao, undefined, 'a opção não é mais aceita');
+
+  // e não sobrou nenhum controle dela no site
+  const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
+  assert.strictEqual(html.includes('op-declaracao'), false, 'sem checkbox da declaração no editor');
+  const editar = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'editar.js'), 'utf8');
+  assert.strictEqual(editar.includes('mostrarDeclaracao'), false, 'sem referência no editor');
 });
 
 // ==================================================== 4. imagens do Drive
@@ -905,6 +928,16 @@ teste('Interface: abre no navegador, entra, cria proposta com item e salva', asy
     assert.strictEqual($('#tela-login'), null, 'sem tela de login no HTML');
     assert.strictEqual($('#app').classList.contains('oculto'), false, 'aplicação visível sem senha');
     assert.strictEqual($('#nome-usuario').textContent.length > 0, true, 'nome da empresa no topo');
+
+    // e o painel diz onde os dados estão sendo salvos
+    await Navegador.esperar(
+      () => !$('#situacao-dados').classList.contains('oculto') && $('#situacao-dados-texto').textContent.length > 0,
+      'situação dos dados no painel'
+    );
+    const situacao = $('#situacao-dados-texto').textContent;
+    assert.ok(/arquivo do servidor/.test(situacao), 'sem banco configurado, avisa que salva no arquivo: ' + situacao);
+    assert.ok($('#situacao-dados').classList.contains('aviso'), 'marcado como aviso');
+    assert.ok($('#situacao-dados-rever'), 'tem o botão de verificar de novo');
 
     // 3. nova proposta
     $('#botao-nova-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -1213,6 +1246,15 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
   assert.strictEqual(
     window.document.documentElement.getAttribute('data-modo'), 'local',
     'interface marcada como modo local'
+  );
+  // no modo local não há banco nem servidor: o painel diz que os dados ficam aqui
+  await ModoLocal.esperar(
+    () => $('#situacao-dados-texto').textContent.length > 0,
+    'situação dos dados no modo local'
+  );
+  assert.ok(
+    /neste navegador/.test($('#situacao-dados-texto').textContent),
+    'avisa que os dados ficam no navegador: ' + $('#situacao-dados-texto').textContent
   );
   assert.ok(erros.length === 0, 'sem erros de script: ' + erros.join(' | '));
 
@@ -1630,9 +1672,15 @@ teste('Supabase: o esquema cria as tabelas usadas, com RLS, e sem chave no naveg
   assert.ok(sql.includes('jsonb'), 'versão do sistema (empresa, itens e dados do documento) em jsonb');
 
   // a chave de serviço é só do servidor: nunca aparece no que vai ao navegador
+  // (o site pode *citar* o Supabase no texto de aviso — o que não pode é ter
+  //  variável de credencial, chave ou o endereço do projeto)
   ['public/index.html', 'public/js/app.js', 'public/js/modo-estatico.js', 'public/js/api.js'].forEach((relativo) => {
     const conteudo = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
-    assert.strictEqual(/SUPABASE|service_role|supabase\.co/i.test(conteudo), false, 'sem credencial de banco em ' + relativo);
+    assert.strictEqual(
+      /SUPABASE_[A-Z]|service_role|sb_secret_|sb_publishable_|supabase\.co/i.test(conteudo),
+      false,
+      'sem credencial de banco em ' + relativo
+    );
   });
 });
 
@@ -1909,6 +1957,81 @@ teste('Supabase: falha no banco é avisada e o arquivo local continua salvando',
     documentos: [],
     sequencia: {},
   });
+});
+
+teste('Supabase: o diagnóstico diz passo a passo onde está o problema', async () => {
+  const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
+  const { execFile } = require('child_process');
+  const arquivo = path.join(RAIZ, 'scripts', 'supabase.js');
+
+  const rodar = (ambiente) =>
+    new Promise((resolver) => {
+      execFile(
+        process.execPath,
+        [arquivo, 'conferir'],
+        { env: Object.assign({}, process.env, ambiente) },
+        (erro, saida, erroSaida) => resolver(String(saida || '') + String(erroSaida || ''))
+      );
+    });
+
+  // banco no ar: tudo ok e a gravação é testada de verdade
+  const falso = await criarServidorDeMentira();
+  try {
+    const saida = await rodar({
+      SUPABASE_URL: falso.url,
+      SUPABASE_SERVICE_KEY: CHAVE_ESPERADA,
+      LICITAPRO_DATA_DIR: process.env.LICITAPRO_DATA_DIR,
+    });
+    assert.ok(/Chave: service_role/.test(saida), 'reconhece a chave de servidor:\n' + saida);
+    assert.ok(/Conexão e tabelas: ok/.test(saida), 'confere as tabelas');
+    assert.ok(/Gravação: ok/.test(saida), 'testa a gravação de verdade');
+    assert.ok(/tudo certo/.test(saida), 'resume como tudo certo');
+    assert.strictEqual(falso.contagem('licitapro_sequencia'), 0, 'a linha de teste é removida no fim');
+
+    // banco fora do ar: aponta a falha e explica o que acontece com os dados
+    falso.falhar = true;
+    const saidaRuim = await rodar({
+      SUPABASE_URL: falso.url,
+      SUPABASE_SERVICE_KEY: CHAVE_ESPERADA,
+      LICITAPRO_DATA_DIR: process.env.LICITAPRO_DATA_DIR,
+    });
+    assert.ok(/FALHA Conexão e tabelas/.test(saidaRuim), 'mostra a falha de conexão');
+    assert.ok(/salvando no arquivo/.test(saidaRuim), 'explica que os dados vão para o arquivo local');
+  } finally {
+    await falso.fechar();
+  }
+
+  // projeto de outro endereço (DNS que não existe): aponta falta de conexão
+  const saidaSemRede = await rodar({
+    SUPABASE_URL: 'https://projeto-que-nao-existe.invalid',
+    SUPABASE_SERVICE_KEY: CHAVE_ESPERADA,
+    LICITAPRO_DATA_DIR: process.env.LICITAPRO_DATA_DIR,
+  });
+  assert.ok(/FALHA/.test(saidaSemRede), 'avisa que falhou');
+});
+
+teste('Supabase: a chave anon sem políticas é barrada com explicação clara', async () => {
+  const { criarServidorDeMentira } = require('./supabase-falso');
+  const { execFile } = require('child_process');
+  const arquivo = path.join(RAIZ, 'scripts', 'supabase.js');
+  const anon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bmViaHRvZHRrYnR5ZHpnb3VvIiwicm9sZSI6ImFub24ifQ.assinatura';
+
+  const falso = await criarServidorDeMentira();
+  try {
+    const saida = await new Promise((resolver) => {
+      execFile(
+        process.execPath,
+        [arquivo, 'conferir'],
+        { env: Object.assign({}, process.env, { SUPABASE_URL: falso.url, SUPABASE_SERVICE_KEY: anon, LICITAPRO_DATA_DIR: process.env.LICITAPRO_DATA_DIR }) },
+        (erro, stdout, stderr) => resolver(String(stdout || '') + String(stderr || ''))
+      );
+    });
+    assert.ok(/FALHA Chave: anon/.test(saida), 'marca a chave como pública');
+    assert.ok(/service_role/.test(saida), 'aponta a chave certa');
+    assert.ok(/politicas-anon\.sql/.test(saida), 'aponta o caminho alternativo');
+  } finally {
+    await falso.fechar();
+  }
 });
 
 teste('Segurança: nenhuma chave de servidor do Supabase no repositório', () => {

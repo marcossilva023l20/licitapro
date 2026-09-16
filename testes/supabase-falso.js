@@ -11,7 +11,16 @@
 const http = require('http');
 
 const TABELAS = ['licitapro_perfil', 'licitapro_documentos', 'licitapro_sequencia'];
-const CHAVE_ESPERADA = 'chave-de-teste';
+
+/**
+ * Chave de mentira com o formato de uma service_role de verdade (com a
+ * assinatura curta, para não ser confundida com um vazamento pelo teste de
+ * segurança do repositório).
+ */
+const CARGA = Buffer.from(
+  JSON.stringify({ iss: 'supabase', ref: 'projeto-de-teste', role: 'service_role' })
+).toString('base64url');
+const CHAVE_ESPERADA = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${CARGA}.assinatura`;
 
 function chavePrimaria(tabela) {
   if (tabela === 'licitapro_documentos') return 'id';

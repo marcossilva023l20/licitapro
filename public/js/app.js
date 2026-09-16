@@ -26,6 +26,47 @@
     return empresa.nomeFantasia || empresa.razaoSocial || 'Minha empresa';
   }
 
+  /**
+   * Mostra no painel onde os dados estão sendo salvos. É a resposta curta para
+   * "o sistema está gravando no banco?" — sem precisar abrir o terminal:
+   *   banco conectado · banco com problema · arquivo do servidor · este navegador
+   */
+  async function atualizarSituacaoDados() {
+    const caixa = $('#situacao-dados');
+    const texto = $('#situacao-dados-texto');
+    if (!caixa || !texto) return;
+
+    const modoLocal = window.ModoEstatico && window.ModoEstatico.ativo && window.ModoEstatico.ativo();
+    if (modoLocal) {
+      caixa.className = 'situacao-dados aviso';
+      texto.textContent =
+        'Dados salvos neste navegador (sem servidor). Use "Baixar backup" no menu para guardar uma cópia.';
+      return;
+    }
+
+    try {
+      const saude = await API.get('/api/health');
+      const banco = saude.supabase || {};
+      if (saude.armazenamento === 'supabase' && banco.conectado) {
+        caixa.className = 'situacao-dados ok';
+        texto.textContent = 'Banco de dados conectado (Supabase): empresa e documentos salvos no banco.';
+      } else if (banco.configurado) {
+        caixa.className = 'situacao-dados erro';
+        texto.textContent =
+          'O banco (Supabase) não está recebendo os dados: ' + (banco.erro || 'motivo desconhecido') +
+          ' — o que você salvar fica no arquivo do servidor até o banco voltar.';
+      } else {
+        caixa.className = 'situacao-dados aviso';
+        texto.textContent =
+          'Supabase não configurado: os dados estão sendo salvos no arquivo do servidor. ' +
+          'Veja o README (seção 4) para ligar o banco.';
+      }
+    } catch (erro) {
+      caixa.className = 'situacao-dados erro';
+      texto.textContent = 'Não consegui falar com o servidor para saber onde os dados estão: ' + erro.message;
+    }
+  }
+
   function mostrarApp() {
     const nome = nomeDaEmpresa();
     $('#nome-usuario').textContent = nome;
@@ -486,6 +527,7 @@
         estado.empresa = Object.assign(estado.empresa, resposta.empresa);
         estado.perfil.empresa = resposta.empresa;
         mostrarApp(); // o nome da empresa também aparece no topo
+        atualizarSituacaoDados();
         UI.toast('Dados da empresa salvos.', 'sucesso');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
@@ -556,6 +598,9 @@
       if (window.location.hash === destino) rotear(); // mesmo endereço não dispara hashchange
       else window.location.hash = destino;
     };
+    const rever = $('#situacao-dados-rever');
+    if (rever) rever.addEventListener('click', () => atualizarSituacaoDados());
+
     $('#botao-nova-proposta').addEventListener('click', () => abrirNovo('proposta'));
     $('#painel-nova-proposta').addEventListener('click', () => abrirNovo('proposta'));
     $('#docs-nova-proposta').addEventListener('click', () => abrirNovo('proposta'));
@@ -581,6 +626,7 @@
       const resposta = await API.get('/api/perfil');
       estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
       mostrarApp();
+      atualizarSituacaoDados();
       if (!window.location.hash) window.location.hash = '#/painel';
       rotear();
     } catch (erro) {
@@ -590,6 +636,7 @@
 
   window.App = {
     iniciar,
+    atualizarSituacaoDados,
     recarregarLista: async () => {
       await carregarDocumentos();
       if (!$('#view-documentos').classList.contains('oculto')) desenharListaDocumentos();

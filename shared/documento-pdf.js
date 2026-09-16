@@ -304,22 +304,6 @@ function cabecalhoTabela(corBase, colunas) {
 
 // ------------------------------------------------------------------ cláusulas
 
-function textoDeclaracao(doc) {
-  if (doc.tipo === 'orcamento') {
-    return (
-      'Este orçamento foi elaborado com base nas informações fornecidas, estando os valores e prazos sujeitos ' +
-      'à confirmação de disponibilidade de estoque junto aos fabricantes. A aceitação se dá por meio de ' +
-      'aprovação por escrito (e-mail ou assinatura) e emissão do pedido de compra.'
-    );
-  }
-  return (
-    'Declaramos que conhecemos e aceitamos integralmente as condições do instrumento convocatório, que os ' +
-    'preços acima ofertados são firmes e irreajustáveis, que estão incluídos todos os custos, tributos, frete ' +
-    'e despesas necessárias ao cumprimento do objeto e que atenderemos aos prazos e às especificações exigidas ' +
-    'no Termo de Referência.'
-  );
-}
-
 // -------------------------------------------------------------- PDF principal
 
 /**
@@ -344,7 +328,6 @@ async function montarDefinicao(doc, empresa, contexto) {
       mostrarDadosBancarios: true,
       mostrarPorExtenso: true,
       mostrarAssinatura: true,
-      mostrarDeclaracao: true,
       quebrarPaginaCatalogo: true,
       logoNoCabecalho: true,
       mostrarLinkCompra: false,
@@ -662,16 +645,6 @@ async function montarDefinicao(doc, empresa, contexto) {
         { text: 'CONDIÇÕES', style: 'tituloSecao', color: corTitulo, margin: [0, 12, 0, 0] },
         ...caixa('', [172, '*'], linhasCondicoes, corTitulo),
       ],
-    });
-  }
-
-  if (opcoes.mostrarDeclaracao) {
-    conteudo.push({
-      text: textoDeclaracao(doc),
-      fontSize: 9.5,
-      alignment: 'justify',
-      color: '#3C4650',
-      margin: [0, 4, 0, 0],
     });
   }
 
