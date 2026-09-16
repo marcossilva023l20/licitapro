@@ -24,6 +24,10 @@
     mapaImagens: new Map(), // 'idb:abc' -> blob URL
     baseCarregada: false,
     pesadasCarregadas: false,
+    armazenamentoOk: null, // null = ainda não testado (janela privada responde que não)
+    motivoArmazenamento: '',
+    ultimoSalvamento: null, // { ok, em, motivo } da última gravação
+    removidos: new Set(), // documentos apagados nesta aba (não podem voltar no juntar)
   };
 
   // ----------------------------------------------------------- utilidades
@@ -85,20 +89,104 @@
     return estado.banco;
   }
 
+  /**
+   * O navegador realmente guarda o que a gente grava? Janela privada, dados de
+   * site bloqueados e cota cheia respondem que não — e aí o que foi salvo some
+   * na próxima visita. Melhor descobrir isso na hora do que depois.
+   */
+  function testarArmazenamento() {
+    if (estado.armazenamentoOk !== null) return estado.armazenamentoOk;
+    try {
+      const prova = CHAVE_BANCO + '.prova';
+      window.localStorage.setItem(prova, 'ok');
+      const lido = window.localStorage.getItem(prova);
+      window.localStorage.removeItem(prova);
+      estado.armazenamentoOk = lido === 'ok';
+      estado.motivoArmazenamento = lido === 'ok' ? '' : 'o navegador não devolveu o que foi gravado';
+    } catch (erro) {
+      estado.armazenamentoOk = false;
+      estado.motivoArmazenamento = (erro && erro.message) || 'armazenamento bloqueado';
+    }
+    return estado.armazenamentoOk;
+  }
+
+  /**
+   * Outra aba pode ter gravado depois desta ser aberta: antes de gravar, o que
+   * está no armazenamento é juntado com o que está na memória (documentos pelo
+   * id, numeração pelo maior número). Sem isso a aba mais antiga apagaria, sem
+   * querer, o trabalho feito na aba nova.
+   */
+  function juntarComOQueEstaSalvo() {
+    if (!estado.banco) return;
+    let outro = null;
+    try {
+      const bruto = window.localStorage.getItem(CHAVE_BANCO);
+      outro = bruto ? JSON.parse(bruto) : null;
+    } catch (_) {
+      return; // armazenamento ilegível/bloqueado: segue com o que está na memória
+    }
+    if (!outro || typeof outro !== 'object') return;
+
+    if (Array.isArray(outro.documentos)) {
+      const porId = new Map();
+      (estado.banco.documentos || []).forEach((d) => { if (d && d.id) porId.set(d.id, d); });
+      outro.documentos.forEach((d) => {
+        if (!d || !d.id || porId.has(d.id) || estado.removidos.has(d.id)) return;
+        porId.set(d.id, d);
+      });
+      estado.banco.documentos = Array.from(porId.values());
+    }
+
+    const sequencia = Object.assign({}, outro.sequencia);
+    Object.keys(sequencia).forEach((chave) => {
+      const meus = estado.banco.sequencia[chave] || {};
+      const anos = Object.assign({}, sequencia[chave]);
+      Object.keys(meus).forEach((ano) => {
+        anos[ano] = Math.max(Number(anos[ano]) || 0, Number(meus[ano]) || 0);
+      });
+      sequencia[chave] = anos;
+    });
+    estado.banco.sequencia = Object.assign({}, estado.banco.sequencia, sequencia);
+
+    // se esta aba ainda está com a empresa em branco, fica com a que já estava salva
+    const empresa = (estado.banco.perfil && estado.banco.perfil.empresa) || {};
+    const vazia = !empresa.razaoSocial && !empresa.cnpj && !empresa.nomeFantasia;
+    if (vazia && outro.perfil && outro.perfil.empresa) {
+      estado.banco.perfil = Object.assign({}, estado.banco.perfil, outro.perfil);
+    }
+  }
+
   let avisoSalvamento = false;
-  function gravarBanco() {
+
+  /**
+   * Grava no navegador. O retorno diz se deu certo — a tela usa isso para
+   * mostrar "salvo" só quando o dado realmente ficou guardado.
+   * @param {object} opcoes { substituir } — true troca tudo (restaurar backup)
+   */
+  function gravarBanco(opcoes) {
+    const config = opcoes || {};
+    if (!config.substituir) juntarComOQueEstaSalvo();
     try {
       window.localStorage.setItem(CHAVE_BANCO, JSON.stringify(estado.banco));
+      estado.removidos.clear();
+      estado.armazenamentoOk = true;
+      estado.motivoArmazenamento = '';
+      estado.ultimoSalvamento = { ok: true, em: new Date().toISOString(), motivo: '' };
       return true;
     } catch (erro) {
+      const motivo = (erro && erro.message) || 'armazenamento indisponível';
+      estado.armazenamentoOk = false;
+      estado.motivoArmazenamento = motivo;
+      estado.ultimoSalvamento = { ok: false, em: new Date().toISOString(), motivo };
       if (!avisoSalvamento) {
         avisoSalvamento = true;
         window.UI && window.UI.toast(
-          'Não foi possível salvar no navegador (armazenamento cheio). Baixe um backup e remova fotos grandes.',
-          'erro', 12000
+          'Este navegador não está guardando os dados (' + motivo + '). ' +
+            'Baixe um backup pelo menu antes de fechar e tente fora da janela privada.',
+          'erro', 15000
         );
       }
-      console.warn('[modo local] falha ao gravar:', erro.message);
+      console.warn('[modo local] falha ao gravar:', motivo);
       return false;
     }
   }
@@ -213,7 +301,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '13';
+  const VERSAO_ARQUIVOS = '15';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -472,6 +560,7 @@
       }
 
       if (!acao && metodo === 'DELETE') {
+        estado.removidos.add(id);
         banco.documentos = banco.documentos.filter((d) => d.id !== id);
         gravarBanco();
         return { ok: true };
@@ -614,7 +703,8 @@
     estado.banco = conteudo.banco;
     estado.banco.perfil = Object.assign(perfilPadrao(), estado.banco.perfil || estado.banco.usuario || {});
     delete estado.banco.usuario;
-    gravarBanco();
+    estado.removidos.clear();
+    gravarBanco({ substituir: true });
 
     const imagens = conteudo.imagens || {};
     for (const [id, dataUrl] of Object.entries(imagens)) {
@@ -690,6 +780,7 @@
     if (estado.ativo) return;
     estado.ativo = true;
 
+    testarArmazenamento();
     lerBanco();
     gravarBanco();
     prepararInterfaceLocal();
@@ -730,7 +821,13 @@
 
     async function respostaLocal(metodo, caminho, corpo) {
       if (!estado.ativo) await ativar();
-      return responder(metodo, caminho, corpo);
+      const resposta = await responder(metodo, caminho, corpo);
+      // a tela precisa saber se a gravação no navegador realmente aconteceu
+      if (metodo !== 'GET' && resposta && typeof resposta === 'object' && !resposta.__blob) {
+        resposta.salvoNoNavegador = estado.ultimoSalvamento ? estado.ultimoSalvamento.ok : true;
+        if (!resposta.salvoNoNavegador) resposta.motivoNaoSalvo = estado.ultimoSalvamento.motivo;
+      }
+      return resposta;
     }
 
     API.pedir = async function (caminho, opcoes) {
@@ -840,6 +937,16 @@
     baixarModeloPlanilha,
     motorPdf: motorPdfPronto,
     verificarAmbiente,
+    /**
+     * Como este navegador está guardando os dados: se a gravação funciona, o
+     * motivo quando não funciona e quando foi a última gravação.
+     */
+    armazenamento: () => ({
+      ok: estado.armazenamentoOk,
+      motivo: estado.motivoArmazenamento,
+      ultimoSalvamento: estado.ultimoSalvamento ? Object.assign({}, estado.ultimoSalvamento) : null,
+    }),
+    testarArmazenamento,
     _interno: estado,
   };
 

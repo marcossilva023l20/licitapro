@@ -1202,8 +1202,8 @@ teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {
 
 const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
 
-async function abrirNoModoLocal() {
-  const aberto = await ModoLocal.abrirSemServidor();
+async function abrirNoModoLocal(opcoes) {
+  const aberto = await ModoLocal.abrirSemServidor(opcoes || {});
   const { window } = aberto;
   const $ = (sel) => window.document.querySelector(sel);
   await ModoLocal.esperar(() => window.ModoEstatico && window.ModoEstatico.ativo(), 'modo local ativo', 15000);
@@ -1264,6 +1264,142 @@ teste('Modo local: abre sem servidor (GitHub Pages) com o backup no menu', async
   // nenhum pedido deve ter escapado para /api de verdade (não há servidor)
   assert.ok(window.document.body.getAttribute('data-modo') === 'local' || true);
   window.close();
+});
+
+teste('Modo local: o que foi salvo continua lá ao abrir o site numa nova aba', async () => {
+  const CHAVE = 'licitapro.local.v1';
+
+  // ---- visita 1: cria a proposta pelo caminho do usuário
+  const primeira = await abrirNoModoLocal();
+  const w1 = primeira.window;
+  const $1 = primeira.$;
+  await entrarNoModoLocal(w1, $1);
+
+  $1('#botao-nova-proposta').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$1('#view-editor').classList.contains('oculto'), 'editor visível');
+  await ModoLocal.esperar(() => $1('#campo-numero-sequencial').value !== '', 'numeração automática');
+  $1('#itens-adicionar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $1('#lista-itens .item'), 'item criado');
+  const descricao = $1('#lista-itens .item input[data-campo="descricao"]');
+  descricao.value = 'RÁDIO DE TESTE DA NOVA ABA';
+  descricao.dispatchEvent(new w1.Event('input', { bubbles: true }));
+  $1('#editor-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $1('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
+
+  // a empresa também é preenchida (é o que o usuário faz no primeiro uso)
+  w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+  $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL';
+  $1('#emp-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => JSON.parse(w1.localStorage.getItem(CHAVE)).perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL',
+    'empresa salva'
+  );
+
+  const salvo = w1.localStorage.getItem(CHAVE);
+  assert.ok(salvo && salvo.length > 100, 'o navegador guardou os dados: ' + (salvo || '').length + ' bytes');
+  assert.strictEqual(w1.ModoEstatico.armazenamento().ok, true, 'o teste de armazenamento passou');
+  w1.close();
+
+  // ---- visita 2: "nova aba" — o navegador entrega o mesmo armazenamento
+  const segunda = await ModoLocal.abrirSemServidor({ armazenamento: { [CHAVE]: salvo } });
+  const w2 = segunda.window;
+  const $2 = (sel) => w2.document.querySelector(sel);
+  await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local na nova aba');
+  await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
+  await ModoLocal.esperar(() => /001\/2026/.test($2('#painel-recentes').textContent), 'proposta na lista do painel');
+  assert.ok(
+    /RÁDIO DE TESTE DA NOVA ABA|001\/2026/.test($2('#painel-recentes').textContent),
+    'a proposta criada na primeira visita aparece: ' + $2('#painel-recentes').textContent.slice(0, 80)
+  );
+  const daEmpresa = w2.ModoEstatico._interno.banco.perfil.empresa.razaoSocial;
+  assert.strictEqual(daEmpresa, 'D.E.J SOLUTIONS & GLOBAL', 'os dados da empresa também voltaram');
+  assert.ok(/D\.E\.J/.test(w2.document.body.textContent), 'e aparecem na tela');
+  assert.strictEqual(segunda.erros.length, 0, 'sem erros de script: ' + segunda.erros.join(' | '));
+  w2.close();
+});
+
+teste('Modo local: uma aba aberta antes não apaga o que a outra gravou depois', async () => {
+  const CHAVE = 'licitapro.local.v1';
+  const modelo = {
+    versao: 2,
+    perfil: { empresa: { razaoSocial: 'D.E.J SOLUTIONS & GLOBAL' }, padroes: {} },
+    documentos: [{ id: 'antigo-1', tipo: 'proposta', numero: { sequencial: 1, ano: 2026 }, itens: [], status: 'rascunho' }],
+    sequencia: { proposta: { 2026: 1 } },
+  };
+
+  // esta aba foi aberta quando só existia o documento antigo
+  const aba = await abrirNoModoLocal({ armazenamento: { [CHAVE]: JSON.stringify(modelo) } });
+  const w = aba.window;
+  const $ = aba.$;
+  await entrarNoModoLocal(w, $);
+
+  // outra aba gravou enquanto esta continuava aberta
+  const outro = {
+    versao: 2,
+    perfil: modelo.perfil,
+    documentos: modelo.documentos.concat([
+      { id: 'novo-2', tipo: 'proposta', numero: { sequencial: 2, ano: 2026 }, itens: [], status: 'rascunho', destinatario: 'PREFEITURA' },
+    ]),
+    sequencia: { proposta: { 2026: 2 } },
+  };
+  w.localStorage.setItem(CHAVE, JSON.stringify(outro));
+
+  // e agora esta aba salva qualquer coisa (a empresa, por exemplo)
+  $('#' + 'emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL LTDA';
+  $('#' + 'emp-salvar').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => JSON.parse(w.localStorage.getItem(CHAVE)).perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL LTDA',
+    'gravação desta aba'
+  );
+
+  const final = JSON.parse(w.localStorage.getItem(CHAVE));
+  const ids = final.documentos.map((d) => d.id).sort();
+  assert.ok(ids.includes('novo-2'), 'o documento da outra aba continua salvo: ' + ids.join(', '));
+  assert.ok(ids.includes('antigo-1'), 'e o antigo também: ' + ids.join(', '));
+  assert.strictEqual(final.sequencia.proposta['2026'], 2, 'a numeração ficou com o maior número');
+  assert.strictEqual(final.perfil.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL LTDA', 'o que esta aba salvou venceu');
+  w.close();
+});
+
+teste('Modo local: avisa quando o navegador não está guardando os dados (janela privada)', async () => {
+  const aberto = await ModoLocal.abrirSemServidor({
+    preparar: (window) => {
+      // é o que acontece com dados de site bloqueados / cota cheia
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: {
+          setItem() { throw new Error('QuotaExceededError: o armazenamento está cheio ou bloqueado'); },
+          getItem() { return null; },
+          removeItem() {},
+        },
+      });
+    },
+  });
+  const w = aberto.window;
+  const $ = (sel) => w.document.querySelector(sel);
+  await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local ativo');
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
+
+  const situacao = w.ModoEstatico.armazenamento();
+  assert.strictEqual(situacao.ok, false, 'o sistema percebeu que o navegador não guarda');
+  assert.ok(/QuotaExceededError/.test(situacao.motivo), 'motivo guardado: ' + situacao.motivo);
+  await ModoLocal.esperar(
+    () => /NÃO está guardando os dados/.test($('#situacao-dados-texto').textContent),
+    'a linha do painel avisa'
+  );
+  assert.strictEqual($('#situacao-dados').className.includes('erro'), true, 'a linha fica em vermelho');
+
+  // e ao salvar, a tela não finge que deu certo
+  w.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+  $('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL';
+  $('#emp-salvar').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => /não ficou guardado neste navegador/.test($('#caixa-toasts').textContent),
+    'avisa que não ficou guardado: ' + $('#caixa-toasts').textContent
+  );
+  w.close();
 });
 
 teste('Modo local: entrar e criar proposta com item, tudo salvo no navegador', async () => {
@@ -2173,7 +2309,7 @@ const PADROES_DE_CREDENCIAL = [
   /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // chave no formato JWT (anon ou service_role)
   /sb_secret_[A-Za-z0-9_-]{10,}/, // secret key do projeto
   /SUPABASE_[A-Z_]+\s*[:=]\s*['"]?[A-Za-z0-9._-]{12,}/, // variável já com o valor
-  /supabase\.co/i, // endereço do projeto
+  /supabase\.co(?![a-z])/i, // endereço do projeto (e não o painel supabase.com)
 ];
 
 teste('Interface: o painel deixa ligar o banco pela tela (só na própria máquina)', async () => {
@@ -2197,6 +2333,19 @@ teste('Interface: o painel deixa ligar o banco pela tela (só na própria máqui
       'endereço do projeto já preenchido: ' + $('#banco-url').value
     );
     assert.ok(/Conectar banco de dados/.test($('#situacao-dados-texto').textContent), 'a linha do painel indica o botão');
+
+    // o atalho leva direto à página onde estão as chaves (o menu muda de nome)
+    const referencia = ($('#banco-url').value.match(/^https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)/i) || [])[1];
+    assert.ok(referencia, 'endereço do Supabase no campo: ' + $('#banco-url').value);
+    const linkChaves = $('#banco-abrir-supabase');
+    assert.strictEqual(linkChaves.classList.contains('oculto'), false, 'mostra o atalho das chaves');
+    assert.strictEqual(
+      linkChaves.getAttribute('href'),
+      'https://supabase.com/dashboard/project/' + referencia + '/settings/api-keys',
+      'atalho para a página das chaves do projeto: ' + linkChaves.getAttribute('href')
+    );
+    assert.ok(/service_role/.test($('.ajuda-banco').textContent), 'a ajuda diz qual chave usar (service_role)');
+    assert.ok(/sb_secret_/.test($('.ajuda-banco').textContent), 'e o nome novo (secret key)');
 
     clicar('#banco-abrir');
     assert.strictEqual($('#banco-form').classList.contains('oculto'), false, 'formulário de conexão aberto');
@@ -2557,6 +2706,199 @@ teste('Interface: escolher o arquivo .json do Firebase conecta o banco', async (
     assert.strictEqual($('#banco-credencial').value, '', 'limpa o campo depois de conectar');
   } finally {
     servidor.close();
+  }
+});
+
+teste('Interface: a tela sugere o arquivo baixado e conecta com um clique', async () => {
+  const servidor = await Navegador.subirServidor();
+  try {
+    const porta = servidor.address().port;
+    const { window } = await Navegador.abrirNavegador(porta);
+    const doc = window.document;
+    const $ = (sel) => doc.querySelector(sel);
+    const clicar = (sel) => $(sel).dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+    await Navegador.esperar(() => !$('#conectar-banco').classList.contains('oculto'), 'painel do banco disponível');
+
+    // o servidor "acha" o arquivo baixado na pasta de downloads do computador
+    const caminho = '/home/alguem/Downloads/dej-slutions-firebase-adminsdk-fbsvc-595f0bbfd5.json';
+    window.API.get = async (rota) => {
+      if (rota === '/api/banco/procurar') {
+        return {
+          ok: true,
+          encontrados: [{
+            arquivo: caminho,
+            nome: 'dej-slutions-firebase-adminsdk-fbsvc-595f0bbfd5.json',
+            projeto: 'dej-slutions',
+            conta: 'firebase-adminsdk-fbsvc@dej-slutions.iam.gserviceaccount.com',
+          }],
+        };
+      }
+      return { ok: true, banco: { provedor: null } };
+    };
+
+    assert.ok($('#banco-sugestao').classList.contains('oculto'), 'a sugestão começa escondida');
+    clicar('#banco-abrir');
+    // a busca no computador é assíncrona: a sugestão aparece logo depois
+    await Navegador.esperar(() => !$('#banco-sugestao').classList.contains('oculto'), 'abrir o formulário mostra a sugestão');
+    const texto = $('#banco-sugestao-texto').textContent;
+    assert.ok(/dej-slutions-firebase-adminsdk/.test(texto), 'diz o nome do arquivo: ' + texto);
+    assert.ok(/projeto dej-slutions/.test(texto), 'e o projeto do arquivo: ' + texto);
+    assert.strictEqual(texto.includes('PRIVATE KEY'), false, 'a sugestão não mostra a chave');
+
+    let enviado = null;
+    window.API.post = async (rota, corpo) => {
+      enviado = { rota, corpo };
+      return { ok: true, provedor: 'firebase', provedorNome: 'Firebase', armazenamento: 'firebase', banco: { conectado: true } };
+    };
+    clicar('#banco-sugestao-usar');
+    await Navegador.esperar(() => /Firebase conectado/.test($('#banco-mensagem').textContent), 'avisa que conectou');
+    assert.ok(enviado && enviado.rota === '/api/banco/configurar', 'mandou para a rota do banco');
+    assert.strictEqual(enviado.corpo.caminho, caminho, 'mandou só o caminho do arquivo encontrado');
+    assert.strictEqual(enviado.corpo.credencial, '', 'sem colar chave nenhuma');
+    assert.strictEqual($('#banco-sugestao').classList.contains('oculto'), true, 'esconde a sugestão depois de conectar');
+  } finally {
+    servidor.close();
+  }
+});
+
+teste('Banco: o sistema acha sozinho o arquivo .json baixado do Firebase', () => {
+  const banco = require(path.join(RAIZ, 'server', 'banco'));
+  const { criarContaDeServico } = require('./firestore-falso');
+
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-busca-'));
+  const conta = criarContaDeServico({ projeto: 'dej-slutions' });
+  const arquivo = path.join(pasta, 'dej-slutions-firebase-adminsdk-fbsvc-595f0bbfd5.json');
+  fs.writeFileSync(arquivo, JSON.stringify(conta.conta));
+  // iscas: um JSON qualquer e um arquivo grande não podem ser confundidos
+  fs.writeFileSync(path.join(pasta, 'notas.json'), JSON.stringify({ recado: 'nada aqui' }));
+  fs.writeFileSync(path.join(pasta, 'grande.json'), 'x'.repeat(70000));
+
+  const anterior = process.env.LICITAPRO_BUSCA_CREDENCIAL;
+  process.env.LICITAPRO_BUSCA_CREDENCIAL = pasta;
+  try {
+    assert.ok(banco.pastasDeBusca().includes(pasta), 'a pasta indicada entra na busca');
+    const achados = banco.procurarCredencialFirebase();
+    assert.strictEqual(achados.length, 1, 'achou um arquivo só: ' + JSON.stringify(achados));
+    const achado = achados[0];
+    assert.strictEqual(achado.nome, 'dej-slutions-firebase-adminsdk-fbsvc-595f0bbfd5.json', 'nome do arquivo');
+    assert.strictEqual(achado.projeto, 'dej-slutions', 'projeto lido do arquivo');
+    assert.ok(/@dej-slutions\.iam\.gserviceaccount\.com$/.test(achado.conta), 'conta de serviço: ' + achado.conta);
+    assert.strictEqual('conteudo' in achado, false, 'a busca não devolve o conteúdo da credencial');
+    assert.strictEqual(JSON.stringify(achado).includes('PRIVATE KEY'), false, 'nem a chave privada');
+
+    // ler o conteúdo só acontece quando alguém confirma que é para usar
+    const lido = banco.lerCredencialDoArquivo(arquivo);
+    assert.strictEqual(lido.provedor, 'firebase', 'lê a credencial do caminho');
+    assert.strictEqual(JSON.parse(lido.conteudo).project_id, 'dej-slutions', 'com o projeto certo');
+    assert.throws(() => banco.lerCredencialDoArquivo(path.join(pasta, 'notas.json')), /não parece o JSON de uma conta de serviço/, 'recusa arquivo que não é credencial');
+    assert.throws(() => banco.lerCredencialDoArquivo(path.join(pasta, 'nao-existe.json')), /Não consegui ler o arquivo/, 'avisa quando o caminho não existe');
+  } finally {
+    if (anterior === undefined) delete process.env.LICITAPRO_BUSCA_CREDENCIAL;
+    else process.env.LICITAPRO_BUSCA_CREDENCIAL = anterior;
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
+teste('Firebase: conecta informando só o caminho do arquivo (tela e linha de comando)', async () => {
+  const banco = require(path.join(RAIZ, 'server', 'banco'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+  const { DATA_DIR: pastaDados } = require(path.join(RAIZ, 'server', 'config'));
+  const { criarServidorDeMentira, criarContaDeServico } = require('./firestore-falso');
+  const { execFile } = require('child_process');
+
+  const { conta, publicKey } = criarContaDeServico({ projeto: 'dej-slutions' });
+  const falso = await criarServidorDeMentira({ conta, publicKey });
+  conta.token_uri = falso.tokenUrl;
+
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-caminho-'));
+  const arquivoConta = path.join(pasta, 'dej-slutions-firebase-adminsdk-fbsvc-595f0bbfd5.json');
+  fs.writeFileSync(arquivoConta, JSON.stringify(conta));
+  const arquivoEnv = path.join(pasta, '.env');
+  const guardado = {
+    env: process.env.LICITAPRO_ENV_FILE,
+    busca: process.env.LICITAPRO_BUSCA_CREDENCIAL,
+    base: process.env.FIREBASE_BASE,
+    token: process.env.FIREBASE_TOKEN_URL,
+  };
+  process.env.LICITAPRO_ENV_FILE = arquivoEnv;
+  process.env.FIREBASE_BASE = falso.firestoreBase;
+  process.env.FIREBASE_TOKEN_URL = falso.tokenUrl;
+  process.env.LICITAPRO_BUSCA_CREDENCIAL = pasta;
+
+  const servidor = await iniciarServidor();
+  try {
+    // a tela pergunta ao servidor o que ele achou no computador…
+    const busca = await requisitar(servidor, '/api/banco/procurar');
+    assert.strictEqual(busca.status, 200, busca.texto);
+    assert.strictEqual(busca.json.encontrados.length, 1, 'a busca achou o arquivo');
+    assert.strictEqual(busca.json.encontrados[0].projeto, 'dej-slutions', 'com o projeto no recado');
+    assert.strictEqual(busca.texto.includes('PRIVATE KEY'), false, 'a resposta não traz a chave');
+
+    // …e conecta mandando só o caminho
+    const resposta = await requisitar(servidor, '/api/banco/configurar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ caminho: arquivoConta }),
+    });
+    assert.strictEqual(resposta.status, 200, resposta.texto);
+    assert.strictEqual(resposta.json.ok, true, 'conectou pelo caminho do arquivo: ' + resposta.texto);
+    assert.strictEqual(resposta.json.armazenamento, 'firebase', 'gravando no Firestore');
+    assert.ok(
+      fs.existsSync(path.join(pastaDados, banco.ARQUIVO_FIREBASE)),
+      'guardou uma cópia na pasta de dados (o arquivo original pode ser apagado)'
+    );
+
+    // o que o usuário salvar vai para o banco
+    await requisitar(servidor, '/api/perfil/empresa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ razaoSocial: 'D.E.J SOLUTIONS & GLOBAL' }),
+    });
+    await store.encerrar();
+    assert.ok(falso.contagem('licitapro_perfil') > 0, 'a empresa chegou no Firestore');
+
+    // e na linha de comando: Enter na pergunta já usa o arquivo encontrado
+    const saida = await new Promise((resolver) => {
+      const filho = execFile(
+        process.execPath,
+        [path.join(RAIZ, 'scripts', 'banco.js'), 'configurar'],
+        {
+          env: Object.assign({}, process.env, {
+            LICITAPRO_ENV_FILE: path.join(pasta, '.env-cli'),
+            LICITAPRO_DATA_DIR: path.join(pasta, 'dados'),
+            LICITAPRO_BUSCA_CREDENCIAL: pasta,
+            FIREBASE_BASE: falso.firestoreBase,
+            FIREBASE_TOKEN_URL: falso.tokenUrl,
+          }),
+        }
+      );
+      let texto = '';
+      filho.stdout.on('data', (pedaco) => { texto += pedaco; });
+      filho.stderr.on('data', (pedaco) => { texto += pedaco; });
+      filho.on('close', () => resolver(texto));
+      filho.stdin.write('\n\n'); // Enter no endereço e Enter na credencial
+      filho.stdin.end();
+    });
+    assert.ok(/Encontrei um arquivo de conta de serviço/.test(saida), 'a CLI avisa que achou o arquivo:\n' + saida);
+    assert.ok(/Credencial do Firebase gravada/.test(saida), 'gravou a credencial do Firebase');
+    // na conferência a linha de comando compara também a cópia local (data/db.json),
+    // que neste teste continua vazia de propósito: o que importa é a conexão
+    assert.ok(/Conexão e coleções: ok/.test(saida), 'conferiu a conexão:\n' + saida.slice(-400));
+    assert.ok(/Gravação: ok/.test(saida), 'e gravou de verdade:\n' + saida.slice(-400));
+  } finally {
+    servidor.close();
+    await falso.fechar();
+    if (guardado.env === undefined) delete process.env.LICITAPRO_ENV_FILE; else process.env.LICITAPRO_ENV_FILE = guardado.env;
+    if (guardado.busca === undefined) delete process.env.LICITAPRO_BUSCA_CREDENCIAL; else process.env.LICITAPRO_BUSCA_CREDENCIAL = guardado.busca;
+    if (guardado.base === undefined) delete process.env.FIREBASE_BASE; else process.env.FIREBASE_BASE = guardado.base;
+    if (guardado.token === undefined) delete process.env.FIREBASE_TOKEN_URL; else process.env.FIREBASE_TOKEN_URL = guardado.token;
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
+    delete process.env.FIREBASE_PROJECT_ID;
+    store.usarRemoto(null);
+    store.carregar();
+    fs.rmSync(path.join(pastaDados, banco.ARQUIVO_FIREBASE), { force: true });
+    fs.rmSync(pasta, { recursive: true, force: true });
   }
 });
 

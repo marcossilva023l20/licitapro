@@ -479,10 +479,26 @@
       }
       estado.doc = resposta.documento;
       estado.novo = false;
-      marcarSalvo();
+      // no modo local o documento é guardado pelo navegador: se a gravação não
+      // aconteceu, dizer "Salvo" seria mentira
+      const guardado = resposta.salvoNoNavegador !== false;
+      if (guardado) {
+        marcarSalvo();
+      } else {
+        $('#editor-estado').textContent = 'Não guardado';
+        $('#editor-estado').className = 'etiqueta-estado erro';
+        if (!silencioso) {
+          UI.toast(
+            'Atenção: este navegador não guardou o documento' +
+              (resposta.motivoNaoSalvo ? ' (' + resposta.motivoNaoSalvo + ')' : '') +
+              '. Baixe um backup pelo menu antes de fechar.',
+            'erro', 15000
+          );
+        }
+      }
       atualizarCabecalho();
       desenharItens();
-      if (!silencioso) UI.toast('Documento salvo.', 'sucesso');
+      if (!silencioso && guardado) UI.toast('Documento salvo.', 'sucesso');
       if (window.App) window.App.recarregarLista();
       window.location.hash = '#/documento/' + estado.doc.id;
       return estado.doc;

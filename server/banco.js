@@ -10,6 +10,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const { DATA_DIR } = require('./config');
@@ -21,7 +22,10 @@ const Firebase = require('./firebase');
 const NOMES = { supabase: 'Supabase', firebase: 'Firebase' };
 
 /** Onde o JSON da conta de serviço do Firebase fica no seu computador. */
-const ARQUIVO_FIREBASE = 'firebase-service-account.json';
+const ARQUIVO_FIREBASE = Firebase.ARQUIVO_PADRAO;
+
+/** Tamanho máximo de um JSON de credencial (o do Firebase tem ~2,5 KB). */
+const TAMANHO_MAXIMO_CREDENCIAL = 65536;
 
 /** Qual banco está configurado (sem tocar na rede). */
 function escolhido(env) {
@@ -150,6 +154,106 @@ function detectarCredencial(texto) {
 }
 
 /**
+ * Pastas onde o arquivo baixado do Firebase costuma estar. Dá para apontar
+ * outras com LICITAPRO_BUSCA_CREDENCIAL (separa por ":" ou ";") — é o que os
+ * testes usam.
+ */
+function pastasDeBusca() {
+  const extras = String(process.env.LICITAPRO_BUSCA_CREDENCIAL || '')
+    .split(/[:;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const casa = os.homedir();
+  const candidatas = extras.concat([
+    path.join(casa, 'Downloads'),
+    path.join(casa, 'Desktop'),
+    path.join(casa, 'Documents'),
+    path.join(casa, 'Documentos'),
+    path.join(casa, 'Área de Trabalho'),
+    DATA_DIR,
+  ]);
+  const vistas = new Set();
+  return candidatas
+    .map((pasta) => path.resolve(pasta))
+    .filter((pasta) => {
+      if (vistas.has(pasta)) return false;
+      vistas.add(pasta);
+      try {
+        return fs.statSync(pasta).isDirectory();
+      } catch (_) {
+        return false;
+      }
+    });
+}
+
+/**
+ * Procura nas pastas prováveis um JSON de conta de serviço já baixado — o que o
+ * console do Firebase entrega em "Generate new private key".
+ *
+ * Devolve só o nome do arquivo, o projeto e a conta (nunca o conteúdo: a chave
+ * privada só é lida quando alguém confirma que é para usar este arquivo).
+ */
+function procurarCredencialFirebase(opcoes) {
+  const config = opcoes || {};
+  const limite = Number(config.limite) || 5;
+  const maximoPorPasta = Number(config.maximoPorPasta) || 300;
+  const encontrados = [];
+
+  for (const pasta of config.pastas || pastasDeBusca()) {
+    let arquivos = [];
+    try {
+      arquivos = fs.readdirSync(pasta, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
+    let lidos = 0;
+    for (const entrada of arquivos) {
+      if (encontrados.length >= limite) return encontrados;
+      if (!entrada.isFile() || !/\.json$/i.test(entrada.name)) continue;
+      if (lidos >= maximoPorPasta) break;
+      lidos += 1;
+      const completo = path.join(pasta, entrada.name);
+      let conteudo = '';
+      try {
+        if (fs.statSync(completo).size > TAMANHO_MAXIMO_CREDENCIAL) continue;
+        conteudo = fs.readFileSync(completo, 'utf8');
+      } catch (_) {
+        continue;
+      }
+      const dados = Firebase.interpretarJson(conteudo);
+      if (!Firebase.pareceContaDeServico(dados)) continue;
+      encontrados.push({
+        arquivo: completo,
+        nome: entrada.name,
+        projeto: String(dados.project_id || ''),
+        conta: String(dados.client_email || ''),
+      });
+    }
+  }
+  return encontrados;
+}
+
+/** Lê uma credencial a partir do caminho do arquivo (usado pela tela e pela CLI). */
+function lerCredencialDoArquivo(caminho) {
+  const alvo = String(caminho || '').trim().replace(/^"(.*)"$/s, '$1').replace(/^'(.*)'$/s, '$1');
+  if (!alvo) throw new Error('Informe o caminho do arquivo .json da conta de serviço.');
+  let conteudo = '';
+  try {
+    const informacao = fs.statSync(alvo);
+    if (!informacao.isFile()) throw new Error('não é um arquivo');
+    if (informacao.size > TAMANHO_MAXIMO_CREDENCIAL) throw new Error('arquivo grande demais para uma credencial');
+    conteudo = fs.readFileSync(alvo, 'utf8');
+  } catch (erro) {
+    throw new Error('Não consegui ler o arquivo "' + alvo + '": ' + erro.message);
+  }
+  const dados = Firebase.interpretarJson(conteudo);
+  if (!Firebase.pareceContaDeServico(dados)) {
+    throw new Error('O arquivo "' + alvo + '" não parece o JSON de uma conta de serviço do Firebase.');
+  }
+  return { provedor: 'firebase', conteudo: JSON.stringify(dados), arquivo: alvo, projeto: dados.project_id };
+}
+
+/**
  * Grava e apaga uma linha de teste para provar que o banco aceita gravação —
  * é o passo que responde "está salvando mesmo?".
  */
@@ -220,6 +324,9 @@ module.exports = {
   classificarChave,
   detectarCredencial,
   gravarCredencial,
+  pastasDeBusca,
+  procurarCredencialFirebase,
+  lerCredencialDoArquivo,
   testarGravacao,
   Supabase,
   Firebase,

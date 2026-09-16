@@ -27,6 +27,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const { DATA_DIR } = require('./config');
+
 const TIMEOUT_MS = 15000;
 const ESCOPO = 'https://www.googleapis.com/auth/datastore';
 const TOKEN_PADRAO = 'https://oauth2.googleapis.com/token';
@@ -41,6 +43,9 @@ const TABELAS = {
 
 /** Id do documento que guarda a empresa e os padrões. */
 const DOC_PERFIL = '1';
+
+/** Nome do arquivo onde o sistema guarda a credencial colada/escolhida na tela. */
+const ARQUIVO_PADRAO = 'firebase-service-account.json';
 
 // --------------------------------------------------------------- credenciais
 
@@ -83,6 +88,21 @@ function lerCredenciais(env) {
       origem = arquivo;
     } catch (_) {
       dados = null;
+    }
+  }
+  // por último: o arquivo que o próprio sistema guarda na pasta de dados (é onde
+  // ele fica quando a credencial é colada ou escolhida pela tela) — assim a
+  // configuração continua valendo mesmo sem o .env
+  if (!pareceContaDeServico(dados)) {
+    const padrao = path.join(DATA_DIR, ARQUIVO_PADRAO);
+    try {
+      const daPastaDeDados = interpretarJson(fs.readFileSync(padrao, 'utf8'));
+      if (pareceContaDeServico(daPastaDeDados)) {
+        dados = daPastaDeDados;
+        origem = padrao;
+      }
+    } catch (_) {
+      /* não existe: segue sem credencial */
     }
   }
   return comoCredenciais(dados, origem);
@@ -493,6 +513,7 @@ function orientacaoDaChave(valor) {
 module.exports = {
   NOME: 'firebase',
   TABELAS,
+  ARQUIVO_PADRAO,
   DOC_PERFIL,
   TOKEN_PADRAO,
   BASE_PADRAO,

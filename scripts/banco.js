@@ -85,17 +85,31 @@ async function configurar() {
   console.log('                                  "Generate new private key" (arraste o .json aqui)');
   console.log('Deixe em branco para manter o que já está configurado.\n');
 
+  // procura sozinho o arquivo que o console do Firebase baixou: se achar, é só
+  // apertar Enter (ou seja: a pessoa não precisa nem saber onde ele está)
+  const achados = banco.procurarCredencialFirebase();
+  const achado = achados[0];
+  if (achado) {
+    console.log('Encontrei um arquivo de conta de serviço do Firebase neste computador:');
+    console.log('  ' + achado.arquivo + (achado.projeto ? '   (projeto ' + achado.projeto + ')' : ''));
+    console.log('Aperte Enter na próxima pergunta para usar esse arquivo.\n');
+  }
+
   const [endereco, segredo] = await perguntarTudo([
     { texto: 'Endereço do projeto Supabase [' + (Supabase.lerConfiguracao().url || Supabase.URL_PADRAO) + ']: ' },
-    { texto: 'Chave do Supabase ou arquivo .json do Firebase: ', oculto: true },
+    {
+      texto: 'Chave do Supabase ou arquivo .json do Firebase' + (achado ? ' [Enter = ' + achado.nome + ']' : '') + ': ',
+      oculto: true,
+    },
   ]);
   const url = endereco || Supabase.lerConfiguracao().url || Supabase.URL_PADRAO;
-  const informado = segredo || (atual.provedor === 'supabase' ? atual.chave : '');
+  const informado = segredo || (achado ? achado.arquivo : '') || (atual.provedor === 'supabase' ? atual.chave : '');
 
   if (!informado) {
     console.log('\nNenhuma credencial informada — nada foi alterado.');
     console.log('Supabase: Project Settings → API keys → service_role (Reveal).');
-    console.log('Firebase: Project settings → Service accounts → Generate new private key.\n');
+    console.log('Firebase: Project settings → Service accounts → Generate new private key');
+    console.log('  (não achei nenhum arquivo já baixado em Downloads/Desktop/pasta de dados).\n');
     process.exitCode = 1;
     return;
   }

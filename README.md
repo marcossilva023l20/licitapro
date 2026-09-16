@@ -159,6 +159,13 @@ não responde.
 No GitHub Pages (modo local) ela diz que os dados ficam no próprio navegador — nesse endereço
 **não existe servidor**, então o banco não é usado ali.
 
+No modo local o sistema também **testa o armazenamento do navegador** ao abrir. Se o navegador
+não estiver guardando (janela privada, dados de site bloqueados, cota cheia), a linha fica
+vermelha avisando para baixar um backup antes de fechar, e o editor só mostra *Salvo* quando o
+documento realmente ficou guardado. Duas abas abertas ao mesmo tempo não se apagam uma à outra:
+ao gravar, o que a outra aba salvou é preservado (documentos entram pelo id, a numeração fica
+com o maior número).
+
 **Backup:** copie a pasta `data/` (ou apenas `db.json` + `uploads/`).
 Pode ser feito com o sistema em execução; para garantir a consistência, copie primeiro `db.json`.
 
@@ -200,6 +207,11 @@ estiverem, vale o Supabase):
      **“Conectar banco de dados”** embaixo da linha de situação. Cole a chave
      (o endereço do projeto já vem preenchido), clique em **Salvar e testar** e o
      sistema grava o `.env`, conecta na hora e passa a usar o banco — sem reiniciar.
+     Um atalho no formulário (**“Abrir a página das chaves deste projeto no
+     Supabase”**) leva direto ao lugar certo do painel, porque o nome do menu muda
+     de tempo em tempo (*Settings → API Keys*, antes *API*). No lugar da chave
+     *anon*/*publishable* use a **`service_role`** (clique em *Reveal*) ou a
+     *secret key* (`sb_secret_...`).
      Esse botão aparece **somente** quando o sistema roda na sua máquina
      (localhost); de um endereço publicado ele não existe, por segurança.
    - **pela linha de comando:** rode
@@ -232,7 +244,10 @@ estiverem, vale o Supabase):
    arquivo `.json` (é a credencial: dá acesso total ao banco).
 4. Informe a credencial — qualquer um dos caminhos:
    - **pela tela (mais fácil):** com o sistema aberto em `http://localhost:3000`,
-     clique em **“Conectar banco de dados”** no painel e depois em **“Escolher o
+     clique em **“Conectar banco de dados”** no painel. O sistema **procura sozinho**
+     nas pastas de downloads/documentos um arquivo de conta de serviço: se achar, ele
+     mostra *“Encontrei o arquivo X (projeto Y)”* e basta clicar em **“Usar este
+     arquivo”**. Se não achar (ou se houver mais de um), clique em **“Escolher o
      arquivo .json do Firebase”** — aponte para o arquivo baixado (ou arraste ele
      para o formulário) e o sistema conecta sozinho. Também dá para colar o
      conteúdo do JSON no campo. O arquivo é gravado em

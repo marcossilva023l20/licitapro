@@ -78,6 +78,16 @@ async function abrirSemServidor(opcoes = {}) {
   });
   const { window } = dom;
 
+  // Abrir "numa nova aba": o navegador entrega o mesmo armazenamento da visita
+  // anterior (é o que o usuário espera quando salva e volta depois).
+  Object.entries(opcoes.armazenamento || {}).forEach(([chave, valor]) => {
+    window.localStorage.setItem(chave, valor);
+  });
+
+  // Gancho para os testes prepararem o "navegador" antes do sistema carregar
+  // (por exemplo: um armazenamento que recusa gravações, como na janela privada).
+  if (typeof opcoes.preparar === 'function') opcoes.preparar(window);
+
   // Sem servidor: qualquer /api/... responde a página 404 do GitHub Pages (HTML).
   window.fetch = async (url) => {
     const endereco = String(url);

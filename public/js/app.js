@@ -36,6 +36,25 @@
     return ({ supabase: 'Supabase', firebase: 'Firebase' })[provedor] || 'banco';
   }
 
+  /**
+   * O nome do menu muda de tempo em tempo no painel do Supabase: este atalho
+   * leva direto à página das chaves do projeto que está escrito no endereço
+   * (nada é enviado para fora — serve só para economizar a procura).
+   */
+  function atualizarLinkSupabase() {
+    const link = $('#banco-abrir-supabase');
+    const campo = $('#banco-url');
+    if (!link || !campo) return;
+    const achado = campo.value.trim().match(/^https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)\b/i);
+    if (!achado) {
+      link.classList.add('oculto');
+      link.removeAttribute('href');
+      return;
+    }
+    link.href = 'https://supabase.com/dashboard/project/' + achado[1] + '/settings/api-keys';
+    link.classList.remove('oculto');
+  }
+
   async function atualizarSituacaoDados() {
     const caixa = $('#situacao-dados');
     const texto = $('#situacao-dados-texto');
@@ -44,9 +63,26 @@
 
     const modoLocal = window.ModoEstatico && window.ModoEstatico.ativo && window.ModoEstatico.ativo();
     if (modoLocal) {
-      caixa.className = 'situacao-dados aviso';
-      texto.textContent =
-        'Dados salvos neste navegador (sem servidor). Use "Baixar backup" no menu para guardar uma cópia.';
+      const situacao = window.ModoEstatico.armazenamento ? window.ModoEstatico.armazenamento() : null;
+      const ultimo = situacao && situacao.ultimoSalvamento;
+      if (situacao && situacao.ok === false) {
+        // janela privada, dados de site bloqueados ou cota cheia: o que for
+        // digitado aqui não sobrevive a fechar a aba — melhor dizer na cara
+        caixa.className = 'situacao-dados erro';
+        texto.textContent =
+          'Atenção: este navegador NÃO está guardando os dados' +
+          (situacao.motivo ? ' (' + situacao.motivo + ')' : '') +
+          '. Baixe um backup pelo menu antes de fechar, ou abra o sistema fora da janela privada.';
+      } else if (ultimo && ultimo.ok === false) {
+        caixa.className = 'situacao-dados erro';
+        texto.textContent =
+          'A última gravação neste navegador falhou' + (ultimo.motivo ? ' (' + ultimo.motivo + ')' : '') +
+          '. Baixe um backup pelo menu e tente salvar de novo.';
+      } else {
+        caixa.className = 'situacao-dados aviso';
+        texto.textContent =
+          'Dados salvos neste navegador (sem servidor). Use "Baixar backup" no menu para guardar uma cópia.';
+      }
       if (areaBanco) areaBanco.classList.add('oculto');
       return;
     }
@@ -78,6 +114,7 @@
         areaBanco.classList.toggle('oculto', !(saude.configuravelAqui && !noBanco));
         const campoUrl = $('#banco-url');
         if (campoUrl && !campoUrl.value && banco.url) campoUrl.value = banco.url;
+        atualizarLinkSupabase();
       }
     } catch (erro) {
       caixa.className = 'situacao-dados erro';
@@ -114,6 +151,37 @@
       });
     }
 
+    const campoEndereco = $('#banco-url');
+    if (campoEndereco) campoEndereco.addEventListener('input', atualizarLinkSupabase);
+
+    const sugestao = $('#banco-sugestao');
+    const sugestaoTexto = $('#banco-sugestao-texto');
+    const sugestaoUsar = $('#banco-sugestao-usar');
+
+    /**
+     * Procura no computador um arquivo do Firebase já baixado: se achar, a tela
+     * oferece "usar este arquivo" (a pessoa não precisa nem escolher na mão).
+     */
+    async function procurarArquivoBaixado() {
+      if (!sugestao) return;
+      sugestao.classList.add('oculto');
+      try {
+        const resposta = await API.get('/api/banco/procurar');
+        const achado = (resposta.encontrados || [])[0];
+        if (!achado) return;
+        sugestaoTexto.textContent =
+          'Encontrei o arquivo ' + achado.nome + (achado.projeto ? ' (projeto ' + achado.projeto + ')' : '') + '.';
+        sugestaoUsar.dataset.caminho = achado.arquivo;
+        sugestao.classList.remove('oculto');
+      } catch (_) {
+        /* servidor antigo ou sem permissão de leitura: segue no caminho manual */
+      }
+    }
+
+    if (sugestaoUsar) {
+      sugestaoUsar.addEventListener('click', () => enviarCredencial({ caminho: sugestaoUsar.dataset.caminho }));
+    }
+
     if (abrir) {
       abrir.addEventListener('click', () => {
         form.classList.remove('oculto');
@@ -121,6 +189,8 @@
         escrever('');
         const campoUrl = $('#banco-url');
         if (campoUrl) campoUrl.focus();
+        atualizarLinkSupabase();
+        procurarArquivoBaixado();
       });
     }
     if (cancelar) {
@@ -131,10 +201,10 @@
       });
     }
 
-    async function enviarCredencial() {
+    async function enviarCredencial(extras) {
       const url = $('#banco-url').value.trim();
-      const credencial = $('#banco-credencial').value.trim();
-      if (!credencial) {
+      const credencial = extras && extras.caminho ? '' : $('#banco-credencial').value.trim();
+      if (!credencial && !(extras && extras.caminho)) {
         escrever('Escolha o arquivo .json do Firebase ou cole a chave do Supabase.', 'erro');
         return;
       }
@@ -143,8 +213,10 @@
       botao.disabled = true;
       escrever('Testando a conexão...');
       try {
-        const resposta = await API.post('/api/banco/configurar', { url, credencial });
+        const corpo = Object.assign({ url, credencial }, extras || {});
+        const resposta = await API.post('/api/banco/configurar', corpo);
         $('#banco-credencial').value = '';
+        if (sugestao) sugestao.classList.add('oculto');
         if (resposta.ok) {
           escrever((resposta.provedorNome || 'Banco') + ' conectado! Os dados já estão sendo salvos nele.', 'ok');
           UI.toast('Banco de dados conectado.', 'sucesso');
@@ -655,6 +727,23 @@
   }
 
 
+  /**
+   * No modo local quem guarda é o próprio navegador: quando a gravação não
+   * acontece (janela privada, cota cheia), a tela avisa na hora — senão a
+   * pessoa só descobre na próxima visita, quando não encontra mais nada.
+   */
+  function avisarSeNaoGuardou(resposta, oQue) {
+    if (!resposta || resposta.salvoNoNavegador !== false) return false;
+    const motivo = resposta.motivoNaoSalvo ? ' (' + resposta.motivoNaoSalvo + ')' : '';
+    UI.toast(
+      oQue + ' não ficou guardado neste navegador' + motivo +
+        '. Baixe um backup pelo menu antes de fechar.',
+      'erro', 15000
+    );
+    atualizarSituacaoDados();
+    return true;
+  }
+
   function ligarEmpresa() {
     $('#emp-salvar').addEventListener('click', async () => {
       const empresa = Object.assign({}, estado.empresa);
@@ -666,7 +755,9 @@
         estado.perfil.empresa = resposta.empresa;
         mostrarApp(); // o nome da empresa também aparece no topo
         atualizarSituacaoDados();
-        UI.toast('Dados da empresa salvos.', 'sucesso');
+        if (!avisarSeNaoGuardou(resposta, 'Os dados da empresa')) {
+          UI.toast('Dados da empresa salvos.', 'sucesso');
+        }
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       }
@@ -679,7 +770,7 @@
       try {
         const resposta = await API.put('/api/perfil/padroes', padroes);
         estado.perfil.padroes = resposta.padroes;
-        UI.toast('Padrões salvos.', 'sucesso');
+        if (!avisarSeNaoGuardou(resposta, 'Os padrões')) UI.toast('Padrões salvos.', 'sucesso');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       }

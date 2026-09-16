@@ -348,10 +348,29 @@ input[type="search"] { padding-left: 12px; }
 }
 .campo-banco { display: grid; gap: 5px; font-size: 0.8rem; color: var(--texto-fraco); }
 .campo-banco input { width: 100%; }
+.sugestao-banco {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--dourado-700);
+  border-radius: var(--raio-xs);
+  background: rgba(198, 161, 91, 0.12);
+}
+.sugestao-banco .texto-suave { font-size: 0.8rem; color: var(--dourado-200, #e6c987); }
 .arquivo-banco { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .arquivo-banco .texto-suave { font-size: 0.78rem; }
 .form-banco.arrastando { border-color: var(--dourado-300); background: var(--superficie-2); }
 .ajuda-banco { margin: 0; font-size: 0.78rem; color: var(--texto-fraco); line-height: 1.5; }
+
+.link-banco {
+  display: inline-block;
+  margin: 4px 0 2px;
+  color: var(--dourado-700, #8a6a31);
+  font-weight: 600;
+}
+.link-banco:hover { text-decoration: underline; }
 .ajuda-banco code {
   font-size: 0.78rem;
   padding: 1px 5px;

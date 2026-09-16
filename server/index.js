@@ -83,6 +83,25 @@ app.get('/api/health', (req, res) => {
 });
 
 /**
+ * Procura nos lugares prováveis (Downloads, Desktop, pasta de dados…) um JSON
+ * de conta de serviço do Firebase já baixado, para a tela oferecer "usar este
+ * arquivo" em vez de pedir para colar a chave. Só responde à própria máquina e
+ * devolve apenas nome/projeto — o conteúdo da credencial não sai daqui.
+ */
+app.get('/api/banco/procurar', (req, res) => {
+  if (!ehLocal(req)) {
+    return res.status(403).json({ erro: 'Esta busca só funciona quando o sistema roda na sua própria máquina.' });
+  }
+  let encontrados = [];
+  try {
+    encontrados = banco.procurarCredencialFirebase();
+  } catch (erro) {
+    return res.json({ encontrados: [], erro: erro.message });
+  }
+  res.json({ encontrados });
+});
+
+/**
  * Liga o banco pela própria tela: grava a credencial e reconecta na hora, sem
  * terminal e sem reiniciar o sistema. Aceita tanto a chave do Supabase quanto o
  * JSON da conta de serviço do Firebase — quem decide é o conteúdo colado.
@@ -99,8 +118,17 @@ app.post('/api/banco/configurar', async (req, res) => {
   }
 
   const corpo = req.body || {};
-  const conteudo = String(corpo.credencial || corpo.chave || '').trim();
   const url = credenciais.limparEndereco(corpo.url);
+  let conteudo = String(corpo.credencial || corpo.chave || '').trim();
+
+  // também dá para mandar só o caminho do arquivo .json (o sistema lê)
+  if (!conteudo && corpo.caminho) {
+    try {
+      conteudo = banco.lerCredencialDoArquivo(corpo.caminho).conteudo;
+    } catch (erro) {
+      return res.status(400).json({ erro: erro.message });
+    }
+  }
 
   if (String(process.env.LICITAPRO_ARMAZENAMENTO || '').trim().toLowerCase() === 'arquivo') {
     return res.status(409).json({

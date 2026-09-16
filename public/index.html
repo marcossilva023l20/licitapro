@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=13" />
+  <link rel="stylesheet" href="css/estilos.css?v=15" />
 </head>
 <body>
   <!-- ================================= APLICAÇÃO ================================= -->
@@ -78,6 +78,10 @@
                     placeholder="cole aqui a chave do Supabase (eyJ...) ou o JSON do Firebase ({ ... })"
                     spellcheck="false"></textarea>
                 </label>
+                <div class="sugestao-banco oculto" id="banco-sugestao">
+                  <span class="texto-suave" id="banco-sugestao-texto"></span>
+                  <button class="botao botao-primario" id="banco-sugestao-usar" type="button">Usar este arquivo</button>
+                </div>
                 <div class="arquivo-banco">
                   <button class="botao botao-suave" id="banco-arquivo-botao" type="button">
                     Escolher o arquivo .json do Firebase
@@ -86,7 +90,12 @@
                   <span class="texto-suave">ou arraste o arquivo para aqui</span>
                 </div>
                 <p class="ajuda-banco">
-                  <strong>Supabase:</strong> Project Settings → API keys (a chave de serviço).<br />
+                  <strong>Supabase:</strong> no painel do seu projeto, <em>Settings</em> → <em>API Keys</em>:
+                  copie a chave <em>service_role</em> (a que tem esse nome; num projeto novo é a
+                  <em>secret key</em>, começa com <code>sb_secret_</code>). A chave <em>anon</em>/<em>publishable</em>
+                  não serve para gravar.<br />
+                  <a class="link-banco oculto" id="banco-abrir-supabase" target="_blank" rel="noopener">
+                    Abrir a página das chaves deste projeto no Supabase</a><br />
                   <strong>Firebase:</strong> Project settings → Service accounts → Generate new private key
                   (o arquivo <code>.json</code> inteiro).<br />
                   A credencial fica só neste servidor (arquivo <code>.env</code> e pasta <code>data/</code>)
@@ -630,11 +639,11 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=13"></script>
-  <script src="js/api.js?v=13"></script>
-  <script src="js/ui.js?v=13"></script>
-  <script src="js/editar.js?v=13"></script>
-  <script src="js/app.js?v=13"></script>
-  <script src="js/modo-estatico.js?v=13"></script>
+  <script src="../shared/format.js?v=15"></script>
+  <script src="js/api.js?v=15"></script>
+  <script src="js/ui.js?v=15"></script>
+  <script src="js/editar.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
+  <script src="js/modo-estatico.js?v=15"></script>
 </body>
 </html>
