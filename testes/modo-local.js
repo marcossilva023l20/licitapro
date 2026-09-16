@@ -88,9 +88,21 @@ async function abrirSemServidor(opcoes = {}) {
   // (por exemplo: um armazenamento que recusa gravações, como na janela privada).
   if (typeof opcoes.preparar === 'function') opcoes.preparar(window);
 
+  // O jsdom não traz WebCrypto: aqui entra o do Node, igual ao que o navegador
+  // oferece em https (o modo nuvem cifra os dados antes de enviar).
+  if (!window.crypto || !window.crypto.subtle) {
+    Object.defineProperty(window, 'crypto', { configurable: true, value: require('crypto').webcrypto });
+  }
+
   // Sem servidor: qualquer /api/... responde a página 404 do GitHub Pages (HTML).
-  window.fetch = async (url) => {
+  // Endereços listados em `externo` (o Supabase de mentira dos testes) saem de
+  // verdade pela rede — é assim que dá para testar a nuvem de ponta a ponta.
+  const externos = (opcoes.externo || []).map((endereco) => String(endereco).replace(/\/+$/, ''));
+  window.fetch = async (url, configuracao) => {
     const endereco = String(url);
+    if (externos.some((prefixo) => endereco.startsWith(prefixo))) {
+      return fetch(endereco, configuracao);
+    }
     const corpo = '<!DOCTYPE html><html><body>404 — There isn\'t a GitHub Pages site here.</body></html>';
     return new window.Response(corpo, {
       status: 404,

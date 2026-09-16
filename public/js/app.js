@@ -63,6 +63,8 @@
 
     const modoLocal = window.ModoEstatico && window.ModoEstatico.ativo && window.ModoEstatico.ativo();
     if (modoLocal) {
+      const nuvem = window.Nuvem ? window.Nuvem.situacao() : { ativa: false };
+      const nuvemAtiva = nuvem.ativa;
       const situacao = window.ModoEstatico.armazenamento ? window.ModoEstatico.armazenamento() : null;
       const ultimo = situacao && situacao.ultimoSalvamento;
       if (situacao && situacao.ok === false) {
@@ -78,14 +80,29 @@
         texto.textContent =
           'A última gravação neste navegador falhou' + (ultimo.motivo ? ' (' + ultimo.motivo + ')' : '') +
           '. Baixe um backup pelo menu e tente salvar de novo.';
+      } else if (nuvemAtiva && nuvem.erro) {
+        caixa.className = 'situacao-dados erro';
+        texto.textContent = 'Nuvem: ' + nuvem.erro + ' — os dados continuam salvos neste navegador.';
+      } else if (nuvemAtiva) {
+        caixa.className = 'situacao-dados ok';
+        texto.textContent =
+          'Dados salvos neste navegador e na nuvem (projeto ' + (nuvem.projeto || '') + ')' +
+          (nuvem.sincronizadoEm ? ' — última sincronização ' + quando(nuvem.sincronizadoEm) + '.' : '.');
       } else {
         caixa.className = 'situacao-dados aviso';
         texto.textContent =
-          'Dados salvos neste navegador (sem servidor). Use "Baixar backup" no menu para guardar uma cópia.';
+          'Dados salvos neste navegador (sem servidor). Para abrir em outro computador, use ' +
+          '"Guardar na nuvem" aqui embaixo — ou baixe um backup pelo menu.';
       }
+      const blocoNuvem = $('#nuvem-bloco');
+      if (blocoNuvem) blocoNuvem.classList.remove('oculto');
+      mostrarStatusDaNuvem();
       if (areaBanco) areaBanco.classList.add('oculto');
       return;
     }
+
+    const blocoNuvemComServidor = $('#nuvem-bloco');
+    if (blocoNuvemComServidor) blocoNuvemComServidor.classList.add('oculto');
 
     try {
       const saude = await API.get('/api/health');
@@ -727,6 +744,134 @@
   }
 
 
+  /** Data e hora curtinhas, para a linha do painel. */
+  function quando(iso) {
+    try {
+      return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  /** Escreve o estado da nuvem no bloco "Guardar na nuvem". */
+  function mostrarStatusDaNuvem() {
+    const area = $('#nuvem-status');
+    if (!area) return;
+    const nuvem = window.Nuvem ? window.Nuvem.situacao() : { ativa: false };
+    if (!nuvem.ativa) {
+      area.textContent = '';
+      return;
+    }
+    area.textContent = nuvem.erro
+      ? 'Nuvem ligada no projeto ' + (nuvem.projeto || '') + ', mas com problema: ' + nuvem.erro
+      : 'Nuvem ligada no projeto ' + (nuvem.projeto || '') +
+        (nuvem.sincronizadoEm ? ' — última sincronização ' + quando(nuvem.sincronizadoEm) + '.' : '.');
+  }
+
+  /**
+   * Nuvem: guardar os dados no Supabase direto do navegador (o site publicado
+   * no GitHub Pages não tem servidor). É o caminho para abrir o sistema em
+   * outro computador sem depender de nenhum PC ligado.
+   */
+  function ligarNuvem() {
+    const form = $('#nuvem-form');
+    if (!form || !window.Nuvem) return;
+
+    const mensagem = $('#nuvem-mensagem');
+    const escrever = (texto, tipo) => {
+      mensagem.textContent = texto || '';
+      mensagem.className = 'mensagem-banco' + (tipo ? ' ' + tipo : '');
+    };
+
+    const config = window.Nuvem.lerConfig();
+    if (config) {
+      $('#nuvem-url').value = config.url || '';
+      $('#nuvem-chave').value = config.chave || '';
+      $('#nuvem-codigo').value = config.codigo || '';
+    }
+
+    form.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const botao = $('#nuvem-conectar');
+      botao.disabled = true;
+      escrever('Testando a conexão com o Supabase...');
+      try {
+        await window.Nuvem.conectar({
+          url: $('#nuvem-url').value,
+          chave: $('#nuvem-chave').value,
+          codigo: $('#nuvem-codigo').value,
+        });
+        escrever('Nuvem ligada. Enviando os dados deste computador...');
+        const resultado = await window.Nuvem.sincronizar();
+        escrever(
+          (resultado && resultado.direcao === 'download'
+            ? 'Dados baixados da nuvem. '
+            : 'Dados enviados para a nuvem. ') + 'Abra o sistema em outro computador com o mesmo código.',
+          'ok'
+        );
+        UI.toast('Nuvem ligada: seus dados agora abrem em qualquer computador.', 'sucesso');
+        await atualizarSituacaoDados();
+      } catch (erro) {
+        escrever(erro.message, 'erro');
+      } finally {
+        botao.disabled = false;
+      }
+    });
+
+    $('#nuvem-sincronizar').addEventListener('click', async () => {
+      escrever('Sincronizando...');
+      try {
+        const resultado = await window.Nuvem.sincronizar();
+        escrever(
+          resultado && resultado.direcao === 'download'
+            ? 'Os dados da nuvem vieram para este computador.'
+            : 'Os dados deste computador foram para a nuvem.',
+          'ok'
+        );
+        await carregarDocumentos();
+        desenharPainel();
+        atualizarSituacaoDados();
+      } catch (erro) {
+        escrever(erro.message, 'erro');
+      }
+    });
+
+    $('#nuvem-desligar').addEventListener('click', async () => {
+      const confirmado = await UI.confirmar({
+        titulo: 'Desligar a nuvem',
+        texto:
+          'Os dados que já estão na nuvem continuam guardados (com o seu código), mas este navegador ' +
+          'para de sincronizar. Tem certeza?',
+        textoConfirmar: 'Desligar',
+        perigo: true,
+      });
+      if (!confirmado) return;
+      window.Nuvem.desconectar();
+      escrever('Nuvem desligada neste computador.');
+      await atualizarSituacaoDados();
+    });
+  }
+
+  /**
+   * Ao abrir o sistema com a nuvem ligada, busca o que está lá (é o que faz os
+   * documentos aparecerem em outro computador).
+   */
+  async function sincronizarAoAbrir() {
+    if (!window.Nuvem || !window.Nuvem.configurada()) return;
+    try {
+      const resultado = await window.Nuvem.sincronizar();
+      if (resultado && resultado.direcao !== 'envio') {
+        await carregarDocumentos();
+        desenharPainel();
+        if (!$('#view-documentos').classList.contains('oculto')) desenharListaDocumentos();
+        UI.toast('Dados atualizados da nuvem.', 'sucesso');
+      }
+    } catch (erro) {
+      UI.toast('Nuvem: ' + erro.message, 'erro', 12000);
+    }
+    atualizarSituacaoDados();
+  }
+
   /**
    * No modo local quem guarda é o próprio navegador: quando a gravação não
    * acontece (janela privada, cota cheia), a tela avisa na hora — senão a
@@ -846,6 +991,7 @@
     jaIniciado = true;
     window.Editor.iniciar();
     ligarConexaoBanco();
+    ligarNuvem();
     ligarNavegacao();
     ligarAcoesDocumentos();
     ligarImportacao();
@@ -859,6 +1005,8 @@
       atualizarSituacaoDados();
       if (!window.location.hash) window.location.hash = '#/painel';
       rotear();
+      // com a nuvem ligada, o que está lá é buscado assim que o sistema abre
+      sincronizarAoAbrir();
     } catch (erro) {
       UI.toast('Não foi possível carregar os dados do sistema: ' + erro.message, 'erro');
     }

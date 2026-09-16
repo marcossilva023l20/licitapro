@@ -30,6 +30,8 @@ const credenciais = require(path.join(RAIZ, 'server', 'credenciais'));
 
 const CAMINHO_SQL = path.join(RAIZ, 'supabase', 'esquema.sql');
 const CAMINHO_POLITICAS = path.join(RAIZ, 'supabase', 'politicas-anon.sql');
+// tabela do cofre: é por ela que o site sem servidor guarda os dados cifrados
+const CAMINHO_NUVEM = path.join(RAIZ, 'supabase', 'nuvem.sql');
 // onde ficam as credenciais (o ambiente pode apontar para outro arquivo: testes)
 const CAMINHO_ENV = credenciais.caminhoEnv();
 
@@ -328,10 +330,20 @@ const acao = (process.argv[2] || 'conferir').toLowerCase();
 (async () => {
   if (acao === 'sql') {
     mostrarSql();
+    console.log('\n' + '-'.repeat(64));
+    console.log('Para o sistema publicado no GitHub Pages (sem servidor) guardar os dados');
+    console.log('no seu projeto e abrir em qualquer computador, rode também este arquivo');
+    console.log('no SQL Editor (uma vez):');
+    console.log('-'.repeat(64) + '\n');
+    mostrarSql(CAMINHO_NUVEM);
     return;
   }
   if (acao === 'politicas') {
     mostrarSql(CAMINHO_POLITICAS);
+    return;
+  }
+  if (acao === 'nuvem') {
+    mostrarSql(CAMINHO_NUVEM);
     return;
   }
   if (acao === 'configurar') {
@@ -347,7 +359,7 @@ const acao = (process.argv[2] || 'conferir').toLowerCase();
     if (acao === 'enviar') await enviar();
     else if (acao === 'conferir') await conferir();
     else {
-      console.error('Ação desconhecida: ' + acao + ' (use: conferir, configurar, enviar, sql ou politicas)');
+      console.error('Ação desconhecida: ' + acao + ' (use: conferir, configurar, enviar, sql, nuvem ou politicas)');
       process.exitCode = 1;
     }
   } catch (erro) {

@@ -1198,6 +1198,132 @@ teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {
   assert.ok(/Enquadrada no SIMPLES NACIONAL/i.test(juntos) || true, 'marcação do SIMPLES quando cadastrada');
 });
 
+teste('Nuvem: liga no Supabase, cifra tudo e abre os documentos em outro computador', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE_PUBLICA = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE_PUBLICA });
+  const nuvem = { url: falso.url, chave: CHAVE_PUBLICA, codigo: 'codigo-secreto-123' };
+
+  try {
+    // ---------------------------------------------------- computador 1
+    const um = await abrirNoModoLocal({ externo: [falso.url] });
+    const w1 = um.window;
+    const $1 = um.$;
+    await entrarNoModoLocal(w1, $1);
+
+    // uma proposta com foto (a foto viaja dentro do documento no modo local)
+    $1('#botao-nova-proposta').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$1('#view-editor').classList.contains('oculto'), 'editor visível');
+    await ModoLocal.esperar(() => $1('#campo-numero-sequencial').value !== '', 'numeração automática');
+    $1('#itens-adicionar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => $1('#lista-itens .item'), 'item criado');
+    const descricao = $1('#lista-itens .item input[data-campo="descricao"]');
+    descricao.value = 'RÁDIO DE TESTE DA NUVEM';
+    descricao.dispatchEvent(new w1.Event('input', { bubbles: true }));
+    $1('#editor-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => $1('#editor-estado').textContent === 'Salvo', 'documento salvo', 10000);
+
+    w1.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(() => !$1('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+    $1('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL';
+    $1('#emp-salvar').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    await ModoLocal.esperar(
+      () => JSON.parse(w1.localStorage.getItem('licitapro.local.v1')).perfil.empresa.razaoSocial === 'D.E.J SOLUTIONS & GLOBAL',
+      'empresa salva'
+    );
+
+    // liga a nuvem pela tela (é o que o usuário faz)
+    $1('#nav-painel') && $1('#nav-painel').dispatchEvent(new w1.MouseEvent('click', { bubbles: true }));
+    w1.location.hash = '#/painel';
+    await ModoLocal.esperar(() => !$1('#nuvem-bloco').classList.contains('oculto'), 'bloco da nuvem visível');
+    $1('#nuvem-url').value = nuvem.url;
+    $1('#nuvem-chave').value = nuvem.chave;
+    $1('#nuvem-codigo').value = nuvem.codigo;
+    $1('#nuvem-form').dispatchEvent(new w1.Event('submit', { bubbles: true, cancelable: true }));
+    await ModoLocal.esperar(
+      () => /Dados enviados para a nuvem/.test($1('#nuvem-mensagem').textContent),
+      'dados enviados para a nuvem: ' + $1('#nuvem-mensagem').textContent,
+      15000
+    );
+
+    // no banco nada legível: o que está lá é a cifra
+    const principal = falso.linhas.get('principal');
+    assert.ok(principal, 'a linha principal chegou no Supabase');
+    const cifrado = JSON.stringify(principal.conteudo);
+    assert.ok(!/RÁDIO|RADIO/.test(cifrado), 'o que está no banco não mostra o item');
+    assert.ok(!/D\.E\.J/.test(cifrado), 'nem a empresa');
+    assert.ok(principal.conteudo.dados.length > 100, 'e o conteúdo cifrado está lá');
+    assert.ok(falso.autenticadas.length >= 2, 'os pedidos foram assinados com a chave pública');
+    assert.ok(
+      falso.autenticadas.some((linha) => /licitapro_cofre/.test(linha)),
+      'o sistema falou com a tabela do cofre'
+    );
+    assert.ok(/sincronizado/.test($1('#nuvem-status').textContent) || /na nuvem/.test($1('#situacao-dados-texto').textContent),
+      'a tela mostra que a nuvem está ligada: ' + $1('#situacao-dados-texto').textContent);
+    const guardado = w1.localStorage.getItem('licitapro.nuvem.v1');
+    assert.ok(guardado && /"codigo"/.test(guardado), 'a configuração da nuvem fica guardada neste navegador');
+    w1.close();
+
+    // ---------------------------------------------------- computador 2
+    const dois = await ModoLocal.abrirSemServidor({
+      externo: [falso.url],
+      armazenamento: { 'licitapro.nuvem.v1': JSON.stringify(nuvem) },
+    });
+    const w2 = dois.window;
+    const $2 = (sel) => w2.document.querySelector(sel);
+    await ModoLocal.esperar(() => w2.ModoEstatico && w2.ModoEstatico.ativo(), 'modo local no computador 2');
+    await ModoLocal.esperar(() => !$2('#app').classList.contains('oculto'), 'aplicação aberta', 10000);
+    await ModoLocal.esperar(
+      () => /001\/2026/.test($2('#painel-recentes').textContent),
+      'a proposta criada no outro computador aparece: ' + $2('#painel-recentes').textContent.slice(0, 80),
+      15000
+    );
+    const bancoDois = w2.ModoEstatico._interno.banco;
+    assert.strictEqual(bancoDois.documentos.length, 1, 'o documento chegou inteiro');
+    assert.strictEqual(bancoDois.documentos[0].itens[0].descricao, 'RÁDIO DE TESTE DA NUVEM', 'com o item');
+    assert.strictEqual(bancoDois.perfil.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL', 'e com os dados da empresa');
+    assert.ok(/na nuvem/.test($2('#situacao-dados-texto').textContent), 'a linha do painel fala da nuvem: ' + $2('#situacao-dados-texto').textContent);
+    assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
+    w2.close();
+
+    // ---------------------------------------------------- código errado
+    const errado = Object.assign({}, nuvem, { codigo: 'codigo-errado-999' });
+    const tres = await ModoLocal.abrirSemServidor({
+      externo: [falso.url],
+      armazenamento: { 'licitapro.nuvem.v1': JSON.stringify(errado) },
+    });
+    try {
+      let mensagem = '';
+      await tres.window.Nuvem.sincronizar().catch((erro) => { mensagem = erro.message; });
+      assert.ok(/código de acesso está certo/.test(mensagem), 'o código errado é explicado: ' + mensagem);
+    } finally {
+      tres.window.close();
+    }
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: explica que falta rodar o nuvem.sql quando a tabela não existe', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const falso = await criarServidorDeMentira({ chave: 'chave-publica-de-teste', semTabela: true });
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({ externo: [falso.url] });
+    await ModoLocal.esperar(() => aberto.window.ModoEstatico && aberto.window.ModoEstatico.ativo(), 'modo local');
+    let mensagem = '';
+    await aberto.window.Nuvem.conectar({
+      url: falso.url,
+      chave: 'chave-publica-de-teste',
+      codigo: 'codigo-secreto-123',
+    }).catch((erro) => { mensagem = erro.message; });
+    assert.ok(/nuvem\.sql/.test(mensagem), 'a mensagem manda rodar o arquivo do cofre: ' + mensagem);
+    assert.strictEqual(aberto.window.Nuvem.configurada(), false, 'e não fica ligada pela metade');
+    aberto.window.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
 // ==================================================== 6. modo local (sem servidor)
 
 const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
@@ -1814,7 +1940,7 @@ teste('Supabase: o esquema cria as tabelas usadas, com RLS, e sem chave no naveg
   // (o site pode *citar* o Supabase e o nome do tipo de chave no texto de ajuda
   //  — o que não pode é ter a chave, uma variável com valor ou o endereço do
   //  projeto; veja PADROES_DE_CREDENCIAL no fim do arquivo)
-  ['public/index.html', 'public/js/app.js', 'public/js/modo-estatico.js', 'public/js/api.js'].forEach((relativo) => {
+  ['public/index.html', 'public/js/app.js', 'public/js/modo-estatico.js', 'public/js/api.js', 'public/js/nuvem.js'].forEach((relativo) => {
     const conteudo = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
     PADROES_DE_CREDENCIAL.forEach((padrao) => {
       assert.strictEqual(padrao.test(conteudo), false, 'sem credencial de banco em ' + relativo);
@@ -2309,7 +2435,8 @@ const PADROES_DE_CREDENCIAL = [
   /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, // chave no formato JWT (anon ou service_role)
   /sb_secret_[A-Za-z0-9_-]{10,}/, // secret key do projeto
   /SUPABASE_[A-Z_]+\s*[:=]\s*['"]?[A-Za-z0-9._-]{12,}/, // variável já com o valor
-  /supabase\.co(?![a-z])/i, // endereço do projeto (e não o painel supabase.com)
+  // endereço do projeto — e não o painel supabase.com nem o exemplo xxxxxxxx.supabase.co
+  /\b(?!x{8})[a-z0-9]{10,}\.supabase\.co(?![a-z])/i,
 ];
 
 teste('Interface: o painel deixa ligar o banco pela tela (só na própria máquina)', async () => {

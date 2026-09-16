@@ -172,6 +172,8 @@
       estado.armazenamentoOk = true;
       estado.motivoArmazenamento = '';
       estado.ultimoSalvamento = { ok: true, em: new Date().toISOString(), motivo: '' };
+      // com a nuvem ligada, o que foi gravado aqui vai para lá logo depois
+      if (window.Nuvem && window.Nuvem.agendarEnvio) window.Nuvem.agendarEnvio();
       return true;
     } catch (erro) {
       const motivo = (erro && erro.message) || 'armazenamento indisponível';
@@ -223,10 +225,24 @@
 
   async function lerImagemBlob(id) {
     try {
-      return await comLoja('readonly', (loja) => loja.get(id));
+      const daqui = await comLoja('readonly', (loja) => loja.get(id));
+      if (daqui) return daqui;
     } catch (_) {
-      return null;
+      /* sem IndexedDB: tenta a nuvem abaixo */
     }
+    // a imagem pode ter sido enviada de outro computador: baixa e guarda aqui
+    if (window.Nuvem && window.Nuvem.configurada && window.Nuvem.configurada()) {
+      try {
+        const daNuvem = await window.Nuvem.baixarImagem(id);
+        if (daNuvem) {
+          await salvarImagemBlob(id, daNuvem);
+          return daNuvem;
+        }
+      } catch (_) {
+        /* segue sem a imagem: o PDF avisa que ela não entrou */
+      }
+    }
+    return null;
   }
 
   async function listarIdsImagens() {
@@ -301,7 +317,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '15';
+  const VERSAO_ARQUIVOS = '16';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -693,10 +709,13 @@
     return conteudo;
   }
 
-  async function importarBackup(arquivo) {
+  /**
+   * Troca os dados deste computador pelo conteúdo de um backup (arquivo ou
+   * nuvem). @param {object} opcoes { silencioso } — sem aviso na tela
+   */
+  async function aplicarBackup(conteudo, opcoes) {
     await carregarBibliotecas();
-    const texto = await arquivo.text();
-    const conteudo = JSON.parse(texto);
+    const config = opcoes || {};
     if (!conteudo || !conteudo.banco || !Array.isArray(conteudo.banco.documentos)) {
       throw new Error('Este arquivo não é um backup do DEJ Solutions & Global.');
     }
@@ -711,10 +730,20 @@
       const blob = await (await fetch(dataUrl)).blob();
       await salvarImagemBlob(id, blob);
     }
-    window.UI && window.UI.toast(
-      'Backup restaurado: ' + estado.banco.documentos.length + ' documento(s) e ' +
-      Object.keys(imagens).length + ' imagem(ns).', 'sucesso'
-    );
+    estado.mapaImagens.clear();
+    if (!config.silencioso) {
+      window.UI && window.UI.toast(
+        'Backup restaurado: ' + estado.banco.documentos.length + ' documento(s) e ' +
+        Object.keys(imagens).length + ' imagem(ns).', 'sucesso'
+      );
+    }
+    return estado.banco;
+  }
+
+  async function importarBackup(arquivo) {
+    const texto = await arquivo.text();
+    const conteudo = JSON.parse(texto);
+    return aplicarBackup(conteudo);
   }
 
   // ---------------------------------------------------------- interface
@@ -934,6 +963,9 @@
     exportarBackup,
     montarBackup,
     importarBackup,
+    aplicarBackup,
+    salvarImagem: salvarImagemBlob,
+    listarIdsImagens,
     baixarModeloPlanilha,
     motorPdf: motorPdfPronto,
     verificarAmbiente,

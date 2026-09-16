@@ -371,6 +371,16 @@ input[type="search"] { padding-left: 12px; }
   font-weight: 600;
 }
 .link-banco:hover { text-decoration: underline; }
+
+/* Nuvem (guardar no Supabase e abrir de outro computador) */
+.nuvem-bloco { margin-top: 10px; }
+.nuvem-bloco summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--dourado-600, #c6a15b);
+}
+.nuvem-bloco[open] summary { margin-bottom: 8px; }
+.nuvem-bloco .form-banco { margin-top: 6px; }
 .ajuda-banco code {
   font-size: 0.78rem;
   padding: 1px 5px;
