@@ -13,7 +13,7 @@ const { PORT, HOST, garantirPastas, DATA_DIR } = require('./config');
 garantirPastas();
 
 const store = require('./store');
-const Supabase = require('./supabase');
+const banco = require('./banco');
 const credenciais = require('./credenciais');
 const rotasPerfil = require('./routes/perfil');
 const rotasDocumentos = require('./routes/documentos');
@@ -62,19 +62,19 @@ function ehLocal(req) {
 }
 
 app.get('/api/health', (req, res) => {
-  const banco = store.carregar();
+  const dados = store.carregar();
   const local = ehLocal(req);
   res.json({
     ok: true,
     armazenamento: store.modo(), // 'supabase' ou 'arquivo'
     // o endereço do projeto só vai para a própria máquina (é o que preenche o
-    // formulário de conectar o banco); a chave nunca sai do servidor
-    supabase: Object.assign(
-      store.situacaoRemota(), // configurado / conectado / erro
-      local ? { url: Supabase.lerConfiguracao().url || Supabase.URL_PADRAO } : {}
+    // formulário de conectar o banco); a credencial nunca sai do servidor
+    banco: Object.assign(
+      store.situacaoRemota(), // provedor / configurado / conectado / erro
+      local ? { url: banco.enderecoPadrao() } : {}
     ),
     ultimoErroDeGravacao: store.ultimoErroRemoto(),
-    documentos: banco.documentos.length,
+    documentos: dados.documentos.length,
     dadosEm: DATA_DIR,
     // a tela pode ligar o banco aqui? (só quando o sistema roda na sua máquina)
     configuravelAqui: local,
@@ -83,9 +83,10 @@ app.get('/api/health', (req, res) => {
 });
 
 /**
- * Liga o banco pela própria tela: grava as credenciais no .env e reconecta na
- * hora, sem terminal e sem reiniciar o sistema. Só aceita pedidos feitos da
- * própria máquina (veja ehLocal).
+ * Liga o banco pela própria tela: grava a credencial e reconecta na hora, sem
+ * terminal e sem reiniciar o sistema. Aceita tanto a chave do Supabase quanto o
+ * JSON da conta de serviço do Firebase — quem decide é o conteúdo colado.
+ * Só aceita pedidos feitos da própria máquina (veja ehLocal).
  */
 app.post('/api/banco/configurar', async (req, res) => {
   if (!ehLocal(req)) {
@@ -93,55 +94,75 @@ app.post('/api/banco/configurar', async (req, res) => {
       erro: 'Por segurança, as credenciais do banco só podem ser gravadas pela tela quando o ' +
         'sistema está rodando na sua própria máquina (endereço localhost).',
       ajuda: 'Neste endereço, informe as credenciais no painel da hospedagem (variáveis de ' +
-        'ambiente do serviço) ou rode "npm run supabase -- configurar" no servidor.',
+        'ambiente do serviço) ou rode "npm run banco -- configurar" no servidor.',
     });
   }
 
-  const url = credenciais.limparEndereco(req.body && req.body.url);
-  const chave = String((req.body && req.body.chave) || '').trim();
+  const corpo = req.body || {};
+  const conteudo = String(corpo.credencial || corpo.chave || '').trim();
+  const url = credenciais.limparEndereco(corpo.url);
 
-  if (chave.length < 20) {
-    return res.status(400).json({
-      erro: 'Cole a chave completa do projeto (a que dá acesso total). Ela é bem comprida — ' +
-        'confira se a cópia veio inteira.',
-    });
-  }
-  if (url && !credenciais.enderecoValido(url)) {
-    return res.status(400).json({
-      erro: 'O endereço do projeto não parece válido.',
-      ajuda: 'Ele é assim: https://xxxxxxxx.supabase.co (Project Settings → Data API).',
-    });
-  }
   if (String(process.env.LICITAPRO_ARMAZENAMENTO || '').trim().toLowerCase() === 'arquivo') {
     return res.status(409).json({
       erro: 'O sistema está configurado para usar o arquivo local (LICITAPRO_ARMAZENAMENTO=arquivo).',
-      ajuda: 'Remova essa variável de ambiente (ou o .env) para que o banco passe a ser usado.',
+      ajuda: 'Remova essa variável de ambiente (ou a linha do .env) para que o banco passe a ser usado.',
     });
   }
 
-  const endereco = url || Supabase.lerConfiguracao().url || Supabase.URL_PADRAO;
-  let gravado;
-  try {
-    gravado = credenciais.gravarCredenciais({ url: endereco, chave });
-  } catch (erro) {
-    return res.status(500).json({ erro: 'Não consegui gravar o arquivo de credenciais: ' + erro.message });
+  const detectado = banco.detectarCredencial(conteudo);
+  if (!detectado.provedor) {
+    return res.status(400).json({ erro: detectado.erro || 'Informe a credencial do banco.' });
   }
 
-  // vale já nesta execução: o sistema reconecta sem precisar reiniciar
-  credenciais.aplicarNoAmbiente({ url: endereco, chave });
+  if (detectado.provedor === 'firebase') {
+    const dados = banco.Firebase.interpretarJson(conteudo);
+    if (!banco.Firebase.pareceContaDeServico(dados)) {
+      return res.status(400).json({
+        erro: 'Esse JSON não é de uma conta de serviço do Firebase.',
+        ajuda: 'No console do Firebase: Project settings (⚙) → Service accounts → ' +
+          '"Generate new private key" — o arquivo baixado tem client_email, private_key e project_id.',
+      });
+    }
+  } else {
+    if (conteudo.length < 20) {
+      return res.status(400).json({
+        erro: 'Cole a chave completa do projeto. Ela é bem comprida — confira se a cópia veio inteira.',
+      });
+    }
+    if (url && !credenciais.enderecoValido(url)) {
+      return res.status(400).json({
+        erro: 'O endereço do projeto não parece válido.',
+        ajuda: 'Ele é assim: https://xxxxxxxx.supabase.co (Project Settings → Data API).',
+      });
+    }
+  }
+
+  let gravado;
+  try {
+    gravado = banco.gravarCredencial({
+      provedor: detectado.provedor,
+      conteudo,
+      url: detectado.provedor === 'supabase'
+        ? url || banco.Supabase.lerConfiguracao().url || banco.Supabase.URL_PADRAO
+        : '',
+    });
+  } catch (erro) {
+    return res.status(500).json({ erro: 'Não consegui gravar a credencial: ' + erro.message });
+  }
+
   const modo = await prepararArmazenamento();
   const situacao = store.situacaoRemota();
-  const conectado = modo === 'supabase' && situacao.conectado;
-  const tipoChave = Supabase.classificarChave(chave);
+  const conectado = modo !== 'arquivo' && situacao.conectado;
 
   res.json({
     ok: conectado,
-    arquivo: gravado.caminho,
+    provedor: gravado.provedor,
+    provedorNome: banco.NOMES[gravado.provedor],
+    arquivo: gravado.arquivo,
     armazenamento: modo,
-    supabase: situacao,
-    tipoChave,
-    aviso: Supabase.orientacaoDaChave(chave),
-    dica: conectado ? null : Supabase.dicaParaErro(situacao.erro),
+    banco: situacao,
+    aviso: detectado.provedor === 'supabase' ? banco.orientacaoDaChave(conteudo, 'supabase') : null,
+    dica: conectado ? null : banco.dicaParaErro(situacao.erro, gravado.provedor),
   });
 });
 
@@ -201,31 +222,34 @@ app.use((erro, req, res, next) => {
  * de data/db.json, se houver). Sem Supabase, usa o arquivo local.
  */
 async function prepararArmazenamento() {
-  if (!Supabase.configurado()) {
+  const escolha = banco.escolhido();
+  if (!escolha.nome) {
     store.carregar();
     return 'arquivo';
   }
-  const config = Supabase.lerConfiguracao();
-  const aviso = Supabase.orientacaoDaChave(config.chave);
+  const config = escolha.modulo.lerConfiguracao();
+  const aviso = escolha.modulo.orientacaoDaChave(config.chave || config.credenciais);
   if (aviso && !avisouSobreAChave) {
     avisouSobreAChave = true; // uma vez por execução, em vez de a cada leitura
-    console.warn(formataAviso('supabase', aviso));
+    console.warn(formataAviso(escolha.nome, aviso));
   }
-  store.usarRemoto(Supabase.criarCliente());
+  store.usarRemoto(escolha.modulo.criarCliente());
   try {
     await store.carregarRemoto();
     store.perfil.obter(); // garante o perfil no banco no primeiro uso
-    return 'supabase';
+    return escolha.nome;
   } catch (erro) {
     // O site não pode ficar fora do ar porque o banco (ou a internet) caiu:
     // segue com o arquivo local e cada alteração tenta o banco de novo.
     store.marcarRemotoIndisponivel(erro);
     store.carregar();
-    console.warn(formataAviso('supabase', [
+    console.warn(formataAviso(escolha.nome, [
       'Não consegui usar o banco agora: ' + erro.message,
       'O site está no ar com o arquivo local (' + DATA_DIR + ').',
       'As alterações continuam sendo salvas aí e vão para o banco assim que ele responder.',
-      'Confira o SUPABASE_URL, a chave e se supabase/esquema.sql já foi executado.',
+      escolha.nome === 'firebase'
+        ? 'Confira o JSON da conta de serviço e se o Firestore foi criado no console do Firebase.'
+        : 'Confira o SUPABASE_URL, a chave e se supabase/esquema.sql já foi executado.',
     ].join('\n')));
     return 'arquivo';
   }
@@ -267,13 +291,13 @@ function iniciar(porta, host) {
         console.log('  DEJ Solutions & Global — gerador de propostas e orçamentos');
         console.log('  ---------------------------------------------------------');
         console.log(`  Endereço:  http://localhost:${servidor.address().port}`);
-        const banco = store.situacaoRemota();
-        if (store.modo() === 'supabase') {
-          console.log(`  Dados em:  Supabase (${Supabase.lerConfiguracao().url})`);
+        const situacao = store.situacaoRemota();
+        if (store.modo() !== 'arquivo') {
+          console.log(`  Dados em:  ${banco.NOMES[store.modo()] || store.modo()} (${situacao.endereco || ''})`);
           console.log(`  Cópia local: ${DATA_DIR}`);
-        } else if (banco.configurado) {
-          console.log(`  Dados em:  arquivo local — Supabase indisponível`);
-          console.log(`             ${banco.erro || ''}`);
+        } else if (situacao.configurado) {
+          console.log(`  Dados em:  arquivo local — ${banco.NOMES[situacao.provedor] || 'banco'} indisponível`);
+          console.log(`             ${situacao.erro || ''}`);
         } else {
           console.log(`  Dados em:  ${DATA_DIR}`);
         }

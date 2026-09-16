@@ -179,10 +179,14 @@ function criarCliente(opcoes) {
   }
 
   return {
+    provedor: 'supabase',
     url: config.url,
     /** Só para diagnóstico: nunca imprimir a chave. */
     resumo() {
       return { url: config.url, tabelas: Object.assign({}, TABELAS) };
+    },
+    endereco() {
+      return config.url;
     },
     listar(tabela, consulta) {
       return requisitar('GET', tabela, consulta || 'select=*');

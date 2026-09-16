@@ -897,13 +897,10 @@ teste('HTTP: o login foi removido de vez (sem senha, sem sessão, sem usuários)
     const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
     assert.strictEqual(html.includes('tela-login'), false, 'sem tela de login no HTML');
     assert.strictEqual(html.includes('form-login'), false, 'sem formulário de login');
-    // o único campo de senha permitido é o da chave do banco, que só aparece
-    // quando o sistema roda na própria máquina (conectar o banco pela tela)
-    const camposDeSenha = html.match(/type="password"/g) || [];
-    assert.ok(
-      camposDeSenha.length <= 1 && (camposDeSenha.length === 0 || html.includes('id="banco-chave"')),
-      'sem campo de senha de login'
-    );
+    assert.strictEqual(html.includes('type="password"'), false, 'sem campo de senha');
+    // a credencial do banco é colada num campo comum (a chave ou o JSON), que só
+    // aparece quando o sistema roda na própria máquina
+    assert.ok(/Verificar de novo|verificar de novo/.test(html), 'sem tela de entrada');
     assert.strictEqual(html.includes('botao-sair'), false, 'sem botão de sair');
   } finally {
     servidor.close();
@@ -1976,7 +1973,7 @@ teste('Supabase: "configurar" grava o .env e já confere a conexão', async () =
     const saida = await new Promise((resolver) => {
       const filho = execFile(
         process.execPath,
-        [path.join(RAIZ, 'scripts', 'supabase.js'), 'configurar'],
+        [path.join(RAIZ, 'scripts', 'banco.js'), 'configurar'],
         { env: Object.assign({}, process.env, { LICITAPRO_ENV_FILE: arquivoEnv, LICITAPRO_DATA_DIR: pasta }) }
       );
       let texto = '';
@@ -1994,14 +1991,14 @@ teste('Supabase: "configurar" grava o .env e já confere a conexão', async () =
     assert.ok(gravado.includes('SUPABASE_URL=' + falso.url), 'grava o endereço informado');
     assert.ok(gravado.includes('SUPABASE_SERVICE_KEY=' + CHAVE_ESPERADA), 'grava a chave');
     assert.strictEqual(gravado.includes('antigo.supabase.co'), false, 'substitui o endereço antigo');
-    assert.ok(/Credenciais gravadas/.test(saida), 'avisa que gravou');
+    assert.ok(/Credencial do Supabase gravada/.test(saida), 'avisa que gravou: ' + saida.slice(0, 200));
     assert.ok(/tudo certo/.test(saida), 'já confere a conexão depois de gravar:\n' + saida);
 
     // sem chave informada (só ENTER), nada é alterado
     const saidaVazia = await new Promise((resolver) => {
       const filho = execFile(
         process.execPath,
-        [path.join(RAIZ, 'scripts', 'supabase.js'), 'configurar'],
+        [path.join(RAIZ, 'scripts', 'banco.js'), 'configurar'],
         { env: Object.assign({}, process.env, { LICITAPRO_ENV_FILE: arquivoEnv, LICITAPRO_DATA_DIR: pasta, SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '' }) }
       );
       let texto = '';
@@ -2011,7 +2008,7 @@ teste('Supabase: "configurar" grava o .env e já confere a conexão', async () =
       filho.stdin.write('\n\n');
       filho.stdin.end();
     });
-    assert.ok(/Nenhuma chave informada/.test(saidaVazia), 'avisa quando não há chave: ' + saidaVazia.slice(0, 120));
+    assert.ok(/Nenhuma credencial informada/.test(saidaVazia), 'avisa quando não há chave: ' + saidaVazia.slice(0, 120));
   } finally {
     await falso.fechar();
     fs.rmSync(pasta, { recursive: true, force: true });
@@ -2021,7 +2018,7 @@ teste('Supabase: "configurar" grava o .env e já confere a conexão', async () =
 teste('Supabase: o diagnóstico diz passo a passo onde está o problema', async () => {
   const { criarServidorDeMentira, CHAVE_ESPERADA } = require('./supabase-falso');
   const { execFile } = require('child_process');
-  const arquivo = path.join(RAIZ, 'scripts', 'supabase.js');
+  const arquivo = path.join(RAIZ, 'scripts', 'banco.js');
 
   const rodar = (ambiente) =>
     new Promise((resolver) => {
@@ -2054,7 +2051,7 @@ teste('Supabase: o diagnóstico diz passo a passo onde está o problema', async 
       SUPABASE_SERVICE_KEY: CHAVE_ESPERADA,
       LICITAPRO_DATA_DIR: process.env.LICITAPRO_DATA_DIR,
     });
-    assert.ok(/FALHA Conexão e tabelas/.test(saidaRuim), 'mostra a falha de conexão');
+    assert.ok(/FALHA Conexão com o banco/.test(saidaRuim), 'mostra a falha de conexão');
     assert.ok(/salvando no arquivo/.test(saidaRuim), 'explica que os dados vão para o arquivo local');
   } finally {
     await falso.fechar();
@@ -2072,7 +2069,7 @@ teste('Supabase: o diagnóstico diz passo a passo onde está o problema', async 
 teste('Supabase: a chave anon sem políticas é barrada com explicação clara', async () => {
   const { criarServidorDeMentira } = require('./supabase-falso');
   const { execFile } = require('child_process');
-  const arquivo = path.join(RAIZ, 'scripts', 'supabase.js');
+  const arquivo = path.join(RAIZ, 'scripts', 'banco.js');
   const anon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5bmViaHRvZHRrYnR5ZHpnb3VvIiwicm9sZSI6ImFub24ifQ.assinatura';
 
   const falso = await criarServidorDeMentira();
@@ -2102,6 +2099,8 @@ teste('Segurança: nenhuma chave de servidor do Supabase no repositório', () =>
   // grupo 1 = carga (payload) do JWT, grupo 2 = assinatura (o que garante que é uma chave de verdade)
   const padraoJwt = /eyJ[A-Za-z0-9_-]{10,}\.(eyJ[A-Za-z0-9_-]{10,})\.([A-Za-z0-9_-]{20,})/g;
   const padraoSecret = /sb_secret_[A-Za-z0-9_-]{20,}/g;
+  // chave privada de conta de serviço (Firebase) — nunca pode estar no repositório
+  const padraoContaDeServico = /"private_key"\s*:\s*"-----BEGIN/;
   const problemas = [];
 
   function lerPasta(caminho) {
@@ -2125,6 +2124,9 @@ teste('Segurança: nenhuma chave de servidor do Supabase no repositório', () =>
       });
       if (Array.from(conteudo.matchAll(padraoSecret)).length) {
         problemas.push(relativo + ' → sb_secret_');
+      }
+      if (padraoContaDeServico.test(conteudo)) {
+        problemas.push(relativo + ' → chave privada de conta de serviço');
       }
     }
   }
@@ -2265,7 +2267,7 @@ teste('Supabase: pela tela do sistema, a chave só pode ser gravada na própria 
     assert.strictEqual(resposta.status, 200, resposta.texto);
     assert.strictEqual(resposta.json.ok, true, 'banco conectado: ' + resposta.texto);
     assert.strictEqual(resposta.json.armazenamento, 'supabase', 'passou a gravar no banco');
-    assert.strictEqual(resposta.json.tipoChave, 'service_role', 'reconhece a chave de servidor');
+    assert.strictEqual(resposta.json.provedor, 'supabase', 'reconhece que a credencial é do Supabase');
     assert.strictEqual(resposta.json.arquivo, arquivoEnv, 'gravou no arquivo indicado pelo ambiente');
 
     const gravado = fs.readFileSync(arquivoEnv, 'utf8');
@@ -2276,7 +2278,7 @@ teste('Supabase: pela tela do sistema, a chave só pode ser gravada na própria 
     // o mesmo servidor já está no banco, sem reiniciar
     const saude = await requisitar(servidor, '/api/health');
     assert.strictEqual(saude.json.armazenamento, 'supabase', 'o site já está usando o banco');
-    assert.strictEqual(saude.json.supabase.conectado, true, 'e conectado');
+    assert.strictEqual(saude.json.banco.conectado, true, 'e conectado');
     assert.strictEqual(saude.json.configuravelAqui, true, 'a própria máquina pode configurar');
     assert.strictEqual(
       JSON.stringify(saude.json).includes(CHAVE_ESPERADA),
@@ -2303,6 +2305,213 @@ teste('Supabase: pela tela do sistema, a chave só pode ser gravada na própria 
     store.usarRemoto(null);
     store.carregar();
     fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
+teste('Banco: a credencial colada decide o banco (Supabase ou Firebase)', () => {
+  const banco = require(path.join(RAIZ, 'server', 'banco'));
+  const { criarContaDeServico } = require('./firestore-falso');
+  const { CHAVE_ESPERADA } = require('./supabase-falso');
+
+  // chave do Supabase
+  const chave = banco.detectarCredencial(CHAVE_ESPERADA);
+  assert.strictEqual(chave.provedor, 'supabase', 'chave JWT → Supabase');
+  assert.strictEqual(chave.tipo, 'service_role', 'e sabe que é a chave de servidor');
+  assert.strictEqual(banco.detectarCredencial('sb_secret_alguma_chave_nova').provedor, 'supabase', 'secret key nova');
+
+  // JSON da conta de serviço do Firebase (colado ou em base64)
+  const conta = criarContaDeServico({ projeto: 'dej-propostas' });
+  const json = JSON.stringify(conta.conta);
+  assert.strictEqual(banco.detectarCredencial(json).provedor, 'firebase', 'JSON → Firebase');
+  assert.strictEqual(
+    banco.detectarCredencial(Buffer.from(json).toString('base64')).provedor,
+    'firebase',
+    'JSON em base64 também'
+  );
+
+  // caminho do arquivo baixado do Firebase (mais prático na linha de comando)
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-firebase-'));
+  const arquivo = path.join(pasta, 'conta-de-servico.json');
+  fs.writeFileSync(arquivo, json);
+  try {
+    const doArquivo = banco.detectarCredencial(arquivo);
+    assert.strictEqual(doArquivo.provedor, 'firebase', 'caminho do arquivo → Firebase');
+    assert.strictEqual(JSON.parse(doArquivo.conteudo).project_id, 'dej-propostas', 'lê o projeto do arquivo');
+    assert.strictEqual(banco.detectarCredencial('"' + arquivo + '"').provedor, 'firebase', 'caminho entre aspas');
+  } finally {
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+
+  // o que não é credencial nenhuma é recusado com explicação
+  const nada = banco.detectarCredencial('um texto qualquer');
+  assert.strictEqual(nada.provedor, null, 'texto solto não passa');
+  assert.ok(/nem o JSON/.test(nada.erro), 'explica o que era esperado: ' + nada.erro);
+
+  // e a escolha do banco segue o que está configurado
+  assert.strictEqual(banco.nome({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_KEY: 'chave' }), 'supabase');
+  assert.strictEqual(banco.nome({ FIREBASE_SERVICE_ACCOUNT: json }), 'firebase');
+  assert.strictEqual(banco.nome({}), null, 'sem nada configurado não há banco');
+  assert.strictEqual(
+    banco.nome({ FIREBASE_SERVICE_ACCOUNT: json, LICITAPRO_ARMAZENAMENTO: 'arquivo' }),
+    null,
+    'LICITAPRO_ARMAZENAMENTO=arquivo desliga o banco'
+  );
+});
+
+teste('Firebase: dá para ligar o banco pela tela e ele grava de verdade', async () => {
+  const banco = require(path.join(RAIZ, 'server', 'banco'));
+  const store = require(path.join(RAIZ, 'server', 'store'));
+  const { DATA_DIR: DATA_DIR_TESTE } = require(path.join(RAIZ, 'server', 'config'));
+  const { criarServidorDeMentira, criarContaDeServico } = require('./firestore-falso');
+
+  const { conta, publicKey } = criarContaDeServico({ projeto: 'dej-propostas' });
+  const falso = await criarServidorDeMentira({ conta, publicKey });
+  conta.token_uri = falso.tokenUrl;
+
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'licitapro-tela-firebase-'));
+  const arquivoEnv = path.join(pasta, '.env');
+  const guardado = {
+    env: process.env.LICITAPRO_ENV_FILE,
+    base: process.env.FIREBASE_BASE,
+    token: process.env.FIREBASE_TOKEN_URL,
+  };
+  process.env.LICITAPRO_ENV_FILE = arquivoEnv;
+  process.env.FIREBASE_BASE = falso.firestoreBase;
+  process.env.FIREBASE_TOKEN_URL = falso.tokenUrl;
+
+  const servidor = await iniciarServidor();
+  try {
+    const json = JSON.stringify(conta);
+    const resposta = await requisitar(servidor, '/api/banco/configurar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ credencial: json }),
+    });
+    assert.strictEqual(resposta.status, 200, resposta.texto);
+    assert.strictEqual(resposta.json.provedor, 'firebase', 'reconheceu o Firebase pelo JSON');
+    assert.strictEqual(resposta.json.ok, true, 'banco ligado: ' + resposta.texto);
+    assert.strictEqual(resposta.json.armazenamento, 'firebase', 'passou a gravar no Firestore');
+
+    // a credencial não fica no .env em texto: o .env aponta para o arquivo do JSON
+    const gravado = fs.readFileSync(arquivoEnv, 'utf8');
+    assert.ok(/FIREBASE_SERVICE_ACCOUNT_FILE=/.test(gravado), 'o .env aponta para o JSON: ' + gravado);
+    assert.ok(/FIREBASE_PROJECT_ID=dej-propostas/.test(gravado), 'grava o id do projeto');
+    assert.strictEqual(gravado.includes(conta.private_key.slice(30, 60)), false, 'a chave privada não vai para o .env');
+
+    const destino = path.join(DATA_DIR_TESTE, banco.ARQUIVO_FIREBASE);
+    assert.ok(fs.existsSync(destino), 'o JSON ficou na pasta de dados: ' + destino);
+    assert.strictEqual(fs.statSync(destino).mode & 0o777, 0o600, 'só o dono lê o arquivo da credencial');
+
+    // o mesmo servidor já está usando o Firestore, sem reiniciar
+    const saude = await requisitar(servidor, '/api/health');
+    assert.strictEqual(saude.json.armazenamento, 'firebase', 'o site já usa o Firestore');
+    assert.strictEqual(saude.json.banco.provedor, 'firebase', 'e sabe dizer qual banco é');
+    assert.strictEqual(saude.json.banco.conectado, true, 'conectado');
+    assert.strictEqual(falso.tokensEmitidos >= 1, true, 'o token foi assinado e trocado com o Google');
+
+    // o que o usuário salvar agora vai para o Firestore de verdade
+    const salvar = await requisitar(servidor, '/api/perfil/empresa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ razaoSocial: 'D.E.J SOLUTIONS & GLOBAL', cnpj: '65.180.352/0001-11' }),
+    });
+    assert.strictEqual(salvar.status, 200, salvar.texto);
+    await store.encerrar();
+    const perfil = falso.dados('licitapro_perfil')[0];
+    assert.ok(perfil, 'o perfil chegou no Firestore');
+    assert.strictEqual(perfil.campos.dados.empresa.razaoSocial, 'D.E.J SOLUTIONS & GLOBAL', 'com os dados certos');
+
+    // e a leitura de volta funciona (é assim que o sistema sobe depois de reiniciar)
+    const cliente = banco.criarCliente();
+    const estado = await banco.lerEstado(cliente);
+    assert.strictEqual(
+      estado.documentos.length,
+      falso.contagem('licitapro_documentos'),
+      'leitura do banco responde com o que está lá'
+    );
+    assert.strictEqual(estado.perfil.empresa.cnpj, '65.180.352/0001-11', 'perfil lido do banco');
+  } finally {
+    servidor.close();
+    await falso.fechar();
+    if (guardado.env === undefined) delete process.env.LICITAPRO_ENV_FILE;
+    else process.env.LICITAPRO_ENV_FILE = guardado.env;
+    if (guardado.base === undefined) delete process.env.FIREBASE_BASE;
+    else process.env.FIREBASE_BASE = guardado.base;
+    if (guardado.token === undefined) delete process.env.FIREBASE_TOKEN_URL;
+    else process.env.FIREBASE_TOKEN_URL = guardado.token;
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
+    delete process.env.FIREBASE_PROJECT_ID;
+    store.usarRemoto(null);
+    store.carregar();
+    fs.rmSync(path.join(DATA_DIR_TESTE, banco.ARQUIVO_FIREBASE), { force: true });
+    fs.rmSync(pasta, { recursive: true, force: true });
+  }
+});
+
+teste('Firebase: o diagnóstico explica cada erro (banco sem Firestore, credencial recusada)', async () => {
+  const banco = require(path.join(RAIZ, 'server', 'banco'));
+  const { criarServidorDeMentira, criarContaDeServico } = require('./firestore-falso');
+  const { execFile } = require('child_process');
+
+  const dica = (mensagem) => banco.dicaParaErro(mensagem, 'firebase');
+  assert.ok(
+    /Create|Firestore Database/i.test(dica('Firestore respondeu 404: The database (default) does not exist for project x')),
+    'aponta criar o Firestore'
+  );
+  assert.ok(/Generate new private key/.test(dica('O Google recusou a credencial (401): invalid_grant')), 'aponta gerar a chave de novo');
+  assert.ok(/internet/i.test(dica('fetch failed')), 'aponta falta de conexão');
+
+  // e na linha de comando: banco certo, gravação testada de verdade
+  const { conta, publicKey } = criarContaDeServico({ projeto: 'dej-propostas' });
+  const falso = await criarServidorDeMentira({ conta, publicKey });
+  conta.token_uri = falso.tokenUrl;
+  try {
+    const saida = await new Promise((resolver) => {
+      execFile(
+        process.execPath,
+        [path.join(RAIZ, 'scripts', 'banco.js'), 'conferir'],
+        {
+          env: Object.assign({}, process.env, {
+            FIREBASE_SERVICE_ACCOUNT: JSON.stringify(conta),
+            FIREBASE_BASE: falso.firestoreBase,
+            FIREBASE_TOKEN_URL: falso.tokenUrl,
+            FIREBASE_PROJECT_ID: 'dej-propostas',
+          }),
+        },
+        (erro, stdout, stderr) => resolver(String(stdout || '') + String(stderr || ''))
+      );
+    });
+    assert.ok(/Conferindo o banco de dados \(Firebase\)/.test(saida), 'diz qual banco está conferindo:\n' + saida);
+    assert.ok(/Conexão e coleções: ok/.test(saida), 'confere as coleções');
+    assert.ok(/Gravação: ok/.test(saida), 'grava e apaga uma linha de teste');
+    assert.ok(/tudo certo/.test(saida), 'resume como tudo certo');
+    assert.strictEqual(falso.contagem('licitapro_sequencia'), 0, 'a linha de teste é removida no fim');
+
+    // banco sem o Firestore criado (o erro mais comum de quem está começando)
+    const semBanco = await criarServidorDeMentira({ conta, publicKey, semBanco: true });
+    conta.token_uri = semBanco.tokenUrl;
+    try {
+      const saidaRuim = await new Promise((resolver) => {
+        execFile(
+          process.execPath,
+          [path.join(RAIZ, 'scripts', 'banco.js'), 'conferir'],
+          {
+            env: Object.assign({}, process.env, {
+              FIREBASE_SERVICE_ACCOUNT: JSON.stringify(conta),
+              FIREBASE_BASE: semBanco.firestoreBase,
+              FIREBASE_TOKEN_URL: semBanco.tokenUrl,
+            }),
+          },
+          (erro, stdout, stderr) => resolver(String(stdout || '') + String(stderr || ''))
+        );
+      });
+      assert.ok(/FALHA Conexão com o banco/.test(saidaRuim), 'mostra a falha: ' + saidaRuim.slice(0, 400));
+      assert.ok(/Firestore Database|Create/i.test(saidaRuim), 'diz o que fazer no console do Firebase');
+    } finally {
+      await semBanco.fechar();
+    }
+  } finally {
+    await falso.fechar();
   }
 });
 

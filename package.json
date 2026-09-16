@@ -11,7 +11,8 @@
     "modelo": "node scripts/gerar-modelo.js",
     "paginas": "node scripts/paginas.js",
     "fontes": "node scripts/fontes-padrao.js",
-    "supabase": "node scripts/supabase.js"
+    "supabase": "node scripts/banco.js",
+    "banco": "node scripts/banco.js"
   },
   "engines": {
     "node": ">=18"

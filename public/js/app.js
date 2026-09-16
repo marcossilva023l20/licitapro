@@ -31,6 +31,11 @@
    * "o sistema está gravando no banco?" — sem precisar abrir o terminal:
    *   banco conectado · banco com problema · arquivo do servidor · este navegador
    */
+  /** Nome do banco que aparece nas mensagens ('Supabase' / 'Firebase'). */
+  function nomeDoBanco(provedor) {
+    return ({ supabase: 'Supabase', firebase: 'Firebase' })[provedor] || 'banco';
+  }
+
   async function atualizarSituacaoDados() {
     const caixa = $('#situacao-dados');
     const texto = $('#situacao-dados-texto');
@@ -48,20 +53,22 @@
 
     try {
       const saude = await API.get('/api/health');
-      const banco = saude.supabase || {};
-      const noBanco = saude.armazenamento === 'supabase' && banco.conectado;
+      const banco = saude.banco || {};
+      const nomeBanco = nomeDoBanco(banco.provedor);
+      const noBanco = saude.armazenamento !== 'arquivo' && banco.conectado;
       if (noBanco) {
         caixa.className = 'situacao-dados ok';
-        texto.textContent = 'Banco de dados conectado (Supabase): empresa e documentos salvos no banco.';
+        texto.textContent =
+          'Banco de dados conectado (' + nomeBanco + '): empresa e documentos salvos no banco.';
       } else if (banco.configurado) {
         caixa.className = 'situacao-dados erro';
         texto.textContent =
-          'O banco (Supabase) não está recebendo os dados: ' + (banco.erro || 'motivo desconhecido') +
+          'O banco (' + nomeBanco + ') não está recebendo os dados: ' + (banco.erro || 'motivo desconhecido') +
           ' — o que você salvar fica no arquivo do servidor até o banco voltar.';
       } else {
         caixa.className = 'situacao-dados aviso';
         texto.textContent =
-          'Supabase não configurado: os dados estão sendo salvos no arquivo do servidor.' +
+          'Banco de dados não configurado: os dados estão sendo salvos no arquivo do servidor.' +
           (saude.configuravelAqui ? ' Use "Conectar banco de dados" aqui embaixo.' : ' Veja o README (seção 4).');
       }
 
@@ -80,8 +87,9 @@
   }
 
   /**
-   * Liga o banco pela própria tela: grava as credenciais no .env do servidor e
-   * reconecta na hora. Aparece só em localhost (o servidor recusa de fora).
+   * Liga o banco pela própria tela: grava a credencial (chave do Supabase ou
+   * JSON do Firebase) no servidor e reconecta na hora. Aparece só em localhost
+   * — o servidor recusa pedidos que não venham da própria máquina.
    */
   function ligarConexaoBanco() {
     const abrir = $('#banco-abrir');
@@ -115,9 +123,9 @@
     form.addEventListener('submit', async (evento) => {
       evento.preventDefault();
       const url = $('#banco-url').value.trim();
-      const chave = $('#banco-chave').value.trim();
-      if (!chave) {
-        escrever('Cole a chave do projeto para continuar.', 'erro');
+      const credencial = $('#banco-credencial').value.trim();
+      if (!credencial) {
+        escrever('Cole a chave do projeto (ou o JSON do Firebase) para continuar.', 'erro');
         return;
       }
 
@@ -125,14 +133,14 @@
       botao.disabled = true;
       escrever('Testando a conexão...');
       try {
-        const resposta = await API.post('/api/banco/configurar', { url, chave });
-        $('#banco-chave').value = '';
+        const resposta = await API.post('/api/banco/configurar', { url, credencial });
+        $('#banco-credencial').value = '';
         if (resposta.ok) {
-          escrever('Banco conectado! Os dados já estão sendo salvos nele.', 'ok');
+          escrever((resposta.provedorNome || 'Banco') + ' conectado! Os dados já estão sendo salvos nele.', 'ok');
           UI.toast('Banco de dados conectado.', 'sucesso');
         } else {
-          const motivo = (resposta.supabase && resposta.supabase.erro) || '';
-          escrever('Credenciais salvas, mas o banco ainda não respondeu.' +
+          const motivo = (resposta.banco && resposta.banco.erro) || '';
+          escrever('Credencial salva, mas o banco ainda não respondeu.' +
             (motivo ? ' ' + motivo : '') + (resposta.dica ? ' ' + resposta.dica : ''), 'erro');
         }
         await atualizarSituacaoDados();

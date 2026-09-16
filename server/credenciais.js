@@ -69,6 +69,7 @@ function atualizarEnv(valores, caminho) {
   }
 
   const conteudo = saida.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  fs.mkdirSync(path.dirname(arquivo), { recursive: true });
   fs.writeFileSync(arquivo, conteudo, { mode: 0o600 }); // só o dono lê
   return conteudo;
 }

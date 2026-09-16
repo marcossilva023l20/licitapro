@@ -153,8 +153,9 @@ data/
 ```
 
 **Onde os dados estão agora?** O painel do sistema mostra uma linha embaixo do título:
-*"Banco de dados conectado (Supabase)"*, *"Supabase não configurado: os dados estão sendo
-salvos no arquivo do servidor"* ou o motivo, quando o banco está configurado mas não responde.
+*"Banco de dados conectado (Supabase/Firebase)"*, *"Banco de dados não configurado: os dados
+estão sendo salvos no arquivo do servidor"* ou o motivo, quando o banco está configurado mas
+não responde.
 No GitHub Pages (modo local) ela diz que os dados ficam no próprio navegador — nesse endereço
 **não existe servidor**, então o banco não é usado ali.
 
@@ -163,16 +164,28 @@ Pode ser feito com o sistema em execução; para garantir a consistência, copie
 
 Para guardar os dados em outro lugar, use `LICITAPRO_DATA_DIR=/caminho/dados`.
 
-### Banco de dados no Supabase (recomendado na hospedagem)
+### Banco de dados: Supabase **ou** Firebase (recomendado na hospedagem)
 
 No plano gratuito do Render o disco é apagado a cada reinício — e aí as propostas
-se perdem. Com o **Supabase**, os dados ficam num Postgres de verdade e sobrevivem a
+se perdem. Com o banco na nuvem, os dados ficam num banco de verdade e sobrevivem a
 deploy, reinício e mudança de servidor.
+
+O sistema aceita **dois bancos** e escolhe pelo que estiver configurado (se os dois
+estiverem, vale o Supabase):
+
+| | Supabase (Postgres) | Firebase (Firestore) |
+|---|---|---|
+| Credencial | chave `service_role` (uma linha) | arquivo JSON da conta de serviço |
+| Preparo | rodar `supabase/esquema.sql` no SQL Editor | nenhum: as coleções nascem no primeiro uso |
+| Plano grátis | 500 MB, o projeto pausa se ficar sem uso | 1 GiB, 50 mil leituras e 20 mil gravações por dia |
+| Melhor para | quem quer tabelas/SQL e não ligar do plano grátis | quem já usa Google e prefere sem SQL |
+
+#### Supabase (Postgres)
 
 1. Crie o projeto em <https://supabase.com> (o plano gratuito já serve).
 2. No painel do projeto, abra **SQL Editor → New query**, cole o conteúdo de
    [`supabase/esquema.sql`](supabase/esquema.sql) e clique em **Run**
-   (também dá para ver o SQL no terminal: `npm run supabase -- sql`).
+   (também dá para ver o SQL no terminal: `npm run banco -- sql`).
    Isso cria as tabelas `licitapro_perfil`, `licitapro_documentos` e
    `licitapro_sequencia`, com RLS ligado — a chave pública não lê nada.
 3. Copie as credenciais do projeto:
@@ -191,7 +204,7 @@ deploy, reinício e mudança de servidor.
      (localhost); de um endereço publicado ele não existe, por segurança.
    - **pela linha de comando:** rode
      ```bash
-     npm run supabase -- configurar
+     npm run banco -- configurar
      ```
      Ele pergunta o endereço do projeto e a chave (a chave não aparece na tela ao
      digitar), grava o arquivo `.env` sem mexer no resto do que já está lá e, em
@@ -199,13 +212,39 @@ deploy, reinício e mudança de servidor.
      `.env.example`.
    - **no Render/Railway/Docker:** cadastre `SUPABASE_URL` e `SUPABASE_SERVICE_KEY`
      nas variáveis de ambiente do serviço (o `render.yaml` já tem os campos).
-5. Suba o sistema e confira: **`npm run supabase`** — ele faz uma conferência passo a
+5. Suba o sistema e confira: **`npm run banco`** — ele faz uma conferência passo a
    passo (arquivo `.env`, endereço, tipo de chave, conexão, tabelas, **gravação de
    verdade**, conteúdo e cópia local) e diz exatamente onde está o problema, se houver.
    No painel do sistema aparece a mesma informação em uma linha:
-   *"Banco de dados conectado (Supabase)"*, *"Supabase não configurado…"* ou
-   *"O banco (Supabase) não está recebendo os dados: <motivo>"*. O `/api/health` também
-   responde `"armazenamento"` e o estado do banco.
+   *"Banco de dados conectado (Supabase)"* (ou *"(Firebase)"*), *"Banco de dados não
+   configurado…"* ou *"O banco (…) não está recebendo os dados: <motivo>"*. O
+   `/api/health` também responde `"armazenamento"` e o estado do banco.
+
+#### Ou Firebase (Firestore)
+
+1. Em <https://console.firebase.google.com>, crie um projeto (a conta Google que você
+   já usa serve).
+2. No menu **Firestore Database**, clique em **Create database** e escolha a região
+   (uma única vez — depois disso as coleções `licitapro_perfil`,
+   `licitapro_documentos` e `licitapro_sequencia` são criadas pelo próprio sistema,
+   sem SQL nenhum).
+3. Em **Project settings (⚙) → Service accounts → Generate new private key**, baixe o
+   arquivo `.json` (é a credencial: dá acesso total ao banco).
+4. Informe a credencial — qualquer um dos caminhos:
+   - **pela tela:** com o sistema aberto em `http://localhost:3000`, clique em
+     **“Conectar banco de dados”** no painel e cole o **conteúdo do arquivo JSON**
+     (o sistema grava em `data/firebase-service-account.json`, só o dono lê, e o
+     `.env` aponta para ele);
+   - **pela linha de comando:** `npm run banco -- configurar` e cole o **caminho do
+     arquivo** (arrastar o arquivo para o terminal também funciona);
+   - **na hospedagem:** cadastre `FIREBASE_SERVICE_ACCOUNT` (o JSON inteiro, ou o
+     mesmo em base64) e `FIREBASE_PROJECT_ID` nas variáveis do serviço, ou
+     `FIREBASE_SERVICE_ACCOUNT_FILE` apontando para o arquivo.
+
+> O Firebase cobra por operação: o sistema grava **só o que mudou** (um documento
+> alterado = uma gravação). O limite grátis (20 mil gravações/dia) cobre com folga o
+> uso de uma empresa. Cada documento tem limite de 1 MB — o PDF e as fotos ficam
+> fora do banco, então isso só apareceria em documentos gigantes.
 
 O que acontece quando as variáveis estão definidas:
 
@@ -221,7 +260,7 @@ O que acontece quando as variáveis estão definidas:
   o sistema tenta o banco de novo. Quando ele volta, banco e arquivo são
   sincronizados automaticamente (e o documento criado durante a queda vai para
   o banco).
-- `npm run supabase` mostra a conexão, o tipo de chave, testa a gravação e o que está gravado.
+- `npm run banco` mostra a conexão, o tipo de chave, testa a gravação e o que está gravado.
 - **No painel** do sistema há uma linha dizendo onde os dados estão sendo salvos — é a forma
   mais rápida de saber se está indo para o banco, para o arquivo ou (no modo local) para o
   próprio navegador.
@@ -240,11 +279,11 @@ com o RLS ligado e sem políticas, o Supabase **recusa** ler e gravar com ela. H
   e informe em `SUPABASE_SERVICE_KEY`. Ela fica só no servidor e ignora o RLS.
 - **Alternativa (com a chave que você já tem):** rode
   [`supabase/politicas-anon.sql`](supabase/politicas-anon.sql) no SQL Editor e informe a chave
-  em `SUPABASE_ANON_KEY` (`npm run supabase -- politicas` mostra o SQL).
+  em `SUPABASE_ANON_KEY` (`npm run banco -- politicas` mostra o SQL).
   Isso abre as três tabelas para o papel `anon`: **quem obtiver essa chave pública
   consegue ler, alterar e apagar os documentos direto no banco**, sem passar pelo sistema.
 
-`npm run supabase` diz qual chave está configurada e o que ela permite — inclusive antes de
+`npm run banco` diz qual chave está configurada e o que ela permite — inclusive antes de
 tentar conectar.
 
 ---
@@ -257,6 +296,9 @@ tentar conectar.
 | `HOST` | `0.0.0.0` | interface de rede |
 | `LICITAPRO_DATA_DIR` | `./data` | pasta de dados |
 | `SUPABASE_URL` | — | endereço do projeto Supabase (liga o banco; veja a seção 4) |
+| `FIREBASE_SERVICE_ACCOUNT` | — | JSON da conta de serviço do Firebase (ou o mesmo em base64) |
+| `FIREBASE_SERVICE_ACCOUNT_FILE` | — | caminho do arquivo `.json` da conta de serviço |
+| `FIREBASE_PROJECT_ID` | — | id do projeto no Firebase (opcional: vem no JSON) |
 | `SUPABASE_SERVICE_KEY` | — | chave `service_role`/`sb_secret_...` do Supabase (só no servidor) |
 | `SUPABASE_ANON_KEY` | — | chave pública, para quem preferir usar as políticas abertas |
 | `LICITAPRO_ARMAZENAMENTO` | automático | `arquivo` ignora o Supabase e usa só `data/db.json` |
@@ -473,12 +515,16 @@ data/                   → dados gerados em execução (não versionado)
 | "A porta 3000 já está em uso" | rode com outra porta: `PORT=3001 npm start` |
 | As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar foto do computador** |
 | A planilha não é reconhecida | use o modelo para download e mantenha os títulos da linha 1 |
-| O sistema diz que não está salvando no banco | rode `npm run supabase`: ele aponta o passo que falhou (`.env`, chave, tabelas ou gravação). No painel, a linha de situação mostra o mesmo motivo |
-| "Supabase não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço. Em localhost, use o botão **“Conectar banco de dados”**; na hospedagem, cadastre as variáveis no painel do serviço — veja a seção 4 |
+| O sistema diz que não está salvando no banco | rode `npm run banco`: ele aponta o passo que falhou (`.env`, chave, tabelas ou gravação). No painel, a linha de situação mostra o mesmo motivo |
+| "Banco de dados não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço. Em localhost, use o botão **“Conectar banco de dados”**; na hospedagem, cadastre as variáveis no painel do serviço — veja a seção 4 |
 | Não acho onde pegar a chave do projeto | Supabase → **Project Settings → API keys**: use a *service_role* (*Reveal*) ou a *secret key* (`sb_secret_...`). A chave *anon*/*publishable* é pública e o banco a recusa com o RLS ligado |
 | O botão "Conectar banco de dados" não aparece | ele só aparece quando o sistema roda na sua máquina (localhost) e o banco ainda não está ligado. No endereço publicado, informe as credenciais no painel da hospedagem |
-| As tabelas não existem no banco | rode `supabase/esquema.sql` no SQL Editor do projeto (`npm run supabase -- sql`) |
+| As tabelas não existem no banco | rode `supabase/esquema.sql` no SQL Editor do projeto (`npm run banco -- sql`) |
 | A chave anon é recusada | ela é pública: use a `service_role` ou rode `supabase/politicas-anon.sql` (veja a seção 4) |
+| (Firebase) "The database (default) does not exist" | o Firestore ainda não foi criado: no console do Firebase, **Firestore Database → Create database** |
+| (Firebase) "O Google recusou a credencial" | gere outra chave em **Project settings → Service accounts → Generate new private key** e informe o JSON inteiro |
+| (Firebase) "PERMISSION_DENIED" | dê à conta de serviço o papel *Cloud Datastore User* (ou *Firebase Admin*) no IAM do projeto |
+| Quero trocar de banco | configure o outro (o Supabase tem prioridade se os dois estiverem). Para desligar o banco e voltar ao arquivo: `LICITAPRO_ARMAZENAMENTO=arquivo` |
 | Quero apagar todos os dados | pare o sistema e remova a pasta `data/` (e as linhas das tabelas no banco, se estiver usando Supabase) |
 | O PDF sai sem o catálogo | confira a aba **Layout do PDF** → "Incluir página de catálogo" |
 | A logo não aparece no cabeçalho | envie a imagem em *Minha empresa* e marque "Usar logo no cabeçalho" |

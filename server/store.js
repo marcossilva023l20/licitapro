@@ -30,8 +30,9 @@ let timerGravar = null;
 let gravando = false;
 
 // ------------------------------------------------------------ Supabase
-let remoto = null;                 // cliente do Supabase (quando configurado)
-let remotoModo = 'arquivo';        // 'arquivo' | 'supabase'
+let remoto = null;                 // cliente do banco (Supabase ou Firebase)
+let remotoProvedor = null;         // 'supabase' | 'firebase' (quando configurado)
+let remotoModo = 'arquivo';        // 'arquivo' | 'supabase' | 'firebase'
 let filaRemota = Promise.resolve(); // serializa os envios ao banco
 let removidosRemotos = new Set();   // documentos excluídos (para apagar no banco)
 let erroRemoto = null;              // última falha de gravação (aparece no /api/health)
@@ -209,7 +210,9 @@ function garantirIds(documentos) {
 /** Liga o banco do Supabase neste armazenamento (usado no start e nos testes). */
 function usarRemoto(cliente) {
   remoto = cliente || null;
-  remotoModo = remoto ? 'supabase' : 'arquivo';
+  // o cliente sabe de qual banco ele é ('supabase' ou 'firebase')
+  remotoProvedor = remoto ? remoto.provedor || 'supabase' : null;
+  remotoModo = remoto ? remotoProvedor : 'arquivo';
   erroRemoto = null;
   return remoto;
 }
@@ -227,6 +230,8 @@ function remotoConfigurado() {
 function situacaoRemota() {
   const erro = remotoIndisponivel || erroRemoto;
   return {
+    provedor: remotoProvedor,
+    endereco: remoto && typeof remoto.endereco === 'function' ? remoto.endereco() : null,
     configurado: Boolean(remoto),
     // "conectado" é o estado da última gravação: se ela falhou, fica falso até
     // a próxima dar certo (mesmo que o banco tenha respondido no start)
@@ -260,15 +265,15 @@ function agendarEnvioRemoto() {
 
 async function enviarRemoto() {
   if (!remoto) return;
-  const Supabase = require('./supabase');
+  const banco = require('./banco');
   const remover = new Set(removidosRemotos);
   try {
-    await Supabase.gravarEstado(remoto, db || VAZIO(), remover);
+    await banco.gravarEstado(remoto, db || VAZIO(), remover);
     remover.forEach((documentoId) => removidosRemotos.delete(documentoId));
     erroRemoto = null;
     if (remotoIndisponivel) {
       remotoIndisponivel = null; // o banco voltou
-      remotoModo = 'supabase';
+      remotoModo = remotoProvedor || 'supabase';
       console.log('[supabase] conexão restabelecida: banco e arquivo estão sincronizados.');
     }
   } catch (erro) {
@@ -285,14 +290,14 @@ async function enviarRemoto() {
  */
 async function carregarRemoto() {
   if (!remoto) return false;
-  const Supabase = require('./supabase');
-  const estado = await Supabase.lerEstado(remoto);
+  const banco = require('./banco');
+  const estado = await banco.lerEstado(remoto);
   const local = lerArquivoLocal();
   const tinhaLocal = Boolean(local && (local.documentos.length || perfilTemDados(local.perfil)));
 
   // une os dois lados (nada é descartado) e devolve a união para o banco
   db = mesclar(local, { perfil: estado.perfil, documentos: estado.documentos, sequencia: estado.sequencia });
-  await Supabase.gravarEstado(remoto, db, new Set());
+  await banco.gravarEstado(remoto, db, new Set());
   gravarArquivo();
 
   if (estado.vazio && tinhaLocal) {
@@ -301,7 +306,7 @@ async function carregarRemoto() {
     console.log('[supabase] dados do banco e do arquivo local unidos (' + db.documentos.length + ' documento(s)).');
   }
 
-  remotoModo = 'supabase';
+  remotoModo = remotoProvedor || 'supabase';
   remotoIndisponivel = null;
   return true;
 }
