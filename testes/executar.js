@@ -1479,6 +1479,58 @@ teste('Itens: Detalhes fica aberto ao digitar, mover para baixo, selecionar/apag
   window.close();
 });
 
+teste('Itens: "Organizar por item nº" põe 1, 15, 2, 3 na ordem certa', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const numeros = ['1', '15', '2', '3', 'S/N', '2.10', '2.2'];
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = numeros.map((numero, i) => ({
+    numeroItem: numero, descricao: 'ITEM ' + numero, unidade: 'UND', quantidade: 1,
+    valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+    descricaoCatalogo: '', linkCompra: '',
+  }));
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const numerosNaTela = () => Array.from($('#lista-itens').querySelectorAll('.item'))
+    .map((bloco) => bloco.querySelector('.item-numero').textContent);
+
+  assert.ok($('#itens-organizar'), 'o botão de organizar existe');
+  assert.deepStrictEqual(numerosNaTela(), numeros, 'a lista começa como foi lançada');
+
+  // abre os detalhes de um item para conferir que ele acompanha o item
+  const blocoDo15 = Array.from($('#lista-itens').querySelectorAll('.item'))
+    .find((b) => b.querySelector('[data-campo="descricao"]').value === 'ITEM 15');
+  blocoDo15.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  $('#itens-organizar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  // 1, 2, 2.2, 2.10, 3, 15 e, no fim, o que não tem número
+  assert.deepStrictEqual(numerosNaTela(), ['1', '2', '2.2', '2.10', '3', '15', 'S/N'], 'itens organizados pelo número');
+
+  const depois = $('#lista-itens').querySelectorAll('.item');
+  const bloco15 = Array.from(depois).find((b) => b.querySelector('[data-campo="descricao"]').value === 'ITEM 15');
+  assert.strictEqual(
+    Array.from(depois).indexOf(bloco15), 5,
+    'o item 15 ficou na posição 6 (antes do S/N)'
+  );
+  assert.ok(
+    !bloco15.querySelector('.item-detalhes').classList.contains('oculto'),
+    'os detalhes abertos acompanharam o item 15'
+  );
+
+  // organizar de novo não muda nada (e avisa)
+  $('#itens-organizar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.deepStrictEqual(numerosNaTela(), ['1', '2', '2.2', '2.10', '3', '15', 'S/N'], 'a ordem se mantém');
+
+  // com um item só, o botão avisa em vez de mexer
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);

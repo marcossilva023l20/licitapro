@@ -774,6 +774,71 @@
     };
   }
 
+  // ------------------------------------------------ organizar por item
+
+  /**
+   * Número do item em pedaços, para comparar como as pessoas leem:
+   * "15" → [15], "2.10" → [2, 10] (por isso 2.2 vem antes de 2.10),
+   * "S/N" → [] (sem número, vai para o fim).
+   */
+  function chaveDoNumero(valor) {
+    const pedacos = String(valor == null ? '' : valor).match(/\d+/g);
+    return pedacos ? pedacos.map(Number) : [];
+  }
+
+  /** Compara dois números de item, pedaço por pedaço (1, 2, 2.2, 2.10, 15). */
+  function compararNumeroItem(a, b) {
+    const na = chaveDoNumero(a);
+    const nb = chaveDoNumero(b);
+    if (!na.length && !nb.length) return 0;
+    if (!na.length) return 1; // item sem número fica no fim
+    if (!nb.length) return -1;
+    const partes = Math.max(na.length, nb.length);
+    for (let i = 0; i < partes; i += 1) {
+      // quem acabou antes vem primeiro: "2" antes de "2.1"
+      const da = na[i] === undefined ? -1 : na[i];
+      const db = nb[i] === undefined ? -1 : nb[i];
+      if (da !== db) return da - db;
+    }
+    return 0;
+  }
+
+  /**
+   * Organiza os itens pelo número do item (1, 15, 2, 3 → 1, 2, 3, 15).
+   * A ordem da tela é a ordem do PDF e da planilha; os números em si não são
+   * trocados — o item continua com o número que veio do edital.
+   */
+  function organizarPorItem() {
+    const itens = estado.doc.itens || [];
+    if (itens.length < 2) {
+      UI.toast('Adicione pelo menos dois itens para organizar.', 'aviso');
+      return;
+    }
+    const antes = capturarEstadoItens();
+    const ordenados = itens
+      .map((item, posicao) => ({ item, posicao }))
+      .sort((a, b) => {
+        const diferenca = compararNumeroItem(a.item.numeroItem, b.item.numeroItem);
+        if (diferenca) return diferenca;
+        // números iguais escritos de formas diferentes ("2.1" e "2-01"):
+        // compara o texto e, se ainda empatar, mantém a ordem atual
+        const texto = String(a.item.numeroItem == null ? '' : a.item.numeroItem)
+          .localeCompare(String(b.item.numeroItem == null ? '' : b.item.numeroItem), 'pt-BR', { numeric: true });
+        return texto || a.posicao - b.posicao;
+      })
+      .map((registro) => registro.item);
+
+    const jaEstava = ordenados.every((item, indice) => item === itens[indice]);
+    if (jaEstava) {
+      UI.toast('Os itens já estão na ordem do número.', 'aviso');
+      return;
+    }
+    estado.doc.itens = ordenados;
+    desenharItens(antes);
+    marcarSujo();
+    UI.toast('Itens organizados pelo número.', 'sucesso');
+  }
+
   // ------------------------------------------------ selecionar itens
 
   /**
@@ -1299,6 +1364,7 @@
     });
 
     $('#itens-selecionar').addEventListener('click', () => definirSelecao(!estado.selecao.ativa));
+    $('#itens-organizar').addEventListener('click', organizarPorItem);
     $('#itens-selecionar-todos').addEventListener('click', marcarTodos);
     $('#itens-subir-todos').addEventListener('click', () => moverSelecionados(-1));
     $('#itens-descer-todos').addEventListener('click', () => moverSelecionados(1));
