@@ -15,6 +15,8 @@
     timerPrevia: null,
     urlPrevia: null,
     previaAberta: true,
+    // modo "selecionar itens": marcar vários para apagar ou mover de uma vez
+    selecao: { ativa: false, marcados: [] },
     avisosImportacao: [],
     itensImportados: null,
   };
@@ -331,6 +333,7 @@
       }
     });
     atualizarVisibilidadeTipo();
+    atualizarVisibilidadeDesconto();
     desenharItens();
     desenharImagens();
     atualizarCabecalho();
@@ -352,10 +355,68 @@
     return estado.doc;
   }
 
+  /** Valor de um campo do formulário, já no tipo certo. */
+  function valorDoCampo(campo, elemento) {
+    if (campo.tipo === 'check') return elemento.checked;
+    if (campo.tipo === 'numero') return elemento.value === '' ? 0 : Number(elemento.value);
+    if (campo.tipo === 'moeda') return elemento.value === '' ? 0 : F.paraNumero(elemento.value);
+    return elemento.value;
+  }
+
   function atualizarVisibilidadeTipo() {
     const tipo = $('#campo-tipo').value || (estado.doc && estado.doc.tipo) || 'proposta';
     $('.grupo-proposta').classList.toggle('oculto', tipo !== 'proposta');
     $('.grupo-orcamento').classList.toggle('oculto', tipo !== 'orcamento');
+    atualizarVisibilidadeDesconto();
+  }
+
+  /**
+   * Desconto e frete são opcionais: ficam guardados atrás da caixa "Usar
+   * desconto e frete / instalação". No orçamento (documento comercial) já vêm
+   * marcados, porque é lá que eles costumam ser necessários; na proposta de
+   * licitação ficam fora do caminho — a não ser que já haja valor preenchido,
+   * para não esconder um desconto que o documento já tinha.
+   */
+  function descontoFreteLigado(doc) {
+    if (!doc) return false;
+    const escolha = doc.desconto && doc.desconto.ativo;
+    if (escolha === true) return true;
+    if (escolha === false) return false;
+    if (doc.tipo === 'orcamento') return true;
+    const desconto = doc.desconto || {};
+    const acrescimo = doc.acrescimo || {};
+    const temDesconto = desconto.modo && desconto.modo !== 'nenhum' && F.paraNumero(desconto.valor) > 0;
+    const temFrete = acrescimo.ativo && F.paraNumero(acrescimo.valor) > 0;
+    return Boolean(temDesconto || temFrete);
+  }
+
+  function atualizarVisibilidadeDesconto() {
+    const ligado = descontoFreteLigado(estado.doc);
+    $('#op-desconto-frete').checked = ligado;
+    $('#bloco-desconto-frete-campos').classList.toggle('oculto', !ligado);
+  }
+
+  function alternarDescontoFrete(ligado) {
+    const doc = estado.doc;
+    if (!doc) return;
+    doc.desconto = Object.assign({ modo: 'nenhum', valor: 0 }, doc.desconto || {});
+    doc.desconto.ativo = ligado;
+    if (!ligado) {
+      // desmarcar quer dizer "este documento não tem desconto nem frete":
+      // os valores saem para o total não ficar com conta escondida
+      doc.desconto.modo = 'nenhum';
+      doc.desconto.valor = 0;
+      doc.acrescimo = Object.assign({ ativo: false, descricao: 'Frete / Instalação', valor: 0 }, doc.acrescimo || {});
+      doc.acrescimo.ativo = false;
+      doc.acrescimo.valor = 0;
+      $('#campo-desconto-modo').value = 'nenhum';
+      $('#campo-desconto-valor').value = '';
+      $('#campo-acrescimo-ativo').checked = false;
+      $('#campo-acrescimo-valor').value = '';
+    }
+    atualizarVisibilidadeDesconto();
+    atualizarResumos();
+    marcarSujo();
   }
 
   function atualizarCabecalho() {
@@ -457,6 +518,7 @@
       { acao: 'detalhes', texto: 'Detalhes', titulo: 'Descrição completa, foto e catálogo' },
       { acao: 'duplicar', texto: '⧉', titulo: 'Duplicar item' },
       { acao: 'subir', texto: '↑', titulo: 'Mover para cima' },
+      { acao: 'descer', texto: '↓', titulo: 'Mover para baixo' },
       { acao: 'remover', texto: '🗑', titulo: 'Remover item' },
     ];
     botoes.forEach((b) => {
@@ -467,6 +529,19 @@
       botao.textContent = b.texto;
       acoes.appendChild(botao);
     });
+
+    if (estado.selecao.ativa) {
+      const marcador = document.createElement('label');
+      marcador.className = 'item-marcador';
+      marcador.title = 'Selecionar este item';
+      const caixa = document.createElement('input');
+      caixa.type = 'checkbox';
+      caixa.setAttribute('data-marcar-item', '');
+      caixa.checked = estado.selecao.marcados.indexOf(item) >= 0;
+      marcador.appendChild(caixa);
+      linha.appendChild(marcador);
+      if (caixa.checked) bloco.classList.add('selecionado');
+    }
 
     linha.append(numero, descricao, campos, total, acoes);
     bloco.appendChild(linha);
@@ -593,11 +668,93 @@
     return bloco;
   }
 
-  function desenharItens() {
+  /**
+   * Guarda o que a pessoa estava fazendo na lista: quais painéis "Detalhes"
+   * estavam abertos, qual campo estava em edição (com a posição do cursor) e
+   * onde a página estava rolada. Os itens são identificados pelo próprio
+   * objeto, então mover/apagar não troca o estado de lugar.
+   */
+  function capturarEstadoItens() {
+    const itens = (estado.doc && estado.doc.itens) || [];
+    const abertos = [];
+    UI.$$('#lista-itens .item').forEach((bloco) => {
+      const detalhes = $('.item-detalhes', bloco);
+      if (detalhes && !detalhes.classList.contains('oculto')) {
+        const item = itens[Number(bloco.dataset.indice)];
+        if (item) abertos.push(item);
+      }
+    });
+    const foco = document.activeElement;
+    let campoFocado = null;
+    if (foco && foco.dataset && foco.dataset.campo) {
+      const bloco = foco.closest('#lista-itens .item');
+      const item = bloco ? itens[Number(bloco.dataset.indice)] : null;
+      if (item) {
+        campoFocado = {
+          item,
+          campo: foco.dataset.campo,
+          inicio: typeof foco.selectionStart === 'number' ? foco.selectionStart : null,
+          fim: typeof foco.selectionEnd === 'number' ? foco.selectionEnd : null,
+        };
+      }
+    }
+    return { abertos, campoFocado, rolagem: window.scrollY || 0 };
+  }
+
+  function blocoDoItem(item) {
+    const indice = ((estado.doc && estado.doc.itens) || []).indexOf(item);
+    if (indice < 0) return null;
+    return $('#lista-itens .item[data-indice="' + indice + '"]');
+  }
+
+  /** Devolve o painel aberto, o cursor e a rolagem depois de redesenhar. */
+  function restaurarEstadoItens(antes) {
+    if (!antes) return;
+    (antes.abertos || []).forEach((item) => {
+      const bloco = blocoDoItem(item);
+      if (!bloco) return;
+      const detalhes = $('.item-detalhes', bloco);
+      if (detalhes) detalhes.classList.remove('oculto');
+      const botao = $('[data-acao-item="detalhes"]', bloco);
+      if (botao) botao.textContent = 'Ocultar';
+    });
+    const foco = antes.campoFocado;
+    if (foco) {
+      const bloco = blocoDoItem(foco.item);
+      const elemento = bloco ? bloco.querySelector('[data-campo="' + foco.campo + '"]') : null;
+      if (elemento && document.activeElement !== elemento) {
+        elemento.focus();
+        if (foco.inicio !== null) {
+          try { elemento.setSelectionRange(foco.inicio, foco.fim); } catch (_) { /* campo sem seleção */ }
+        }
+      }
+    }
+    // devolve a posição da página só se ela realmente mudou (não briga com
+    // quem está rolando, e ambientes sem scrollTo ficam em paz)
+    if (typeof antes.rolagem === 'number' && typeof window.scrollY === 'number' && window.scrollY !== antes.rolagem) {
+      window.scrollTo(0, antes.rolagem);
+    }
+  }
+
+  /**
+   * Redesenha a lista de itens.
+   * @param {object} [antes] estado capturado antes de mexer nos itens; sem ele,
+   *   o estado é lido do que está na tela agora.
+   */
+  function desenharItens(antes) {
+    const estadoAnterior = antes || capturarEstadoItens();
     const lista = $('#lista-itens');
+    lista.classList.toggle('em-selecao', estado.selecao.ativa);
     lista.innerHTML = '';
     (estado.doc.itens || []).forEach((item, indice) => lista.appendChild(linhaItem(item, indice)));
+    restaurarEstadoItens(estadoAnterior);
+    atualizarPainelSelecao();
     atualizarResumos();
+  }
+
+  /** O que muda o desenho da lista: quantidade de itens e numeração. */
+  function assinaturaItens(itens) {
+    return (itens || []).map((i) => String(i.numeroItem == null ? '' : i.numeroItem)).join('|') + '#' + ((itens || []).length);
   }
 
   function itemVazio() {
@@ -615,6 +772,101 @@
       linkCompra: '',
       observacao: '',
     };
+  }
+
+  // ------------------------------------------------ selecionar itens
+
+  /**
+   * Modo "selecionar itens": uma caixa em cada item, para apagar ou mover
+   * vários de uma vez (o sistema não pergunta item por item).
+   */
+  function atualizarPainelSelecao() {
+    const barra = $('#itens-selecao');
+    const botao = $('#itens-selecionar');
+    const quantos = estado.selecao.marcados.length;
+    barra.classList.toggle('oculto', !estado.selecao.ativa);
+    botao.setAttribute('aria-pressed', estado.selecao.ativa ? 'true' : 'false');
+    botao.textContent = estado.selecao.ativa ? 'Concluir seleção' : 'Selecionar itens';
+    $('#itens-selecao-contagem').textContent = quantos
+      ? quantos + (quantos === 1 ? ' item selecionado' : ' itens selecionados')
+      : 'Nenhum item selecionado';
+    $('#itens-selecionar-todos').textContent =
+      quantos && quantos === (estado.doc.itens || []).length ? 'Desmarcar todos' : 'Marcar todos';
+    ['#itens-subir-todos', '#itens-descer-todos', '#itens-remover-todos'].forEach((sel) => {
+      $(sel).disabled = quantos === 0;
+    });
+  }
+
+  function definirSelecao(ativa) {
+    estado.selecao.ativa = !!ativa;
+    if (!estado.selecao.ativa) estado.selecao.marcados = [];
+    desenharItens();
+  }
+
+  function marcarItem(item, marcado) {
+    const marcados = estado.selecao.marcados;
+    const posicao = marcados.indexOf(item);
+    if (marcado && posicao < 0) marcados.push(item);
+    if (!marcado && posicao >= 0) marcados.splice(posicao, 1);
+    atualizarPainelSelecao();
+  }
+
+  function marcarTodos() {
+    const itens = estado.doc.itens || [];
+    estado.selecao.marcados = estado.selecao.marcados.length === itens.length ? [] : itens.slice();
+    desenharItens();
+  }
+
+  /** Move os itens marcados um passo para cima ou para baixo, na ordem deles. */
+  function moverSelecionados(direcao) {
+    const itens = estado.doc.itens || [];
+    const marcados = itens.filter((i) => estado.selecao.marcados.indexOf(i) >= 0);
+    if (!marcados.length) {
+      UI.toast('Marque pelo menos um item para mover.', 'aviso');
+      return;
+    }
+    const antes = capturarEstadoItens();
+    // subindo começa pelo primeiro; descendo, pelo último (o bloco anda junto)
+    const ordem = direcao < 0 ? marcados : marcados.slice().reverse();
+    let moveu = false;
+    ordem.forEach((item) => {
+      const de = itens.indexOf(item);
+      const para = de + direcao;
+      if (de < 0 || para < 0 || para >= itens.length) return;
+      if (estado.selecao.marcados.indexOf(itens[para]) >= 0) return; // vizinho marcado: já vai junto
+      itens.splice(de, 1);
+      itens.splice(para, 0, item);
+      moveu = true;
+    });
+    if (!moveu) {
+      UI.toast(direcao < 0 ? 'Os itens marcados já estão no topo.' : 'Os itens marcados já estão no fim.', 'aviso');
+      return;
+    }
+    desenharItens(antes);
+    marcarSujo();
+  }
+
+  async function removerSelecionados() {
+    const itens = estado.doc.itens || [];
+    const marcados = itens.filter((i) => estado.selecao.marcados.indexOf(i) >= 0);
+    if (!marcados.length) {
+      UI.toast('Marque pelo menos um item para remover.', 'aviso');
+      return;
+    }
+    const confirma = await UI.confirmar({
+      titulo: 'Remover itens',
+      texto: marcados.length === 1
+        ? 'Deseja remover o item selecionado?'
+        : 'Deseja remover os ' + marcados.length + ' itens selecionados?',
+      textoConfirmar: 'Remover',
+      perigo: true,
+    });
+    if (!confirma) return;
+    const antes = capturarEstadoItens();
+    estado.doc.itens = itens.filter((i) => estado.selecao.marcados.indexOf(i) < 0);
+    estado.selecao.marcados = [];
+    desenharItens(antes);
+    marcarSujo();
   }
 
   // --------------------------------------------------------- prévia e PDF
@@ -654,6 +906,7 @@
   async function salvar(silencioso) {
     if (estado.salvando) return estado.doc;
     estado.salvando = true;
+    const antesDosItens = assinaturaItens(estado.doc && estado.doc.itens);
     try {
       coletarFormulario();
       $('#editor-estado').textContent = 'Salvando...';
@@ -683,7 +936,11 @@
         }
       }
       atualizarCabecalho();
-      desenharItens();
+      // Redesenha os itens só quando a lista mudou de verdade (numeração nova
+      // ou item a mais/menos). O salvamento automático acontece enquanto a
+      // pessoa digita: redesenhar à toa fechava o painel "Detalhes" e
+      // devolvia o cursor para o começo do campo.
+      if (antesDosItens !== assinaturaItens(estado.doc.itens)) desenharItens();
       if (!silencioso && guardado) UI.toast('Documento salvo.', 'sucesso');
       if (window.App) window.App.recarregarLista();
       // o endereço passa a apontar para o documento salvo — mas só quando a
@@ -862,16 +1119,11 @@
 
     // campos simples
     const formulario = $('.editor-formulario');
-    formulario.addEventListener('input', (evento) => {
-      const alvo = evento.target;
-      if (alvo.closest('#lista-itens')) return;
+    /** Grava o que foi digitado/alterado num campo do formulário. */
+    function aplicarCampo(alvo) {
       const campo = CAMPOS.find((c) => c.sel === '#' + alvo.id);
       if (!campo) return;
-      let valor;
-      if (campo.tipo === 'check') valor = alvo.checked;
-      else if (campo.tipo === 'numero') valor = alvo.value === '' ? 0 : Number(alvo.value);
-      else if (campo.tipo === 'moeda') valor = alvo.value === '' ? 0 : F.paraNumero(alvo.value);
-      else valor = alvo.value;
+      const valor = valorDoCampo(campo, alvo);
       // "adicionar nova modalidade" é um caminho da tela, não um dado
       if (valor === MODALIDADE_NOVA) return;
       definir(campo.alvo, valor);
@@ -880,26 +1132,35 @@
         atualizarCabecalho();
       }
       if (campo.alvo.startsWith('numero.')) atualizarCabecalho();
+      // desconto e frete mexem no total: recalcula enquanto a pessoa digita
+      if (['desconto.modo', 'desconto.valor', 'acrescimo.ativo', 'acrescimo.valor'].includes(campo.alvo)) {
+        atualizarResumos();
+      }
       marcarSujo();
+    }
+
+    // "input" cobre o que é digitado; "change" também grava (listas e
+    // navegadores que só disparam um dos dois) — gravar duas vezes não muda nada
+    formulario.addEventListener('input', (evento) => {
+      if (evento.target.closest('#lista-itens')) return;
+      aplicarCampo(evento.target);
     });
     formulario.addEventListener('change', (evento) => {
       const alvo = evento.target;
       if (alvo.closest('#lista-itens')) return;
-      const campo = CAMPOS.find((c) => c.sel === '#' + alvo.id);
-      if (campo && campo.tipo === 'check') {
-        definir(campo.alvo, alvo.checked);
-        marcarSujo();
-      }
-      if (campo && campo.alvo === 'desconto.modo') {
-        atualizarResumos();
-      }
       if (alvo.id === 'campo-orgao-modalidade' && alvo.value === MODALIDADE_NOVA) {
         pedirNovaModalidade();
+        return;
       }
+      aplicarCampo(alvo);
     });
 
     // valores em dinheiro do formulário
     ['#campo-desconto-valor', '#campo-acrescimo-valor'].forEach((sel) => UI.ligarMoeda($(sel)));
+
+    // desconto e frete ficam atrás desta caixa: são opcionais e, na proposta,
+    // só aparecem quando a pessoa quiser usá-los
+    $('#op-desconto-frete').addEventListener('change', () => alternarDescontoFrete($('#op-desconto-frete').checked));
 
     // ---------------------------------------------------------- itens
     const lista = $('#lista-itens');
@@ -945,6 +1206,14 @@
     });
 
     lista.addEventListener('change', (evento) => {
+      // caixa do modo "selecionar itens"
+      if (evento.target.dataset.marcarItem !== undefined) {
+        const bloco = evento.target.closest('.item');
+        const item = estado.doc.itens[Number(bloco.dataset.indice)];
+        marcarItem(item, evento.target.checked);
+        bloco.classList.toggle('selecionado', evento.target.checked);
+        return;
+      }
       const campo = evento.target.dataset.campo;
       if (campo && ['precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)) {
         evento.target.value = evento.target.value === '' ? '' : F.numero(F.paraNumero(evento.target.value), 2);
@@ -975,17 +1244,27 @@
         return;
       }
       if (acao === 'duplicar') {
+        const antes = capturarEstadoItens();
         const copia = JSON.parse(JSON.stringify(itens[indice]));
         copia.numeroItem = String(itens.length + 1);
         itens.splice(indice + 1, 0, copia);
-        desenharItens();
+        desenharItens(antes);
         marcarSujo();
         return;
       }
-      if (acao === 'subir' && indice > 0) {
-        const [movido] = itens.splice(indice, 1);
-        itens.splice(indice - 1, 0, movido);
-        desenharItens();
+      if (acao === 'subir' || acao === 'descer') {
+        const destino = acao === 'subir' ? indice - 1 : indice + 1;
+        if (destino < 0 || destino >= itens.length) {
+          UI.toast(acao === 'subir' ? 'Este item já é o primeiro.' : 'Este item já é o último.', 'aviso');
+          return;
+        }
+        const movido = itens[indice];
+        const antes = capturarEstadoItens();
+        itens.splice(indice, 1);
+        itens.splice(destino, 0, movido);
+        desenharItens(antes);
+        const linha = blocoDoItem(movido);
+        if (linha) linha.scrollIntoView({ block: 'nearest' });
         marcarSujo();
         return;
       }
@@ -997,8 +1276,11 @@
           perigo: true,
         }).then((confirma) => {
           if (!confirma) return;
+          const antes = capturarEstadoItens();
+          const removido = itens[indice];
+          estado.selecao.marcados = estado.selecao.marcados.filter((i) => i !== removido);
           itens.splice(indice, 1);
-          desenharItens();
+          desenharItens(antes);
           marcarSujo();
         });
       }
@@ -1016,6 +1298,13 @@
       }
     });
 
+    $('#itens-selecionar').addEventListener('click', () => definirSelecao(!estado.selecao.ativa));
+    $('#itens-selecionar-todos').addEventListener('click', marcarTodos);
+    $('#itens-subir-todos').addEventListener('click', () => moverSelecionados(-1));
+    $('#itens-descer-todos').addEventListener('click', () => moverSelecionados(1));
+    $('#itens-remover-todos').addEventListener('click', removerSelecionados);
+    $('#itens-selecao-concluir').addEventListener('click', () => definirSelecao(false));
+
     $('#itens-limpar').addEventListener('click', async () => {
       if (!estado.doc.itens || !estado.doc.itens.length) return;
       const confirma = await UI.confirmar({
@@ -1026,6 +1315,7 @@
       });
       if (!confirma) return;
       estado.doc.itens = [];
+      estado.selecao.marcados = [];
       desenharItens();
       marcarSujo();
     });
@@ -1190,6 +1480,7 @@
       };
       estado.novo = true;
       estado.sujo = true;
+      estado.selecao = { ativa: false, marcados: [] };
       prepararTela();
       $('#editor-estado').textContent = 'Não salvo';
       $('#editor-estado').className = 'etiqueta-estado';
@@ -1230,6 +1521,7 @@
       estado.doc = resposta.documento;
       estado.novo = false;
       estado.sujo = false;
+      estado.selecao = { ativa: false, marcados: [] };
       prepararTela();
       $('#editor-estado').textContent = 'Salvo';
       $('#editor-estado').className = 'etiqueta-estado salvo';

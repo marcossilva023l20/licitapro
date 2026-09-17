@@ -89,13 +89,22 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que faz |
    |---|---|
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
-   | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro |
+   | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Dados do proponente | dados da empresa para *este* documento (logo e assinatura) |
    | Layout do PDF | catálogo, fotos, dados bancários, valor por extenso, assinatura, cor do documento |
 
    Recursos úteis: **margem sobre o custo** (aplica custo + X% em todos os itens),
    **duplicar item**, **reordenar**, **pré-visualização** do PDF lado a lado e salvamento automático.
+
+   **Desconto e frete são opcionais**: ficam atrás da caixa *Usar desconto e frete / instalação*
+   e, no orçamento (documento comercial), já vêm marcados. Na proposta de licitação os campos
+   ficam fora do caminho — se o documento já tiver desconto ou frete preenchido, a caixa vem
+   marcada para nada ficar escondido. Desmarcar tira os valores do documento (o total não fica
+   com conta invisível).
+
+   Enquanto você preenche os **Detalhes** de um item, o salvamento automático não redesenha a
+   lista: o painel continua aberto e o cursor segue no campo.
 
    O botão **Pré-visualização**, no topo do editor, **oculta ou mostra** o quadro da prévia
    quando quiser mais espaço para o formulário (fica marcado enquanto a prévia está à vista).

@@ -186,10 +186,20 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       observacoes: texto(condicoes.observacoes, 2000),
       local: texto(condicoes.local, 200),
     },
-    desconto: {
-      modo: ['nenhum', 'percentual', 'valor'].includes(desconto.modo) ? desconto.modo : 'nenhum',
-      valor: numero(desconto.valor, 2),
-    },
+    desconto: Object.assign(
+      {
+        // com a caixa desmarcada o documento não tem desconto: o valor sai
+        // junto (o total nunca fica com uma conta escondida)
+        modo: desconto.ativo === false
+          ? 'nenhum'
+          : ['nenhum', 'percentual', 'valor'].includes(desconto.modo) ? desconto.modo : 'nenhum',
+        valor: desconto.ativo === false ? 0 : numero(desconto.valor, 2),
+      },
+      // escolha de mostrar (ou não) o desconto/frete no documento; quando o
+      // usuário nunca mexeu na caixa, o campo não existe e a tela decide pelo
+      // tipo (orçamento já vem marcado, proposta não)
+      typeof desconto.ativo === 'boolean' ? { ativo: desconto.ativo } : {}
+    ),
     acrescimo: {
       ativo: booleano(acrescimo.ativo, false),
       descricao: texto(acrescimo.descricao, 120) || 'Frete / Instalação',

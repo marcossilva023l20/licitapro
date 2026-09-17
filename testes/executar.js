@@ -1358,6 +1358,127 @@ teste('Pré-visualização: o botão no topo do editor mostra e oculta o quadro'
   segunda.window.close();
 });
 
+teste('Itens: Detalhes fica aberto ao digitar, mover para baixo, selecionar/apagar e desconto opcional', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const itens = ['PRIMEIRO ITEM', 'SEGUNDO ITEM', 'TERCEIRO ITEM'].map((descricao, i) => ({
+    numeroItem: String(i + 1), descricao, unidade: 'UND', quantidade: 1,
+    valorReferencia: 100, precoCusto: 50, precoVenda: 100, marcaModelo: '', foto: '',
+    descricaoCatalogo: '', linkCompra: '',
+  }));
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = itens;
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const bloco = (indice) => $('#lista-itens .item[data-indice="' + indice + '"]');
+  const descricaoDe = (indice) => bloco(indice).querySelector('[data-campo="descricao"]').value;
+
+  // 1) "Detalhes" continua aberto enquanto a pessoa preenche (o salvamento
+  //    automático não pode fechar o painel nem jogar o cursor para fora)
+  bloco(0).querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const detalhes = bloco(0).querySelector('.item-detalhes');
+  assert.ok(!detalhes.classList.contains('oculto'), 'o painel de detalhes abriu');
+  const catalogo = detalhes.querySelector('[data-campo="descricaoCatalogo"]');
+  catalogo.value = 'Descrição completa do primeiro item';
+  catalogo.focus();
+  catalogo.setSelectionRange(catalogo.value.length, catalogo.value.length);
+  catalogo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await new Promise((ok) => setTimeout(ok, 3200)); // passa pelo salvamento automático
+  assert.ok(
+    !bloco(0).querySelector('.item-detalhes').classList.contains('oculto'),
+    'o painel de detalhes continua aberto depois do salvamento automático'
+  );
+  assert.strictEqual(
+    bloco(0).querySelector('[data-campo="descricaoCatalogo"]').value,
+    'Descrição completa do primeiro item',
+    'o texto digitado continua lá'
+  );
+  assert.strictEqual(
+    window.document.activeElement.dataset.campo, 'descricaoCatalogo',
+    'o cursor continua no campo que estava sendo preenchido'
+  );
+
+  // 2) mover para baixo (antes só existia "mover para cima")
+  assert.ok(bloco(0).querySelector('[data-acao-item="descer"]'), 'o botão Mover para baixo existe');
+  bloco(0).querySelector('[data-acao-item="descer"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(descricaoDe(0), 'SEGUNDO ITEM', 'o item desceu uma posição');
+  assert.strictEqual(descricaoDe(1), 'PRIMEIRO ITEM', 'e o outro subiu');
+  assert.ok(
+    !bloco(1).querySelector('.item-detalhes').classList.contains('oculto'),
+    'o painel aberto acompanhou o item que se moveu'
+  );
+  bloco(1).querySelector('[data-acao-item="descer"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(descricaoDe(2), 'PRIMEIRO ITEM', 'desce de novo até o fim');
+
+  // 3) selecionar itens para mover/apagar de uma vez
+  $('#itens-selecionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok(!$('#itens-selecao').classList.contains('oculto'), 'a barra de seleção aparece');
+  assert.strictEqual($('#itens-selecionar').textContent, 'Concluir seleção', 'o botão vira "Concluir seleção"');
+  assert.strictEqual($('#lista-itens').querySelectorAll('[data-marcar-item]').length, 3, 'cada item ganhou uma caixa');
+
+  const marcar = (indice) => {
+    const caixa = bloco(indice).querySelector('[data-marcar-item]');
+    caixa.checked = true;
+    caixa.dispatchEvent(new window.Event('change', { bubbles: true }));
+  };
+  marcar(2);
+  marcar(1);
+  assert.match($('#itens-selecao-contagem').textContent, /2 itens selecionados/, 'a contagem mostra 2');
+
+  // os dois marcados sobem juntos, na ordem: TERCEIRO, PRIMEIRO, SEGUNDO
+  $('#itens-subir-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(descricaoDe(0), 'TERCEIRO ITEM', 'mover para cima leva os marcados');
+  assert.strictEqual(descricaoDe(1), 'PRIMEIRO ITEM', 'o bloco anda inteiro, sem embaralhar');
+  assert.strictEqual(descricaoDe(2), 'SEGUNDO ITEM', 'e o que não estava marcado desce');
+  $('#itens-descer-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(descricaoDe(1), 'TERCEIRO ITEM', 'mover para baixo devolve o bloco');
+  assert.strictEqual(descricaoDe(2), 'PRIMEIRO ITEM', 'na mesma ordem');
+
+  // apaga os dois marcados de uma vez
+  $('#itens-remover-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'a confirmação abre', 8000);
+  const confirmar = Array.from($('#modal-rodape').querySelectorAll('button')).pop();
+  confirmar.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#lista-itens').querySelectorAll('.item').length === 1, 'os marcados foram removidos', 8000);
+  assert.strictEqual(descricaoDe(0), 'SEGUNDO ITEM', 'sobrou o item que não estava marcado');
+  assert.match($('#itens-selecao-contagem').textContent, /Nenhum item/, 'a seleção foi limpa');
+
+  $('#itens-selecao-concluir').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok($('#itens-selecao').classList.contains('oculto'), 'a barra de seleção sai');
+  assert.strictEqual($('#itens-selecionar').textContent, 'Selecionar itens', 'o botão volta ao normal');
+  assert.strictEqual($('#lista-itens').querySelectorAll('[data-marcar-item]').length, 0, 'as caixas saem com o modo');
+
+  // 4) desconto e frete: opcionais e fora do caminho na proposta
+  assert.ok($('#bloco-desconto-frete-campos').classList.contains('oculto'), 'na proposta os campos ficam guardados');
+  assert.strictEqual($('#op-desconto-frete').checked, false, 'a caixa começa desmarcada na proposta');
+
+  $('#campo-tipo').value = 'orcamento';
+  $('#campo-tipo').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.ok(!$('#bloco-desconto-frete-campos').classList.contains('oculto'), 'no orçamento os campos aparecem');
+  assert.strictEqual($('#op-desconto-frete').checked, true, 'e já vêm marcados');
+
+  $('#campo-desconto-modo').value = 'percentual';
+  $('#campo-desconto-modo').dispatchEvent(new window.Event('change', { bubbles: true }));
+  $('#campo-desconto-valor').value = '10';
+  $('#campo-desconto-valor').dispatchEvent(new window.Event('input', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#resumo-total').textContent.includes('90,00'), 'o desconto entra no total', 8000);
+
+  $('#op-desconto-frete').checked = false;
+  $('#op-desconto-frete').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.ok($('#bloco-desconto-frete-campos').classList.contains('oculto'), 'desmarcar esconde os campos');
+  assert.strictEqual($('#campo-desconto-modo').value, 'nenhum', 'e o desconto sai do documento');
+  assert.strictEqual(window.Editor.estadoAtual().doc.desconto.ativo, false, 'a escolha fica guardada no documento');
+  assert.strictEqual(window.Editor.estadoAtual().doc.desconto.valor, 0, 'sem valor de desconto escondido');
+  await ModoLocal.esperar(() => $('#resumo-total').textContent.includes('100,00'), 'o total volta ao subtotal', 8000);
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);
