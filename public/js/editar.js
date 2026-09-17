@@ -517,8 +517,8 @@
     const botoes = [
       { acao: 'detalhes', texto: 'Detalhes', titulo: 'Descrição completa, foto e catálogo' },
       { acao: 'duplicar', texto: '⧉', titulo: 'Duplicar item' },
-      { acao: 'subir', texto: '↑', titulo: 'Mover para cima' },
-      { acao: 'descer', texto: '↓', titulo: 'Mover para baixo' },
+      { acao: 'subir', texto: '↑', titulo: 'Mover para cima (o número acompanha a ordem)' },
+      { acao: 'descer', texto: '↓', titulo: 'Mover para baixo (o número acompanha a ordem)' },
       { acao: 'remover', texto: '🗑', titulo: 'Remover item' },
     ];
     botoes.forEach((b) => {
@@ -803,6 +803,27 @@
     return 0;
   }
 
+  /** O item tem número com dígitos? ("S/N", "-" e vazio não entram na conta) */
+  function temNumeroDeItem(valor) {
+    return chaveDoNumero(valor).length > 0;
+  }
+
+  /**
+   * Troca o número entre dois itens que mudaram de lugar. É o que faz a
+   * numeração acompanhar a ordem: ao descer, o item assume o número do que
+   * estava abaixo (crescente); ao subir, o do que estava acima (decrescente).
+   * Se um dos dois não tem número (por exemplo "S/N"), nada é trocado — não
+   * existe número para colocar em sequência.
+   */
+  function trocarNumeroItem(a, b) {
+    if (!a || !b || a === b) return false;
+    if (!temNumeroDeItem(a.numeroItem) || !temNumeroDeItem(b.numeroItem)) return false;
+    const guardado = a.numeroItem;
+    a.numeroItem = b.numeroItem;
+    b.numeroItem = guardado;
+    return true;
+  }
+
   /**
    * Organiza os itens pelo número do item (1, 15, 2, 3 → 1, 2, 3, 15).
    * A ordem da tela é a ordem do PDF e da planilha; os números em si não são
@@ -894,6 +915,7 @@
     // subindo começa pelo primeiro; descendo, pelo último (o bloco anda junto)
     const ordem = direcao < 0 ? marcados : marcados.slice().reverse();
     let moveu = false;
+    let numerosTrocados = false;
     ordem.forEach((item) => {
       const de = itens.indexOf(item);
       const para = de + direcao;
@@ -901,6 +923,9 @@
       if (estado.selecao.marcados.indexOf(itens[para]) >= 0) return; // vizinho marcado: já vai junto
       itens.splice(de, 1);
       itens.splice(para, 0, item);
+      // quem ficou no índice antigo é o vizinho que foi passado: os números
+      // trocam de lugar junto com os itens
+      if (trocarNumeroItem(item, itens[de])) numerosTrocados = true;
       moveu = true;
     });
     if (!moveu) {
@@ -908,6 +933,9 @@
       return;
     }
     desenharItens(antes);
+    if (numerosTrocados) {
+      UI.toast('Itens movidos: a numeração acompanhou a nova ordem.', 'sucesso', 3500);
+    }
     marcarSujo();
   }
 
@@ -1324,12 +1352,23 @@
           return;
         }
         const movido = itens[indice];
+        const vizinho = itens[destino];
         const antes = capturarEstadoItens();
         itens.splice(indice, 1);
         itens.splice(destino, 0, movido);
+        // a numeração anda junto: o item passa a ter o número da posição nova
+        const numerosTrocados = trocarNumeroItem(movido, vizinho);
         desenharItens(antes);
         const linha = blocoDoItem(movido);
         if (linha) linha.scrollIntoView({ block: 'nearest' });
+        if (numerosTrocados) {
+          UI.toast(
+            'Item movido: agora é o nº ' + (movido.numeroItem || destino + 1) + ' ' +
+              (acao === 'subir' ? '(subiu)' : '(desceu)') + '.',
+            'sucesso',
+            3500
+          );
+        }
         marcarSujo();
         return;
       }

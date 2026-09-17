@@ -1531,6 +1531,73 @@ teste('Itens: "Organizar por item nº" põe 1, 15, 2, 3 na ordem certa', async (
   window.close();
 });
 
+teste('Itens: ao mover, a numeração acompanha a ordem (crescente/decrescente)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const iniciais = [
+    { numeroItem: '1', descricao: 'PRIMEIRO' },
+    { numeroItem: '2', descricao: 'SEGUNDO' },
+    { numeroItem: '3', descricao: 'TERCEIRO' },
+    { numeroItem: 'S/N', descricao: 'SEM NUMERO' },
+  ];
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = iniciais.map((i) => Object.assign({
+    unidade: 'UND', quantidade: 1, valorReferencia: 10, precoCusto: 5, precoVenda: 10,
+    marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }, i));
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const blocos = () => Array.from($('#lista-itens').querySelectorAll('.item'));
+  const numeros = () => blocos().map((b) => b.querySelector('.item-numero').textContent);
+  const descricoes = () => blocos().map((b) => b.querySelector('[data-campo="descricao"]').value);
+  const acao = (indice, nome) => blocos()[indice].querySelector('[data-acao-item="' + nome + '"]')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'começa 1, 2, 3, S/N');
+
+  // 1) descer o primeiro: ele assume o número 2 (crescente) e o outro vira 1
+  acao(0, 'descer');
+  assert.deepStrictEqual(descricoes(), ['SEGUNDO', 'PRIMEIRO', 'TERCEIRO', 'SEM NUMERO'], 'a ordem mudou');
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'a numeração continua em sequência');
+
+  // 2) subir de volta: o número volta a descer (2 → 1)
+  acao(1, 'subir');
+  assert.deepStrictEqual(descricoes(), ['PRIMEIRO', 'SEGUNDO', 'TERCEIRO', 'SEM NUMERO'], 'volta à ordem original');
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'e a numeração também');
+
+  // 3) item sem número não troca (não há número para entrar na sequência)
+  acao(3, 'subir');
+  assert.deepStrictEqual(descricoes(), ['PRIMEIRO', 'SEGUNDO', 'SEM NUMERO', 'TERCEIRO'], 'o S/N subiu');
+  assert.deepStrictEqual(numeros(), ['1', '2', 'S/N', '3'], 'e os números ficaram onde estavam');
+  acao(2, 'descer');
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'volta como estava');
+
+  // 4) mover os marcados também leva a numeração junto
+  $('#itens-selecionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  [0, 1].forEach((indice) => {
+    const caixa = blocos()[indice].querySelector('[data-marcar-item]');
+    caixa.checked = true;
+    caixa.dispatchEvent(new window.Event('change', { bubbles: true }));
+  });
+  $('#itens-descer-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.deepStrictEqual(descricoes(), ['TERCEIRO', 'PRIMEIRO', 'SEGUNDO', 'SEM NUMERO'], 'os marcados desceram');
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'a sequência continua 1, 2, 3');
+
+  $('#itens-subir-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.deepStrictEqual(descricoes(), ['PRIMEIRO', 'SEGUNDO', 'TERCEIRO', 'SEM NUMERO'], 'e voltam');
+  assert.deepStrictEqual(numeros(), ['1', '2', '3', 'S/N'], 'com a numeração certa');
+
+  // organização por número continua disponível para quem lançou fora de ordem
+  $('#itens-selecao-concluir').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);
