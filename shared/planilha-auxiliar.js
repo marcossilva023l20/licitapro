@@ -54,7 +54,18 @@
       2
     );
     const total = Formato.arredondar(Math.max(0, bruto - valorDesconto) + acrescimo, 2);
-    return { bruto, valorDesconto, acrescimo, custo, total, lucro: Formato.arredondar(total - custo, 2) };
+    const lucro = Formato.arredondar(total - custo, 2);
+    return {
+      bruto,
+      valorDesconto,
+      acrescimo,
+      custo,
+      total,
+      lucro,
+      // lucro sobre o total (margem) e sobre o custo (markup)
+      percentualLucro: total > 0 ? Formato.arredondar((lucro / total) * 100, 1) : 0,
+      percentualSobreCusto: custo > 0 ? Formato.arredondar((lucro / custo) * 100, 1) : 0,
+    };
   }
 
   function dataBR(iso) {
@@ -136,6 +147,8 @@
       ['TOTAL', totais.total],
       ['Custo dos itens (uso interno)', totais.custo],
       ['Lucro estimado (uso interno)', totais.lucro],
+      ['Lucro (% sobre o total)', totais.percentualLucro],
+      ['Lucro (% sobre o custo)', totais.percentualSobreCusto],
       [''],
       ['CONDIÇÕES'],
       ['Validade (dias)', numero(condicoes.validadeDias)],

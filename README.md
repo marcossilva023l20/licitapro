@@ -75,6 +75,12 @@ Desenvolvimento com recarga automática: `npm run dev`.
    O arquivo `Modelo_Importacao_Itens_DEJ.xlsx` tem **uma única aba**, **Itens**, com os títulos
    das colunas e nada mais — sem aba de instruções, sem legenda e sem comentários.
 
+3b. **Documentos em lote** — na lista de *Documentos*, cada item tem uma caixa de marcar e a
+   barra de ações oferece **Selecionar todos** (marca o que está à vista, respeitando busca e
+   filtros), **Desmarcar todos**, **Excluir selecionados** e **Excluir todos** — sempre com
+   confirmação dizendo quantos documentos serão excluídos. A exclusão em lote usa a rota
+   `POST /api/documentos/excluir` (`{ ids: [...] }`), que também funciona no modo local.
+
 3. **Importar planilha** — arraste o arquivo preenchido. O sistema mostra os itens encontrados,
    avisa sobre linhas com problema e permite:
 
@@ -91,6 +97,10 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
    | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
+
+   O resumo de valores mostra **Lucro estimado** em reais **e em porcentagem**
+   (`R$ 340,00 · 22,8% do total`); passando o mouse, aparece também a leitura sobre o custo
+   (29,6%), que é a mesma conta da ferramenta *margem sobre o custo*.
    | Dados do proponente | dados da empresa para *este* documento (logo e assinatura) |
    | Layout do PDF | catálogo, fotos, dados bancários, valor por extenso, assinatura, cor do documento |
 

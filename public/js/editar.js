@@ -442,13 +442,18 @@
     else if (desconto.modo === 'valor') valorDesconto = F.paraNumero(desconto.valor);
     const acrescimo = estado.doc.acrescimo && estado.doc.acrescimo.ativo ? F.paraNumero(estado.doc.acrescimo.valor) : 0;
     const total = Math.max(0, subtotal - valorDesconto) + acrescimo;
+    const lucro = F.arredondar(total - custo - acrescimo, 2);
     return {
       itens: itens.length,
       subtotal: F.arredondar(subtotal, 2),
       custo: F.arredondar(custo, 2),
-      lucro: F.arredondar(total - custo - acrescimo, 2),
+      lucro,
       total: F.arredondar(total, 2),
       desconto: F.arredondar(valorDesconto, 2),
+      // lucro sobre o total (margem do documento) e sobre o custo (a mesma
+      // conta da ferramenta "margem sobre o custo")
+      percentualLucro: total > 0 ? F.arredondar((lucro / total) * 100, 1) : 0,
+      percentualSobreCusto: custo > 0 ? F.arredondar((lucro / custo) * 100, 1) : 0,
     };
   }
 
@@ -458,6 +463,11 @@
     $('#resumo-subtotal').textContent = F.moeda(c.subtotal);
     $('#resumo-custo').textContent = F.moeda(c.custo);
     $('#resumo-lucro').textContent = F.moeda(c.lucro);
+    // a porcentagem vem junto do valor; o título mostra as duas leituras
+    $('#resumo-lucro-percentual').textContent = F.porcentagem(c.percentualLucro) + ' do total';
+    $('#resumo-lucro-percentual').title =
+      'Lucro sobre o total (margem): ' + F.porcentagem(c.percentualLucro) +
+      ' · sobre o custo: ' + F.porcentagem(c.percentualSobreCusto);
     $('#resumo-total').textContent = F.moeda(c.total);
     $('#itens-vazio').classList.toggle('oculto', c.itens > 0);
     $$('#lista-itens .item').forEach((elemento, indice) => {

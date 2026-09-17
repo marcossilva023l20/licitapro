@@ -1036,6 +1036,15 @@ input[type="search"] { padding-left: 12px; }
   color: var(--texto-fraco);
 }
 .resumo-valores strong { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+/* a porcentagem do lucro, ao lado do valor */
+.resumo-valores .percentual-lucro {
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--dourado-300);
+}
 .resumo-valores .destaque strong { font-size: 1.3rem; color: var(--dourado-300); letter-spacing: -0.02em; }
 
 .bloco-desconto { align-items: end; }
@@ -1055,6 +1064,20 @@ input[type="search"] { padding-left: 12px; }
   background: rgba(30, 75, 119, 0.35);
 }
 .barra-selecao-contagem { margin-right: auto; font-size: 0.85rem; font-weight: 600; color: var(--texto-suave); }
+
+/* barra de ações da lista de documentos (selecionar / excluir em lote) */
+.barra-documentos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+.doc-marcador { display: flex; align-items: center; padding-right: 2px; }
+.doc-marcador input { width: 18px; height: 18px; accent-color: var(--dourado-500); cursor: pointer; }
+/* a caixa fica na frente do conteúdo do documento, na mesma linha */
+.doc-item:has(.doc-marcador) { grid-template-columns: 26px 118px minmax(0, 1fr) auto; }
+.doc-item.marcado { border-color: var(--dourado-500); box-shadow: 0 0 0 1px rgba(198, 161, 91, 0.45); }
 
 /* caixa de seleção de cada item (só no modo seleção) */
 .item-marcador { display: flex; align-items: center; padding: 0 2px; }

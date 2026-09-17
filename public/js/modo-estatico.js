@@ -318,7 +318,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '35';
+  const VERSAO_ARQUIVOS = '36';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -537,6 +537,20 @@
       const grupo = String(busca.get('grupo') || '').slice(0, 30);
       const sequencial = proximoNumero(tipo, ano, grupo);
       return { sequencial, ano, grupo, numeroFormatado: window.Formato.numeroDocumento(sequencial, ano) };
+    }
+
+    // excluir vários de uma vez (vem antes do casamento por id, senão
+    // "excluir" seria lido como um id de documento)
+    if (rota === '/api/documentos/excluir' && metodo === 'POST') {
+      const ids = Array.isArray(corpo && corpo.ids) ? corpo.ids.map(String) : [];
+      if (!ids.length) throw Object.assign(new Error('Nenhum documento informado.'), { status: 400 });
+      const alvos = new Set(ids);
+      const antes = banco.documentos.length;
+      banco.documentos = banco.documentos.filter((d) => !alvos.has(d.id));
+      ids.forEach((id) => estado.removidos.add(id));
+      const removidos = antes - banco.documentos.length;
+      if (removidos) gravarBanco();
+      return { ok: true, removidos };
     }
 
     if (rota === '/api/documentos/previa-pdf' && metodo === 'POST') {

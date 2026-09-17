@@ -445,15 +445,25 @@ const documento = {
     return atualizado;
   },
   remover(did) {
+    return documento.removerVarios([did]) > 0;
+  },
+
+  /**
+   * Remove vários documentos de uma vez (é o que a tela usa em
+   * "excluir selecionados" / "excluir todos"). Devolve quantos saíram.
+   */
+  removerVarios(ids) {
     const db = carregar();
+    const alvos = new Set((ids || []).map(String));
+    if (!alvos.size) return 0;
     const antes = db.documentos.length;
-    db.documentos = db.documentos.filter((d) => d.id !== did);
-    if (db.documentos.length !== antes) {
-      if (remoto) removidosRemotos.add(did); // apaga também no banco
+    db.documentos = db.documentos.filter((d) => !alvos.has(d.id));
+    const removidos = antes - db.documentos.length;
+    if (removidos) {
+      if (remoto) alvos.forEach((did) => removidosRemotos.add(did)); // apaga também no banco
       salvarAgora();
-      return true;
     }
-    return false;
+    return removidos;
   },
 
   /** Próximo número sequencial (por tipo, grupo e ano). */

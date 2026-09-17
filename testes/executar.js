@@ -896,6 +896,32 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     const listaFinal = await requisitar(servidor, '/api/documentos');
     assert.strictEqual(listaFinal.json.documentos.length, 1);
 
+    // excluir em lote (o botão "excluir todos" da tela manda os ids da lista)
+    const semIds = await requisitar(servidor, '/api/documentos/excluir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ ids: [] }),
+    });
+    assert.strictEqual(semIds.status, 400, 'sem ids a rota não apaga nada');
+
+    const outro = await requisitar(servidor, '/api/documentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ tipo: 'orcamento', cliente: { nome: 'CLIENTE DA LIMPEZA' } }),
+    });
+    const idsDaLista = (await requisitar(servidor, '/api/documentos')).json.documentos.map((d) => d.id);
+    assert.ok(idsDaLista.length >= 2, 'há documentos para excluir em lote');
+    const lote = await requisitar(servidor, '/api/documentos/excluir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ ids: idsDaLista }),
+    });
+    assert.strictEqual(lote.status, 200, lote.texto);
+    assert.strictEqual(lote.json.removidos, idsDaLista.length, 'excluiu todos os informados');
+    const depoisDoLote = await requisitar(servidor, '/api/documentos');
+    assert.strictEqual(depoisDoLote.json.documentos.length, 0, 'a lista ficou vazia');
+    assert.ok([200, 201].includes(outro.status), 'o orçamento de apoio foi criado: ' + outro.status);
+
     // página inicial (SPA)
     const inicio = await requisitar(servidor, '/');
     assert.strictEqual(inicio.status, 200);
@@ -1594,6 +1620,132 @@ teste('Itens: ao mover, a numeração acompanha a ordem (crescente/decrescente)'
 
   // organização por número continua disponível para quem lançou fora de ordem
   $('#itens-selecao-concluir').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Itens: o lucro estimado mostra também a porcentagem', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  // 1 item: venda 1.490, custo 1.150 → lucro 340 (22,8% do total, 29,6% do custo)
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
+    precoCusto: 1150, precoVenda: 1490, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  assert.strictEqual($('#resumo-lucro').textContent, 'R$ 340,00', 'o lucro em reais continua igual');
+  const percentual = $('#resumo-lucro-percentual');
+  assert.ok(percentual, 'a porcentagem do lucro aparece ao lado');
+  assert.match(percentual.textContent, /22,8% do total/, 'porcentagem sobre o total: ' + percentual.textContent);
+  assert.match(percentual.title, /sobre o custo: 29,6%/, 'e a leitura sobre o custo no título');
+
+  // muda o custo: a porcentagem acompanha
+  const custo = $('#lista-itens .item [data-campo="precoCusto"]');
+  custo.value = '740,00';
+  custo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#resumo-lucro').textContent === 'R$ 750,00', 'lucro recalculado');
+  assert.match($('#resumo-lucro-percentual').textContent, /50,3% do total/, 'nova porcentagem: ' + $('#resumo-lucro-percentual').textContent);
+
+  // sem itens: 0% em vez de "NaN%" ou divisão por zero
+  const vazio = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  const outro = await window.API.post('/api/documentos', vazio);
+  window.location.hash = '#/documento/' + outro.documento.id;
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento vazio carregado', 20000);
+  await ModoLocal.esperar(() => $('#resumo-lucro-percentual').textContent.startsWith('0,0%'), 'percentual zerado sem itens');
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Documentos: selecionar todos, desmarcar e excluir (selecionados e todos)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  // três documentos de tipos/status diferentes, para os filtros fazerem sentido
+  const criar = (tipo, nome, status) => window.API.post('/api/documentos', Object.assign(
+    window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, tipo),
+    {
+      status,
+      orgao: { nome: 'UASG ' + nome },
+      cliente: { nome: 'CLIENTE ' + nome },
+      itens: [{
+        numeroItem: '1', descricao: tipo === 'orcamento' ? 'B' : 'A', unidade: 'UND', quantidade: 1,
+        valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+        descricaoCatalogo: '', linkCompra: '',
+      }],
+    }
+  ));
+  await criar('proposta', 'MARINHA', 'enviada');
+  await criar('proposta', 'EXERCITO', 'ganha');
+  await criar('orcamento', 'LOJA', 'rascunho');
+
+  window.location.hash = '#/documentos';
+  await ModoLocal.esperar(() => !$('#view-documentos').classList.contains('oculto'), 'tela de documentos');
+  await ModoLocal.esperar(() => $('#lista-documentos').querySelectorAll('.doc-item').length === 3, 'os 3 documentos na lista');
+
+  const itens = () => Array.from($('#lista-documentos').querySelectorAll('.doc-item'));
+  const caixas = () => itens().map((i) => i.querySelector('[data-marcar-doc]'));
+  const concluir = () => {
+    const botao = Array.from($('#modal-rodape').querySelectorAll('button')).pop();
+    botao.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  };
+
+  assert.strictEqual(caixas().length, 3, 'cada documento tem a caixa de marcar');
+  assert.strictEqual($('#docs-selecao-contagem').textContent, 'Nenhum documento selecionado', 'começa sem seleção');
+  assert.strictEqual($('#docs-excluir-selecionados').disabled, true, 'sem seleção o botão fica desabilitado');
+
+  // 1) selecionar todos
+  $('#docs-selecionar-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok(caixas().every((c) => c.checked), 'todos ficaram marcados');
+  assert.strictEqual($('#docs-selecao-contagem').textContent, '3 documentos selecionados', 'a contagem mostra 3');
+  assert.strictEqual($('#docs-excluir-selecionados').disabled, false, 'agora dá para excluir');
+  assert.strictEqual($('#docs-selecionar-todos').textContent, 'Desmarcar todos', 'o botão vira "Desmarcar todos"');
+
+  // 2) desmarcar todos
+  $('#docs-desmarcar-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.ok(caixas().every((c) => !c.checked), 'todos ficaram desmarcados');
+  assert.strictEqual($('#docs-selecao-contagem').textContent, 'Nenhum documento selecionado', 'contagem zerada');
+
+  // 3) excluir só os marcados
+  itens()[0].querySelector('[data-marcar-doc]').click();
+  assert.strictEqual($('#docs-selecao-contagem').textContent, '1 documento selecionado', 'um marcado');
+  $('#docs-excluir-selecionados').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'a confirmação abre');
+  assert.match($('#modal-corpo').textContent, /documento selecionado/, 'a confirmação fala do selecionado');
+  concluir();
+  await ModoLocal.esperar(() => itens().length === 2, 'o selecionado foi excluído');
+  assert.strictEqual($('#docs-selecao-contagem').textContent, 'Nenhum documento selecionado', 'a seleção é limpa depois');
+  const restantes = Array.from(window.App.estadoDocumentos().map((d) => d.id));
+  assert.strictEqual(restantes.length, 2, 'sobraram dois documentos');
+
+  // 4) excluir todos de uma vez
+  $('#docs-excluir-todos').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'a confirmação de excluir todos abre');
+  assert.match($('#modal-corpo').textContent, /Todos os 2 documentos/, 'o aviso diz quantos serão excluídos');
+  concluir();
+  await ModoLocal.esperar(() => itens().length === 0, 'a lista ficou vazia');
+  assert.strictEqual(
+    $('#lista-documentos').textContent.includes('ainda não tem propostas'),
+    true,
+    'aparece o convite para criar o primeiro documento'
+  );
+  assert.strictEqual($('#docs-selecionar-todos').disabled, true, 'sem documentos não há o que selecionar');
+  assert.strictEqual($('#docs-excluir-todos').disabled, true, 'e "excluir todos" fica desabilitado');
+
+  // 5) a exclusão em lote também funciona pela API (é o que a tela chama)
+  await criar('proposta', 'NOVA', 'rascunho');
+  const lista = await window.API.get('/api/documentos');
+  const lote = await window.API.post('/api/documentos/excluir', { ids: lista.documentos.map((d) => d.id) });
+  assert.strictEqual(lote.removidos, 1, 'a rota exclui em lote: ' + lote.removidos);
+  const depois = await window.API.get('/api/documentos');
+  assert.strictEqual(depois.documentos.length, 0, 'não sobrou documento');
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
 });

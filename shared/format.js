@@ -269,6 +269,13 @@
       .toLowerCase();
   }
 
+  /** "23,6%" — usado no lucro estimado da tela. */
+  function porcentagem(valor, casas) {
+    const n = paraNumero(valor);
+    const decimais = casas === undefined ? 1 : casas;
+    return numero(n, decimais) + '%';
+  }
+
   /**
    * Nome de arquivo seguro em ASCII **mantendo a extensão** — usado no
    * cabeçalho `filename=` do download (o `filename*` leva o nome completo, com
@@ -328,6 +335,7 @@
     somenteDigitos,
     escapar,
     slug,
+    porcentagem,
     nomeArquivoSeguro,
     primeiroNome,
     iniciais,

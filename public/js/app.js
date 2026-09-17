@@ -16,6 +16,8 @@
     empresa: {},
     padroes: {},
     pendenteEditor: null,
+    // documentos marcados na lista (para excluir vários de uma vez)
+    selecaoDocs: [],
   };
 
   // ------------------------------------------------------------- entrada
@@ -395,12 +397,15 @@
       const resposta = await API.get('/api/documentos');
       estado.documentos = resposta.documentos || [];
       estado.totais = resposta.totais || { quantidade: 0, valor: 0, ganhas: 0, enviadas: 0 };
+      // a seleção só guarda ids que ainda existem
+      const vivos = estado.documentos.map((d) => d.id);
+      estado.selecaoDocs = estado.selecaoDocs.filter((id) => vivos.indexOf(id) >= 0);
     } catch (erro) {
       UI.toast('Não foi possível carregar os documentos: ' + erro.message, 'erro');
     }
   }
 
-  function corpoDocumento(doc) {
+  function corpoDocumento(doc, comSelecao) {
     const etiqueta = `status-${doc.status}`;
     const destinatario = doc.destinatario || (doc.tipo === 'orcamento' ? 'Cliente não informado' : 'Órgão não informado');
     const meta = [];
@@ -409,7 +414,15 @@
     meta.push('atualizado em ' + F.dataHora(doc.atualizadoEm));
     if (doc.data) meta.push('data do documento: ' + F.dataBR(doc.data));
 
+    const marcado = estado.selecaoDocs.indexOf(doc.id) >= 0;
+    const marcador = comSelecao
+      ? `<label class="doc-marcador" title="Selecionar este documento">
+           <input type="checkbox" data-marcar-doc="${UI.escaparHtml(doc.id)}"${marcado ? ' checked' : ''} />
+         </label>`
+      : '';
+
     return `
+      ${marcador}
       <div>
         <div class="doc-numero">${UI.escaparHtml(doc.numeroFormatado)}</div>
         <span class="doc-tipo ${doc.tipo === 'orcamento' ? 'orcamento' : ''}">${UI.rotuloTipo(doc.tipo)}</span>
@@ -454,6 +467,7 @@
     });
 
     const container = $('#lista-documentos');
+    atualizarBarraDocumentos();
     if (!filtrados.length) {
       container.innerHTML = estado.documentos.length
         ? '<div class="lista-vazia">Nenhum documento corresponde aos filtros.</div>'
@@ -465,7 +479,12 @@
       return;
     }
 
-    container.innerHTML = filtrados.map((doc) => `<article class="doc-item">${corpoDocumento(doc)}</article>`).join('');
+    container.innerHTML = filtrados
+      .map((doc) => {
+        const marcado = estado.selecaoDocs.indexOf(doc.id) >= 0;
+        return `<article class="doc-item${marcado ? ' marcado' : ''}" data-doc="${UI.escaparHtml(doc.id)}">${corpoDocumento(doc, true)}</article>`;
+      })
+      .join('');
 
     $$('select[data-acao="status"]', container).forEach((select) => {
       select.value = select.dataset.status;
@@ -480,6 +499,92 @@
         }
       });
     });
+  }
+
+  // ------------------------------------------- selecionar/excluir documentos
+
+  /** Documentos que estão na tela agora (respeitando busca e filtros). */
+  function documentosFiltrados() {
+    const busca = ($('#filtro-busca').value || '').toLowerCase().trim();
+    const tipo = $('#filtro-tipo').value;
+    const status = $('#filtro-status').value;
+    return estado.documentos.filter((doc) => {
+      if (tipo && doc.tipo !== tipo) return false;
+      if (status && doc.status !== status) return false;
+      if (busca) {
+        const texto = [doc.destinatario, doc.numeroFormatado, doc.processo, doc.titulo].join(' ').toLowerCase();
+        if (!texto.includes(busca)) return false;
+      }
+      return true;
+    });
+  }
+
+  function marcarDocumento(id, marcado) {
+    const posicao = estado.selecaoDocs.indexOf(id);
+    if (marcado && posicao < 0) estado.selecaoDocs.push(id);
+    if (!marcado && posicao >= 0) estado.selecaoDocs.splice(posicao, 1);
+    const item = $(`.doc-item[data-doc="${id}"]`);
+    if (item) item.classList.toggle('marcado', marcado);
+    atualizarBarraDocumentos();
+  }
+
+  function atualizarBarraDocumentos() {
+    const quantos = estado.selecaoDocs.length;
+    const visiveis = documentosFiltrados();
+    const semVisiveis = visiveis.length === 0;
+    $('#docs-selecao-contagem').textContent = quantos
+      ? quantos + (quantos === 1 ? ' documento selecionado' : ' documentos selecionados')
+      : 'Nenhum documento selecionado';
+    $('#docs-excluir-selecionados').disabled = quantos === 0;
+    $('#docs-selecionar-todos').disabled = semVisiveis;
+    $('#docs-desmarcar-todos').disabled = semVisiveis && quantos === 0;
+    $('#docs-selecionar-todos').textContent =
+      !semVisiveis && visiveis.every((d) => estado.selecaoDocs.indexOf(d.id) >= 0)
+        ? 'Desmarcar todos'
+        : 'Selecionar todos';
+    $('#docs-excluir-todos').disabled = estado.documentos.length === 0;
+  }
+
+  function selecionarTodosDocumentos() {
+    const visiveis = documentosFiltrados().map((d) => d.id);
+    const todosMarcados = visiveis.length > 0 && visiveis.every((id) => estado.selecaoDocs.indexOf(id) >= 0);
+    if (todosMarcados) {
+      estado.selecaoDocs = estado.selecaoDocs.filter((id) => visiveis.indexOf(id) < 0);
+    } else {
+      visiveis.forEach((id) => { if (estado.selecaoDocs.indexOf(id) < 0) estado.selecaoDocs.push(id); });
+    }
+    desenharListaDocumentos();
+  }
+
+  function limparSelecaoDocumentos() {
+    estado.selecaoDocs = [];
+  }
+
+  /** Exclui uma lista de documentos (um, vários ou todos), com confirmação. */
+  async function excluirDocumentos(ids, titulo, texto, textoConfirmar) {
+    if (!ids.length) return;
+    const confirma = await UI.confirmar({
+      titulo,
+      texto,
+      textoConfirmar: textoConfirmar || 'Excluir',
+      perigo: true,
+    });
+    if (!confirma) return;
+    try {
+      const resposta = await API.post('/api/documentos/excluir', { ids });
+      const removidos = Number(resposta && resposta.removidos);
+      limparSelecaoDocumentos();
+      UI.toast(
+        (removidos || ids.length) === 1
+          ? 'Documento excluído.'
+          : (removidos || ids.length) + ' documentos excluídos.',
+        'sucesso'
+      );
+      await carregarDocumentos();
+      rotear();
+    } catch (erro) {
+      UI.toast('Não foi possível excluir: ' + erro.message, 'erro');
+    }
   }
 
   function desenharPainel() {
@@ -578,6 +683,44 @@
           UI.toast(erro.message, 'erro');
         }
       }
+    });
+
+    // caixas de marcar da lista de documentos
+    document.addEventListener('change', (evento) => {
+      const caixa = evento.target.closest('[data-marcar-doc]');
+      if (caixa) marcarDocumento(caixa.dataset.marcarDoc, caixa.checked);
+    });
+
+    $('#docs-selecionar-todos').addEventListener('click', () => {
+      if (!$('#docs-selecionar-todos').textContent.startsWith('Desmarcar')) {
+        return selecionarTodosDocumentos();
+      }
+      // "desmarcar todos": tira só os que estão à vista, como o rótulo promete
+      const visiveis = documentosFiltrados().map((d) => d.id);
+      estado.selecaoDocs = estado.selecaoDocs.filter((id) => visiveis.indexOf(id) < 0);
+      desenharListaDocumentos();
+    });
+    $('#docs-desmarcar-todos').addEventListener('click', () => {
+      limparSelecaoDocumentos();
+      desenharListaDocumentos();
+    });
+    $('#docs-excluir-selecionados').addEventListener('click', () => {
+      const ids = estado.selecaoDocs.slice();
+      excluirDocumentos(
+        ids,
+        'Excluir documentos',
+        ids.length === 1
+          ? 'Esta ação não pode ser desfeita. Deseja excluir o documento selecionado?'
+          : 'Esta ação não pode ser desfeita. Deseja excluir os ' + ids.length + ' documentos selecionados?'
+      );
+    });
+    $('#docs-excluir-todos').addEventListener('click', () => {
+      const ids = estado.documentos.map((d) => d.id);
+      excluirDocumentos(
+        ids,
+        'Excluir todos os documentos',
+        'Esta ação não pode ser desfeita. Todos os ' + ids.length + ' documentos (propostas e orçamentos) serão excluídos.'
+      );
     });
 
     ['#filtro-busca', '#filtro-tipo', '#filtro-status'].forEach((sel) => {
@@ -1574,6 +1717,7 @@
       if (!$('#view-painel').classList.contains('oculto')) desenharPainel();
     },
     estado,
+    estadoDocumentos: () => estado.documentos,
   };
 
   document.addEventListener('DOMContentLoaded', iniciar);

@@ -117,6 +117,18 @@ rotas.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Exclui vários documentos de uma vez. A tela manda os ids (em "excluir
+ * todos", manda a lista inteira) — assim não existe o risco de uma chamada
+ * sem ids apagar tudo por engano.
+ */
+rotas.post('/excluir', (req, res) => {
+  const ids = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ erro: 'Nenhum documento informado.' });
+  const removidos = Documento.removerVarios(ids);
+  res.json({ ok: true, removidos });
+});
+
 rotas.post('/:id/duplicar', (req, res) => {
   const origem = Documento.porId(req.params.id);
   if (!origem) return res.status(404).json({ erro: 'Documento não encontrado.' });
