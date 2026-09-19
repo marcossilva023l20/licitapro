@@ -1887,6 +1887,27 @@ teste('Layout do PDF: orientação (retrato/paisagem) e cabeçalho só na primei
   assert.strictEqual(orientacao.value, 'retrato', 'o documento começa em retrato');
   assert.strictEqual(soPrimeira.checked, false, 'e com o cabeçalho em todas as páginas');
 
+  // o botão Retrato/Paisagem fica na barra de cima do editor (é o caminho curto)
+  const botaoOrientacao = $('#editor-orientacao');
+  assert.ok(botaoOrientacao, 'o botão Retrato / Paisagem está na barra do editor');
+  assert.match(botaoOrientacao.textContent, /Retrato/, 'mostra o papel em uso: ' + botaoOrientacao.textContent);
+  assert.strictEqual(botaoOrientacao.getAttribute('aria-pressed'), 'false', 'retrato é o estado inicial');
+  assert.ok($('#op-orientacao-paisagem').classList.contains('ativo') === false, 'a paisagem não está marcada');
+  assert.ok($('#op-orientacao-retrato').classList.contains('ativo'), 'o retrato está marcado');
+
+  // um clique na barra deixa o documento em paisagem (nos dois controles)
+  botaoOrientacao.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#op-orientacao').value === 'paisagem', 'o clique passou o papel para paisagem');
+  assert.match(botaoOrientacao.textContent, /Paisagem/, 'o botão passou a mostrar Paisagem');
+  assert.strictEqual(botaoOrientacao.getAttribute('aria-pressed'), 'true', 'e ficou marcado');
+  assert.ok($('#op-orientacao-paisagem').classList.contains('ativo'), 'o botão da aba Layout do PDF acompanha');
+  assert.ok(!$('#op-orientacao-retrato').classList.contains('ativo'), 'e o retrato fica desmarcado');
+
+  // e o botão da aba faz o mesmo caminho de volta
+  $('#op-orientacao-retrato').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#op-orientacao').value === 'retrato', 'o botão da aba voltou ao retrato');
+  assert.match(botaoOrientacao.textContent, /Retrato/, 'a barra mostra Retrato de novo');
+
   // orçamento em paisagem e cabeçalho só na primeira página
   orientacao.value = 'paisagem';
   orientacao.dispatchEvent(new window.Event('change', { bubbles: true }));

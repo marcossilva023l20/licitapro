@@ -307,6 +307,38 @@
 
   // ------------------------------------------------------------ formulário
 
+  /**
+   * O papel do PDF (retrato ou paisagem) é um dado só, mostrado em três
+   * lugares: o botão da barra do editor, os dois botões da aba "Layout do PDF"
+   * e o campo que fica guardado no documento. Aqui os três são sincronizados.
+   */
+  function atualizarBotaoOrientacao() {
+    const paisagem = obter('opcoes.orientacao') === 'paisagem';
+    const botao = $('#editor-orientacao');
+    if (botao) {
+      botao.textContent = paisagem ? '📄 Paisagem' : '📄 Retrato';
+      botao.setAttribute('aria-pressed', paisagem ? 'true' : 'false');
+      botao.title = paisagem
+        ? 'O PDF sai em paisagem (horizontal). Clique para voltar ao retrato (vertical).'
+        : 'O PDF sai em retrato (vertical). Clique para imprimir em paisagem (horizontal).';
+    }
+    UI.$$('.botao-orientacao').forEach((escolha) => {
+      const ativo = escolha.dataset.orientacao === (paisagem ? 'paisagem' : 'retrato');
+      escolha.classList.toggle('ativo', ativo);
+      escolha.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+    });
+    const lista = $('#op-orientacao');
+    if (lista) lista.value = paisagem ? 'paisagem' : 'retrato';
+  }
+
+  /** Troca o papel do documento (botão da barra ou botões da aba Layout do PDF). */
+  function definirOrientacao(valor) {
+    if (!estado.doc) return;
+    definir('opcoes.orientacao', valor === 'paisagem' ? 'paisagem' : 'retrato');
+    atualizarBotaoOrientacao();
+    marcarSujo();
+  }
+
   function preencherFormulario() {
     montarModalidades(obter('orgao.modalidade'));
     CAMPOS.forEach((campo) => {
@@ -337,6 +369,7 @@
     });
     atualizarVisibilidadeTipo();
     atualizarVisibilidadeDesconto();
+    atualizarBotaoOrientacao();
     desenharItens();
     desenharImagens();
     atualizarCabecalho();
@@ -1238,6 +1271,7 @@
         atualizarCabecalho();
       }
       if (campo.alvo.startsWith('numero.')) atualizarCabecalho();
+      if (campo.alvo === 'opcoes.orientacao') atualizarBotaoOrientacao();
       // desconto e frete mexem no total: recalcula enquanto a pessoa digita
       if (['desconto.modo', 'desconto.valor', 'acrescimo.ativo', 'acrescimo.valor'].includes(campo.alvo)) {
         atualizarResumos();
@@ -1500,6 +1534,13 @@
     $('#previa-atualizar').addEventListener('click', () => atualizarPrevia(false));
     $('#previa-baixar').addEventListener('click', gerarPdf);
     $('#editor-previa').addEventListener('click', () => definirPrevia(!estado.previaAberta, true));
+    // papel do PDF: o botão da barra alterna retrato ↔ paisagem
+    $('#editor-orientacao').addEventListener('click', () => {
+      definirOrientacao(obter('opcoes.orientacao') === 'paisagem' ? 'retrato' : 'paisagem');
+    });
+    UI.$$('.botao-orientacao').forEach((escolha) => {
+      escolha.addEventListener('click', () => definirOrientacao(escolha.dataset.orientacao));
+    });
     $('#editor-gerar-pdf').addEventListener('click', gerarPdf);
     $('#editor-salvar').addEventListener('click', () => salvar(false));
     $('#editor-voltar').addEventListener('click', () => {

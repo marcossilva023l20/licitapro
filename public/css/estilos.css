@@ -1130,6 +1130,24 @@ input[type="search"] { padding-left: 12px; }
 .campo-cor { flex-direction: row; align-items: center; gap: 12px; }
 .campo-cor input[type="color"] { width: 60px; height: 38px; }
 .campo-orientacao { max-width: 460px; }
+/* Papel do PDF: a escolha fica no alto da aba "Layout do PDF" e também na barra */
+.caixa-orientacao {
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid rgba(198, 161, 91, 0.45);
+  border-radius: var(--raio-sm, 10px);
+  background: rgba(198, 161, 91, 0.08);
+}
+.caixa-orientacao h3 { font-size: 0.95rem; margin-bottom: 10px; }
+.caixa-orientacao .texto-suave { margin: 8px 0 0; font-size: 0.78rem; }
+.botoes-orientacao { display: flex; flex-wrap: wrap; gap: 8px; }
+.botao-orientacao { min-width: 170px; }
+.botao-orientacao.ativo {
+  border-color: var(--dourado-500, #c6a15b);
+  background: rgba(198, 161, 91, 0.18);
+  color: var(--texto, #fff);
+  font-weight: 650;
+}
 
 .editor-previa { position: sticky; top: calc(var(--topo-altura) + 18px); }
 .previa-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }

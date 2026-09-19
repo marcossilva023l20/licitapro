@@ -155,10 +155,12 @@ Desenvolvimento com recarga automática: `npm run dev`.
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.
 
-   Na aba **Layout do PDF** também se escolhe o **papel**: *Retrato* (padrão) ou *Paisagem* —
-   o orçamento com muitas colunas fica bem ajustado deitado. E a caixa
-   **cabeçalho só na primeira página** repete ou não o timbre da empresa nas páginas
-   seguintes: marcada, a faixa sai só na folha 1 e o texto das demais começa logo no topo.
+   O **papel** do PDF fica no botão **Retrato / Paisagem** na barra de cima do editor e também
+   no alto da aba **Layout do PDF** (*Retrato* é o padrão; *Paisagem* deixa o orçamento bem
+   ajustado, com as colunas da tabela de preços mais largas).
+   A caixa **cabeçalho só na primeira página** (também na aba *Layout do PDF*) repete ou não o
+   timbre da empresa nas páginas seguintes: marcada, a faixa sai só na folha 1 e o texto das
+   demais começa logo no topo.
 
 5b. **Planilha auxiliar (Excel)** — botão **Planilha auxiliar** no editor (e
    *Planilha (Excel)* na lista de documentos). Sai um `.xlsx` com:
