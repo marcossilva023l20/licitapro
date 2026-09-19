@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=37" />
+  <link rel="stylesheet" href="css/estilos.css?v=38" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -102,6 +102,7 @@
         <a href="#/painel" data-rota="painel"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.6 12 3.5l9 7.1" /><path d="M5.4 10.2V20h13.2v-9.8" /><path d="M9.8 20v-5.4h4.4V20" /></svg>Painel</a>
         <a href="#/documentos" data-rota="documentos"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /><path d="M9 13h6M9 17h4" /></svg>Documentos</a>
         <a href="#/importar" data-rota="importar"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="M3 9.5h18M9 9.5V19.5M15 9.5V19.5" /></svg>Importar planilha</a>
+        <a href="#/declaracoes" data-rota="declaracoes"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /><path d="m9 14.6 2 2 4.2-4.4" /></svg>Declarações</a>
         <a href="#/empresa" data-rota="empresa"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V6.2l7-3.2v17.5" /><path d="M11 10.5h9v10H4" /><path d="M14 14h3M14 17.5h3" /></svg>Minha empresa</a>
       </nav>
 
@@ -212,6 +213,7 @@
           <div class="acoes-vista">
             <button class="botao" id="painel-novo-orcamento" type="button">+ Novo orçamento</button>
             <button class="botao botao-primario" id="painel-nova-proposta" type="button">+ Nova proposta</button>
+            <button class="botao" id="painel-declaracoes" type="button">+ Declarações</button>
           </div>
         </div>
 
@@ -262,6 +264,7 @@
           <div class="acoes-vista">
             <button class="botao" id="docs-novo-orcamento" type="button">+ Novo orçamento</button>
             <button class="botao botao-primario" id="docs-nova-proposta" type="button">+ Nova proposta</button>
+            <button class="botao" id="docs-declaracoes" type="button">+ Declarações</button>
           </div>
         </div>
 
@@ -294,6 +297,38 @@
       </section>
 
       <!-- ------------------------------------------------ Editor -->
+      <section id="view-declaracoes" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Declarações</h2>
+            <p class="texto-suave">
+              Os textos que acompanham as suas propostas e orçamentos: declaração de ME / EPP / MEI,
+              declaração unificada, não emprego de menor — e as que você escrever.
+            </p>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao botao-primario" id="declaracoes-nova" data-acao-modelos="nova" type="button">+ Nova declaração</button>
+            <button class="botao" id="declaracoes-salvar" data-acao-modelos="salvar" type="button">Salvar declarações</button>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho">
+            <h3>Minhas declarações</h3>
+            <span class="texto-suave" id="declaracoes-contagem">Nenhuma declaração guardada</span>
+          </div>
+          <p class="texto-suave">
+            O texto fica guardado aqui e serve para todos os documentos: no editor, a aba
+            <strong>Declarações</strong> deixa escolher quais saem no PDF daquele documento (só as
+            marcadas são impressas, cada uma com espaço para assinatura). No texto você pode citar os
+            dados do sistema entre chaves — <code>{RAZAO}</code>, <code>{CNPJ}</code>,
+            <code>{ORGAO}</code>, <code>{EDITAL}</code>, <code>{DATA}</code> e outros: eles são
+            trocados na hora de gerar o PDF.
+          </p>
+          <div id="declaracoes-lista" class="lista-declaracoes" data-lista-modelos></div>
+        </div>
+      </section>
+
       <section id="view-editor" class="vista oculto">
         <div class="editor-topo">
           <div class="editor-topo-info">
@@ -754,14 +789,15 @@
 
           <h3 class="titulo-bloco">Modelos de declaração</h3>
           <p class="texto-suave">
-            Guarde aqui os textos que você usa sempre (Declaração Unificada, ME/EPP/MEI...). Na aba
-            <strong>Declarações</strong> do documento você escolhe quais entram no PDF — o modelo é só um
-            ponto de partida e pode ser editado sem mexer neste cadastro.
+            Os mesmos textos da seção <a href="#/declaracoes">Declarações</a>, no painel. Guarde aqui o
+            que você usa sempre (Declaração Unificada, ME/EPP/MEI...): no editor, a aba
+            <strong>Declarações</strong> do documento escolhe quais entram no PDF — o modelo é só um
+            ponto de partida, e editar o texto no documento não muda este cadastro.
           </p>
-          <div id="lista-modelos-declaracao" class="lista-declaracoes"></div>
+          <div id="lista-modelos-declaracao" class="lista-declaracoes" data-lista-modelos></div>
           <div class="acoes-vista">
-            <button class="botao" id="modelo-declaracao-adicionar" type="button">+ Novo modelo</button>
-            <button class="botao botao-primario" id="modelos-declaracao-salvar" type="button">Salvar modelos</button>
+            <button class="botao" id="modelo-declaracao-adicionar" data-acao-modelos="nova" type="button">+ Nova declaração</button>
+            <button class="botao botao-primario" id="modelos-declaracao-salvar" data-acao-modelos="salvar" type="button">Salvar declarações</button>
           </div>
         </div>
 
@@ -797,14 +833,14 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=37"></script>
-  <script src="../shared/declaracoes.js?v=37"></script>
-  <script src="js/api.js?v=37"></script>
-  <script src="js/ui.js?v=37"></script>
-  <script src="js/editar.js?v=37"></script>
-  <script src="js/app.js?v=37"></script>
-  <script src="js/config-nuvem.js?v=37"></script>
-  <script src="js/modo-estatico.js?v=37"></script>
-  <script src="js/nuvem.js?v=37"></script>
+  <script src="../shared/format.js?v=38"></script>
+  <script src="../shared/declaracoes.js?v=38"></script>
+  <script src="js/api.js?v=38"></script>
+  <script src="js/ui.js?v=38"></script>
+  <script src="js/editar.js?v=38"></script>
+  <script src="js/app.js?v=38"></script>
+  <script src="js/config-nuvem.js?v=38"></script>
+  <script src="js/modo-estatico.js?v=38"></script>
+  <script src="js/nuvem.js?v=38"></script>
 </body>
 </html>

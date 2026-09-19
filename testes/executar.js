@@ -1975,6 +1975,98 @@ teste('Declarações na tela: adicionar do modelo, marcar e gerar o PDF', async 
   window.close();
 });
 
+teste('Declarações: a seção fica no painel, junto de novo orçamento e nova proposta', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  // 1) o botão está na barra do painel, ao lado de + Novo orçamento / + Nova proposta
+  const barra = $('#painel-nova-proposta').parentElement;
+  assert.strictEqual($('#painel-novo-orcamento').parentElement, barra, 'os três botões ficam na mesma barra');
+  const botao = $('#painel-declaracoes');
+  assert.strictEqual(botao.parentElement, barra, 'e o + Declarações também');
+  assert.strictEqual(botao.textContent.trim(), '+ Declarações', 'com o rótulo pedido');
+  assert.ok($('#docs-declaracoes'), 'a lista de documentos tem o mesmo atalho');
+
+  // 2) o botão abre a seção Declarações
+  botao.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#view-declaracoes').classList.contains('oculto'), 'a seção Declarações abriu');
+  assert.strictEqual($('#view-declaracoes').querySelector('h2').textContent.trim(), 'Declarações', 'com o título da seção');
+  assert.strictEqual($('#declaracoes-contagem').textContent.trim(), 'Nenhuma declaração guardada', 'avisa que está vazia');
+  assert.ok(window.location.hash === '#/declaracoes', 'e o endereço fica em #/declaracoes: ' + window.location.hash);
+  assert.ok(window.document.querySelector('#navegacao a[data-rota="declaracoes"]'), 'o menu tem a entrada Declarações');
+
+  // 3) + Nova declaração oferece os modelos prontos que o usuário pediu
+  $('#declaracoes-nova').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal dos modelos abre', 8000);
+  const opcoes = Array.from($('#declaracao-modelo').options).map((o) => o.textContent);
+  ['Declaração Unificada', 'Declaração ME / EPP / MEI', 'Declaração de não emprego de menor']
+    .forEach((titulo) => assert.ok(opcoes.some((o) => o.includes(titulo)), 'tem a opção ' + titulo + ': ' + opcoes.join(' | ')));
+  assert.ok(opcoes.some((o) => o.includes('em branco')), 'e dá para começar em branco');
+
+  const indice = Array.from($('#declaracao-modelo').options)
+    .findIndex((o) => o.textContent.includes('Declaração ME / EPP / MEI'));
+  $('#declaracao-modelo').value = String(indice);
+  Array.from($('#modal-rodape').querySelectorAll('button')).pop()
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => window.document.querySelectorAll('#declaracoes-lista .declaracao').length === 1,
+    'a declaração ME/EPP/MEI entrou na lista'
+  );
+
+  const bloco = () => window.document.querySelector('#declaracoes-lista .declaracao');
+  assert.strictEqual(bloco().querySelector('[data-modelo-titulo]').value, 'Declaração ME / EPP / MEI', 'com o título do modelo');
+  const textoDoModelo = bloco().querySelector('[data-modelo-texto]').value.replace(/\s+/g, ' ');
+  assert.ok(textoDoModelo.includes('Lei Complementar nº 123/2006'), 'e o texto da LC 123/2006: ' + textoDoModelo.slice(0, 90));
+  assert.ok(!/\(Ajuste|ajuste a condição\)/.test(textoDoModelo), 'o modelo não traz instrução para sair impressa');
+
+  // 4) o texto é editável e salva nos dados da empresa
+  bloco().querySelector('[data-modelo-titulo]').value = 'Declaração ME / EPP / MEI';
+  const texto = bloco().querySelector('[data-modelo-texto]');
+  texto.value = 'Sou optante do SIMPLES NACIONAL, enquadrada como ME, na forma da LC 123/2006.';
+  texto.dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('#declaracoes-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  // espera a gravação (e não só a lista em memória, que já tem o texto digitado)
+  await ModoLocal.esperar(
+    () => String(window.localStorage.getItem('licitapro.local.v1')).includes('SIMPLES NACIONAL'),
+    'a declaração foi gravada'
+  );
+  const perfil = await window.API.get('/api/perfil');
+  assert.strictEqual(perfil.perfil.declaracoes.length, 1, 'ficou no perfil (vai para todos os documentos)');
+  assert.strictEqual($('#declaracoes-contagem').textContent.trim(), '1 declaração guardada', 'a contagem acompanha');
+
+  // 4b) com a empresa ainda em branco, salvar os padrões não descarta as declarações
+  // (era o que acontecia no modo local: a junção com o que estava gravado trazia o
+  // perfil antigo inteiro e apagava o que tinha acabado de ser salvo)
+  await window.API.put('/api/perfil/padroes', { garantia: '12 meses' });
+  const depois = await window.API.get('/api/perfil');
+  assert.strictEqual(depois.perfil.padroes.garantia, '12 meses', 'os padrões foram salvos');
+  assert.strictEqual(depois.perfil.declaracoes.length, 1, 'e as declarações continuam guardadas');
+
+  // 5) a mesma lista aparece em Minha empresa (um cadastro só)
+  assert.strictEqual(
+    window.document.querySelectorAll('#lista-modelos-declaracao .declaracao').length, 1,
+    'Minha empresa mostra a mesma declaração'
+  );
+
+  // 6) e o documento oferece esse modelo na aba Declarações
+  window.location.hash = '#/documento/novo/proposta';
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  const aba = Array.from(window.document.querySelectorAll('#abas-editor .aba'))
+    .find((b) => b.dataset.abaEditor === 'declaracoes');
+  aba.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  $('#declaracoes-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal abre no documento', 8000);
+  const noDocumento = Array.from($('#declaracao-modelo').options).map((o) => o.textContent);
+  assert.ok(
+    noDocumento.some((o) => o.includes('Declaração ME / EPP / MEI') && o.includes('meu modelo')),
+    'o modelo guardado é oferecido primeiro: ' + noDocumento.join(' | ')
+  );
+  window.UI.fecharModal();
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);

@@ -321,7 +321,7 @@
 
   // -------------------------------------------------------------- rotas
 
-  const VISTAS = ['painel', 'documentos', 'editor', 'importar', 'empresa'];
+  const VISTAS = ['painel', 'documentos', 'declaracoes', 'editor', 'importar', 'empresa'];
 
   function mostrarVista(nome) {
     VISTAS.forEach((v) => $('#view-' + v).classList.toggle('oculto', v !== nome));
@@ -384,6 +384,12 @@
       mostrarVista('documentos');
       marcarNavegacao('documentos');
       carregarDocumentos().then(desenharListaDocumentos);
+      return;
+    }
+    if (primeira === 'declaracoes') {
+      mostrarVista('declaracoes');
+      marcarNavegacao('declaracoes');
+      desenharModelosDeclaracao();
       return;
     }
 
@@ -924,49 +930,112 @@
 
   // ------------------------------------------- modelos de declaração
 
+  /** Onde a lista das declarações guardadas aparece (seção Declarações e Minha empresa). */
+  function listasDeDeclaracoes() {
+    return UI.$$('[data-lista-modelos]');
+  }
+
+  /** A lista que está à vista agora: é dela que se lê o que foi digitado. */
+  function listaDeclaracoesVisivel() {
+    return listasDeDeclaracoes().find((lista) => !lista.closest('.oculto')) || null;
+  }
+
   /** Lista dos modelos guardados (o texto é reaproveitado nos documentos). */
   function desenharModelosDeclaracao() {
-    const lista = $('#lista-modelos-declaracao');
-    if (!lista) return;
+    const listas = listasDeDeclaracoes();
+    if (!listas.length) return;
     const modelos = estado.modelosDeclaracao || [];
-    if (!modelos.length) {
-      lista.innerHTML = '<p class="texto-suave">Nenhum modelo guardado ainda. ' +
-        'Você também pode escolher um modelo sugerido (Declaração Unificada, ME/EPP/MEI) na aba ' +
-        '<strong>Declarações</strong> de qualquer documento.</p>';
-      return;
+
+    const contagem = $('#declaracoes-contagem');
+    if (contagem) {
+      contagem.textContent = modelos.length
+        ? modelos.length + (modelos.length === 1 ? ' declaração guardada' : ' declarações guardadas')
+        : 'Nenhuma declaração guardada';
     }
-    lista.innerHTML = modelos.map((modelo, indice) => `
+
+    const html = modelos.length
+      ? modelos.map((modelo, indice) => `
       <div class="declaracao">
         <div class="declaracao-cabecalho">
           <input type="text" data-modelo-titulo="${indice}" value="${UI.escaparHtml(modelo.titulo || '')}"
             placeholder="Título (ex.: Declaração ME / EPP / MEI)" />
           <div class="item-acoes">
-            <button class="botao botao-fantasma" data-modelo-remover="${indice}" type="button" title="Remover modelo">🗑</button>
+            <button class="botao botao-fantasma" data-modelo-remover="${indice}" type="button" title="Remover declaração">🗑</button>
           </div>
         </div>
         <textarea data-modelo-texto="${indice}" placeholder="Texto da declaração">${UI.escaparHtml(modelo.texto || '')}</textarea>
       </div>
-    `).join('');
+    `).join('')
+      : '<p class="texto-suave">Nenhuma declaração guardada ainda. Clique em ' +
+        '<strong>+ Nova declaração</strong> para começar de um modelo (Declaração Unificada, ' +
+        'ME / EPP / MEI, não emprego de menor) ou escrever do zero.</p>';
 
-    UI.$$('[data-modelo-remover]', lista).forEach((botao) => {
-      botao.addEventListener('click', () => {
-        coletarModelosDeclaracao();
-        estado.modelosDeclaracao.splice(Number(botao.dataset.modeloRemover), 1);
-        desenharModelosDeclaracao();
-      });
-    });
+    listas.forEach((lista) => { lista.innerHTML = html; });
   }
 
   /** Lê o que está na tela para a lista em memória. */
-  function coletarModelosDeclaracao() {
-    const lista = estado.modelosDeclaracao || [];
-    UI.$$('[data-modelo-titulo]', $('#lista-modelos-declaracao')).forEach((campo) => {
+  function coletarModelosDeclaracao(onde) {
+    const lista = onde || listaDeclaracoesVisivel();
+    if (!lista) return;
+    const modelos = estado.modelosDeclaracao || [];
+    UI.$$('[data-modelo-titulo]', lista).forEach((campo) => {
       const indice = Number(campo.dataset.modeloTitulo);
-      if (lista[indice]) lista[indice].titulo = campo.value;
+      if (modelos[indice]) modelos[indice].titulo = campo.value;
     });
-    UI.$$('[data-modelo-texto]', $('#lista-modelos-declaracao')).forEach((campo) => {
+    UI.$$('[data-modelo-texto]', lista).forEach((campo) => {
       const indice = Number(campo.dataset.modeloTexto);
-      if (lista[indice]) lista[indice].texto = campo.value;
+      if (modelos[indice]) modelos[indice].texto = campo.value;
+    });
+  }
+
+  /** Abre o escolhedor de modelos: os do usuário, os sugeridos e "começar em branco". */
+  async function escolherModeloDeclaracao(aoEscolher) {
+    if (!estado.modelosDeclaracao) await recarregarPerfil();
+    const meus = (estado.modelosDeclaracao || []).map((m) => Object.assign({}, m, { meu: true }));
+    const nomes = meus.map((m) => String(m.titulo || '').toLowerCase());
+    const sugeridos = window.Declaracoes.MODELOS
+      .filter((m) => nomes.indexOf(m.titulo.toLowerCase()) < 0)
+      .map((m) => Object.assign({}, m, { meu: false }));
+    const modelos = meus.concat(sugeridos);
+
+    UI.abrirModal({
+      titulo: 'Adicionar declaração',
+      corpo: `
+        <p class="texto-suave">Escolha um modelo para começar. O texto é editável: mudar aqui não
+        altera o modelo guardado.</p>
+        <label class="campo campo-largo">Declaração
+          <select id="declaracao-modelo">
+            ${modelos.map((m, i) => `<option value="${i}">${UI.escaparHtml(m.titulo)}${m.meu ? ' (meu modelo)' : (m.descricao ? ' — ' + UI.escaparHtml(m.descricao) : '')}</option>`).join('')}
+            <option value="branco">— Começar em branco —</option>
+          </select>
+        </label>
+      `,
+      botoes: [
+        { texto: 'Cancelar', classe: 'botao-fantasma', acao: () => UI.fecharModal() },
+        {
+          texto: 'Adicionar',
+          classe: 'botao-primario',
+          acao: () => {
+            const escolhido = $('#declaracao-modelo').value;
+            const nova = escolhido === 'branco'
+              ? window.Declaracoes.emBranco()
+              : window.Declaracoes.doModelo(modelos[Number(escolhido)]);
+            UI.fecharModal();
+            aoEscolher(nova);
+          },
+        },
+      ],
+    });
+  }
+
+  /** "+ Nova declaração": escolhe um modelo (ou em branco) e guarda na lista de trabalho. */
+  async function adicionarModeloDeclaracao() {
+    await escolherModeloDeclaracao((nova) => {
+      estado.modelosDeclaracao = (estado.modelosDeclaracao || []).concat([
+        { titulo: nova.titulo, texto: nova.texto },
+      ]);
+      desenharModelosDeclaracao();
+      UI.toast('Declaração adicionada. Edite o texto e salve.', 'sucesso', 6000);
     });
   }
 
@@ -1634,13 +1703,27 @@
   }
 
   function ligarEmpresa() {
-    $('#modelo-declaracao-adicionar').addEventListener('click', () => {
-      coletarModelosDeclaracao();
-      estado.modelosDeclaracao = (estado.modelosDeclaracao || []).concat([{ titulo: '', texto: '' }]);
-      desenharModelosDeclaracao();
+    // declarações: a mesma lista aparece na seção Declarações e em Minha empresa
+    listasDeDeclaracoes().forEach((lista) => {
+      lista.addEventListener('input', () => coletarModelosDeclaracao(lista));
+      lista.addEventListener('click', (evento) => {
+        const botao = evento.target.closest('[data-modelo-remover]');
+        if (!botao) return;
+        coletarModelosDeclaracao(lista);
+        (estado.modelosDeclaracao || []).splice(Number(botao.dataset.modeloRemover), 1);
+        desenharModelosDeclaracao();
+      });
     });
-    $('#modelos-declaracao-salvar').addEventListener('click', salvarModelosDeclaracao);
-    $('#lista-modelos-declaracao').addEventListener('input', () => coletarModelosDeclaracao());
+    UI.$$('[data-acao-modelos="nova"]').forEach((botao) => {
+      botao.addEventListener('click', adicionarModeloDeclaracao);
+    });
+    UI.$$('[data-acao-modelos="salvar"]').forEach((botao) => {
+      botao.addEventListener('click', salvarModelosDeclaracao);
+    });
+    ['#painel-declaracoes', '#docs-declaracoes'].forEach((sel) => {
+      const botao = $(sel);
+      if (botao) botao.addEventListener('click', () => { window.location.hash = '#/declaracoes'; });
+    });
 
     $('#emp-salvar').addEventListener('click', async () => {
       const empresa = Object.assign({}, estado.empresa);
@@ -1795,6 +1878,10 @@
     },
     estado,
     estadoDocumentos: () => estado.documentos,
+    // o editor usa o mesmo escolhedor de modelos da seção Declarações
+    escolherModeloDeclaracao,
+    adicionarModeloDeclaracao,
+    listasDeDeclaracoes,
     // o editor chama isto depois de salvar modelos novos na aba Declarações
     recarregarModelosDeclaracao: async () => {
       await recarregarPerfil();

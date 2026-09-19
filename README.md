@@ -122,8 +122,14 @@ Desenvolvimento com recarga automática: `npm run dev`.
    Com ela oculta o PDF nem é gerado; ao mostrar, ele é gerado na hora. A escolha fica
    guardada neste navegador (`licitapro.previa.v1`).
 
-4b. **Declarações** — a aba *Declarações* do editor monta as declarações que acompanham o
-   documento. **+ Adicionar declaração** abre a lista de modelos: os **seus modelos** (guardados
+4b. **Declarações** — a seção **Declarações** fica no painel, junto dos botões *+ Novo orçamento*
+   e *+ Nova proposta* (e também no menu, na lista de documentos e em *Minha empresa → Modelos de
+   declaração*). É lá que o texto é criado uma vez e guardado para todos os documentos:
+   **+ Nova declaração** abre os modelos — **Declaração Unificada**, **Declaração ME / EPP / MEI**,
+   **Declaração de não emprego de menor** — ou *Começar em branco*; o texto é editável na própria
+   lista e **Salvar declarações** grava (o mesmo cadastro aparece em *Minha empresa*).
+
+   No editor, a aba *Declarações* monta as declarações que acompanham aquele documento. **+ Adicionar declaração** abre a lista de modelos: os **seus modelos** (guardados
    em *Minha empresa → Modelos de declaração*) e os sugeridos pelo sistema —
    **Declaração Unificada**, **Declaração ME / EPP / MEI** e **Declaração de não emprego de menor** —
    além de *Começar em branco*. O texto entra no documento e pode ser editado ali mesmo, sem
@@ -131,6 +137,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    vira modelo para os próximos).
 
    Cada declaração tem **No PDF** (só as marcadas saem), **↑ ↓** para ordenar e **🗑** para remover.
+   Os modelos guardados na seção Declarações aparecem primeiro na lista (marcados como *meu modelo*).
    No PDF elas saem em folha própria (opção *Começar as declarações em nova página*, em *Layout*),
    cada uma com local, data e linha de assinatura — prontas para imprimir e assinar.
 
@@ -141,8 +148,8 @@ Desenvolvimento com recarga automática: `npm run dev`.
    `{ANO}` e `{DATA}`. A troca acontece na hora de gerar o PDF; quando algum campo usado no
    texto ainda está vazio, a aba avisa qual é — e o marcador (`{ORGAO}`) nunca aparece no papel.
 
-   Endpoints: `PUT /api/perfil/declaracoes` (modelos do usuário) e o campo `declaracoes` do
-   documento. **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
+   Endpoints: `PUT /api/perfil/declaracoes` (os modelos guardados, na seção Declarações e em Minha
+   empresa) e o campo `declaracoes` do documento (o que sai naquele PDF). **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
 
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.

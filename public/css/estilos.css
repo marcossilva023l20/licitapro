@@ -1101,6 +1101,8 @@ input[type="search"] { padding-left: 12px; }
 }
 .declaracao-aviso { font-size: 0.78rem; color: var(--dourado-300); margin-top: 6px; }
 .titulo-bloco { margin: 22px 0 6px; font-size: 1rem; }
+.lista-declaracoes:empty { display: none; }
+#declaracoes-contagem { white-space: nowrap; }
 
 /* caixa de seleção de cada item (só no modo seleção) */
 .item-marcador { display: flex; align-items: center; padding: 0 2px; }

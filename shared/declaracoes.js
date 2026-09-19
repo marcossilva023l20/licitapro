@@ -24,11 +24,15 @@
   const LIMITE_TITULO = 120;
   const LIMITE_TEXTO = 6000;
 
-  /** Modelos sugeridos. Todos podem ser editados, copiados ou apagados. */
+  /**
+   * Modelos sugeridos. Todos podem ser editados, copiados ou apagados.
+   * `descricao` é só ajuda na tela: não vai para o texto nem para o PDF.
+   */
   const MODELOS = [
     {
       id: 'unificada',
       titulo: 'Declaração Unificada',
+      descricao: 'as declarações do edital em um só texto (habilitação, idoneidade, veracidade)',
       texto: [
         '{RAZAO}, inscrita no CNPJ sob o nº {CNPJ}, com sede em {CIDADE}/{UF}, neste ato',
         'representada por {REPRESENTANTE}, {CARGO}, DECLARA, sob as penas da lei, para os fins',
@@ -46,6 +50,7 @@
     {
       id: 'me-epp-mei',
       titulo: 'Declaração ME / EPP / MEI',
+      descricao: 'enquadramento no Simples Nacional (LC 123/2006) — ajuste ME, EPP ou MEI',
       texto: [
         '{RAZAO}, inscrita no CNPJ sob o nº {CNPJ}, DECLARA, sob as penas da lei, para os fins',
         'do disposto na Lei Complementar nº 123/2006, que se enquadra na condição de',
@@ -53,13 +58,12 @@
         '(MEI), estando apta a usufruir dos benefícios previstos na referida lei complementar,',
         'e que não se encontra em nenhuma das situações de exclusão do § 4º do art. 3º da',
         'mesma lei.',
-        '',
-        '(Ajuste a condição que se aplica à empresa: ME, EPP ou MEI.)',
       ].join('\n'),
     },
     {
       id: 'nao-emprega-menor',
       titulo: 'Declaração de não emprego de menor',
+      descricao: 'art. 7º, XXXIII, da Constituição (não emprego de menor de idade)',
       texto: [
         '{RAZAO}, inscrita no CNPJ sob o nº {CNPJ}, DECLARA, sob as penas da lei, que não',
         'emprega menor de 18 anos em trabalho noturno, perigoso ou insalubre, nem menor de 16',

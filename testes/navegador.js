@@ -91,6 +91,9 @@ function verificarIds(html) {
     'importar-avisos', 'importar-tabela', 'importacao-todos', 'importacao-selecionados',
     // criados no modal de declarações
     'declaracao-modelo',
+    // seção Declarações (painel) e os botões que levam até ela
+    'declaracoes-lista', 'declaracoes-nova', 'declaracoes-salvar', 'declaracoes-contagem',
+    'painel-declaracoes', 'docs-declaracoes',
   ]);
   const faltando = [];
   ['js/app.js', 'js/editar.js', 'js/ui.js'].forEach((relativo) => {

@@ -978,7 +978,7 @@
 
   // -------------------------------------------------------- declarações
 
-  /** Modelos do usuário (perfil) + os sugeridos pelo sistema. */
+  /** Modelos do usuário (perfil). */
   async function carregarModelosDeclaracao(forcar) {
     if (estado.modelosDeclaracao && !forcar) return estado.modelosDeclaracao;
     let meus = [];
@@ -990,16 +990,6 @@
     }
     estado.modelosDeclaracao = meus;
     return meus;
-  }
-
-  /** Lista de modelos para o modal: os do usuário primeiro, depois os sugeridos. */
-  function modelosParaEscolher() {
-    const meus = (estado.modelosDeclaracao || []).map((m) => Object.assign({}, m, { meu: true }));
-    const nomes = meus.map((m) => m.titulo.toLowerCase());
-    const sugeridos = window.Declaracoes.MODELOS
-      .filter((m) => nomes.indexOf(m.titulo.toLowerCase()) < 0)
-      .map((m) => Object.assign({}, m, { meu: false }));
-    return meus.concat(sugeridos);
   }
 
   function desenharDeclaracoes() {
@@ -1080,37 +1070,12 @@
   }
 
   function desenharSelecaoDeModelos() {
-    const modelos = modelosParaEscolher();
-    const opcoes = modelos
-      .map((m, indice) => `<option value="${indice}">${UI.escaparHtml(m.titulo || 'Sem título')}${m.meu ? ' (meu modelo)' : ''}</option>`)
-      .join('');
-    UI.abrirModal({
-      titulo: 'Adicionar declaração',
-      corpo: `
-        <p class="texto-suave">Escolha um modelo para começar. O texto entra no documento e pode ser editado
-        aqui sem alterar o modelo guardado.</p>
-        <label class="campo campo-largo">Declaração
-          <select id="declaracao-modelo">${opcoes}<option value="branco">— Começar em branco —</option></select>
-        </label>
-      `,
-      botoes: [
-        { texto: 'Cancelar', classe: 'botao-fantasma', acao: () => UI.fecharModal() },
-        {
-          texto: 'Adicionar',
-          classe: 'botao-primario',
-          acao: () => {
-            const escolhido = $('#declaracao-modelo').value;
-            const nova = escolhido === 'branco'
-              ? window.Declaracoes.emBranco()
-              : window.Declaracoes.doModelo(modelos[Number(escolhido)]);
-            declaracoesDoDocumento().push(nova);
-            UI.fecharModal();
-            desenharDeclaracoes();
-            marcarSujo();
-            UI.toast('Declaração adicionada. Revise o texto e marque para sair no PDF.', 'sucesso', 6000);
-          },
-        },
-      ],
+    // mesma lista da seção "Declarações" do painel: os modelos do usuário e os sugeridos
+    window.App.escolherModeloDeclaracao((nova) => {
+      declaracoesDoDocumento().push(nova);
+      desenharDeclaracoes();
+      marcarSujo();
+      UI.toast('Declaração adicionada. Revise o texto e marque para sair no PDF.', 'sucesso', 6000);
     });
   }
 
@@ -1191,10 +1156,7 @@
   }
 
   function ligarDeclaracoes() {
-    $('#declaracoes-adicionar').addEventListener('click', async () => {
-      await carregarModelosDeclaracao();
-      desenharSelecaoDeModelos();
-    });
+    $('#declaracoes-adicionar').addEventListener('click', () => desenharSelecaoDeModelos());
     $('#declaracoes-modelos').addEventListener('click', () => abrirMeusModelos());
 
     const lista = $('#lista-declaracoes');

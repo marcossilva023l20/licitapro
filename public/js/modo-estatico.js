@@ -150,11 +150,26 @@
     });
     estado.banco.sequencia = Object.assign({}, estado.banco.sequencia, sequencia);
 
-    // se esta aba ainda está com a empresa em branco, fica com a que já estava salva
-    const empresa = (estado.banco.perfil && estado.banco.perfil.empresa) || {};
-    const vazia = !empresa.razaoSocial && !empresa.cnpj && !empresa.nomeFantasia;
-    if (vazia && outro.perfil && outro.perfil.empresa) {
-      estado.banco.perfil = Object.assign({}, estado.banco.perfil, outro.perfil);
+    // Se esta aba ainda está com a empresa em branco, ela fica com a que já
+    // estava salva. O resto do perfil (padrões, declarações) é o desta aba: antes
+    // esta troca levava o perfil inteiro do armazenamento e, com a empresa em
+    // branco, apagava o que acabou de ser salvo aqui.
+    const meu = estado.banco.perfil || {};
+    const minhaEmpresa = meu.empresa || {};
+    const vazia = !minhaEmpresa.razaoSocial && !minhaEmpresa.cnpj && !minhaEmpresa.nomeFantasia;
+    if (vazia && outro.perfil) {
+      const empresa = Object.assign({}, outro.perfil.empresa || {});
+      Object.keys(minhaEmpresa).forEach((chave) => {
+        if (minhaEmpresa[chave]) empresa[chave] = minhaEmpresa[chave];
+      });
+      const padroes = Object.assign({}, outro.perfil.padroes || {});
+      Object.keys(meu.padroes || {}).forEach((chave) => {
+        if (meu.padroes[chave]) padroes[chave] = meu.padroes[chave];
+      });
+      const declaracoes = (meu.declaracoes && meu.declaracoes.length)
+        ? meu.declaracoes
+        : (outro.perfil.declaracoes || []);
+      estado.banco.perfil = Object.assign({}, meu, { empresa, padroes, declaracoes });
     }
   }
 
@@ -321,7 +336,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '37';
+  const VERSAO_ARQUIVOS = '38';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
