@@ -2062,6 +2062,64 @@ teste('Declarações: a seção fica no painel, junto de novo orçamento e nova 
   window.close();
 });
 
+teste('Nuvem: as declarações dos dois computadores se somam (ninguém perde o que escreveu)', () => {
+  // reaproveita o módulo da nuvem num navegador de mentira
+  const fs = require('fs');
+  const caminho = path.join(RAIZ, 'public', 'js', 'nuvem.js');
+  assert.ok(fs.existsSync(caminho), 'o módulo da nuvem existe');
+
+  const aberto = (() => {
+    const vm = require('vm');
+    const janela = {};
+    janela.window = janela;
+    janela.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    janela.console = console;
+    janela.fetch = () => Promise.reject(new Error('sem rede'));
+    janela.addEventListener = () => {};
+    janela.removeEventListener = () => {};
+    janela.document = { addEventListener: () => {}, removeEventListener: () => {}, querySelector: () => null };
+    janela.navigator = { onLine: false, userAgent: 'teste' };
+    janela.setTimeout = setTimeout;
+    janela.clearTimeout = clearTimeout;
+    vm.createContext(janela);
+    vm.runInContext(fs.readFileSync(caminho, 'utf8'), janela);
+    return janela;
+  })();
+
+  const daqui = {
+    perfil: {
+      empresa: { razaoSocial: 'DEJ SOLUTIONS', atualizadoEm: '2026-09-19T10:00:00.000Z' },
+      declaracoes: [{ titulo: 'Declaração Unificada', texto: 'versão daqui' }],
+    },
+    documentos: [],
+    sequencia: {},
+  };
+  const deLa = {
+    perfil: {
+      empresa: { razaoSocial: 'DEJ SOLUTIONS', atualizadoEm: '2026-09-19T10:00:00.000Z' },
+      declaracoes: [
+        { titulo: 'Declaração Unificada', texto: 'versão de lá' },
+        { titulo: 'Declaração ME / EPP / MEI', texto: 'texto de lá' },
+      ],
+    },
+    documentos: [],
+    sequencia: {},
+  };
+
+  const junto = aberto.Nuvem.juntar(daqui, deLa);
+  const titulos = junto.perfil.declaracoes.map((d) => d.titulo);
+  assert.deepStrictEqual(
+    titulos,
+    ['Declaração Unificada', 'Declaração ME / EPP / MEI'],
+    'as duas listas se somam: ' + titulos.join(' | ')
+  );
+  assert.strictEqual(junto.perfil.declaracoes[0].texto, 'versão daqui', 'o mesmo título fica com a versão desta máquina');
+
+  // e o caminho contrário (esta máquina com a lista vazia) não apaga nada
+  const vazio = aberto.Nuvem.juntar({ perfil: { empresa: {}, declaracoes: [] }, documentos: [], sequencia: {} }, deLa);
+  assert.strictEqual(vazio.perfil.declaracoes.length, 2, 'a lista de lá continua inteira');
+});
+
 teste('Interface: JavaScript e HTML estão consistentes', () => {
   const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
   const faltando = Navegador.verificarIds(html);
@@ -2676,6 +2734,9 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
       'o computador 2 recebeu o cadastro: ' + JSON.stringify($2('#emp-razao').value),
       15000
     );
+    // a edição precisa ser de um instante depois da primeira: com os dois
+    // salvamentos no mesmo milissegundo não há 'último' para comparar
+    await new Promise((r) => setTimeout(r, 30));
     $2('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL — MATRIZ';
     $2('#emp-salvar').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(

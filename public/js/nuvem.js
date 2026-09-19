@@ -613,6 +613,22 @@
 
   /** Junta dois bancos: documento por documento vale o mais novo; a numeração
    *  fica com o maior número; a empresa vem de quem tiver os dados. */
+  /**
+   * Soma as declarações dos dois lados, por título: as daqui ficam como estão e
+   * as que só existem do outro lado entram no fim. Ninguém perde o que escreveu.
+   */
+  function juntarDeclaracoes(daqui, deLa) {
+    const lista = (Array.isArray(daqui) ? daqui : []).slice();
+    const titulos = lista.map((d) => String((d && d.titulo) || '').trim().toLowerCase());
+    (Array.isArray(deLa) ? deLa : []).forEach((declaracao) => {
+      const titulo = String((declaracao && declaracao.titulo) || '').trim().toLowerCase();
+      if (!titulo || titulos.indexOf(titulo) >= 0) return;
+      lista.push(declaracao);
+      titulos.push(titulo);
+    });
+    return lista;
+  }
+
   function juntar(daqui, deLa) {
     const meu = daqui || { perfil: {}, documentos: [], sequencia: {} };
     const outro = deLa || { perfil: {}, documentos: [], sequencia: {} };
@@ -635,6 +651,14 @@
       sequencia[chave] = anos;
     });
 
+    // Declarações guardadas: a lista dos dois lados é somada (por título), para
+    // que um computador com a lista antiga não apague o que o outro escreveu —
+    // sem isso, trocar o perfil inteiro levava junto as declarações do outro.
+    const declaracoes = juntarDeclaracoes(
+      (meu.perfil && meu.perfil.declaracoes) || [],
+      (outro.perfil && outro.perfil.declaracoes) || []
+    );
+
     const empresaDaqui = (meu.perfil && meu.perfil.empresa) || {};
     const empresaDeLa = (outro.perfil && outro.perfil.empresa) || {};
     const temCadastro = (empresa) =>
@@ -652,6 +676,8 @@
     } else {
       perfil = Object.assign({}, meu.perfil, outro.perfil || {});
     }
+
+    perfil = Object.assign({}, perfil, { declaracoes });
 
     return { versao: 2, perfil, documentos: Array.from(porId.values()), sequencia };
   }
@@ -869,6 +895,7 @@
     agendarEnvio,
     baixarImagem,
     juntar,
+    juntarDeclaracoes,
     linkParaOutroComputador,
     configDoEndereco,
     _interno: estado,
