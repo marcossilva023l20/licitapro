@@ -97,6 +97,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
    | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
+   | Declarações | as declarações que acompanham o documento (Declaração Unificada, ME/EPP/MEI, textos próprios), com marcação de quais saem no PDF |
 
    O resumo de valores mostra **Lucro estimado** em reais **e em porcentagem**
    (`R$ 340,00 · 22,8% do total`); passando o mouse, aparece também a leitura sobre o custo
@@ -120,6 +121,28 @@ Desenvolvimento com recarga automática: `npm run dev`.
    quando quiser mais espaço para o formulário (fica marcado enquanto a prévia está à vista).
    Com ela oculta o PDF nem é gerado; ao mostrar, ele é gerado na hora. A escolha fica
    guardada neste navegador (`licitapro.previa.v1`).
+
+4b. **Declarações** — a aba *Declarações* do editor monta as declarações que acompanham o
+   documento. **+ Adicionar declaração** abre a lista de modelos: os **seus modelos** (guardados
+   em *Minha empresa → Modelos de declaração*) e os sugeridos pelo sistema —
+   **Declaração Unificada**, **Declaração ME / EPP / MEI** e **Declaração de não emprego de menor** —
+   além de *Começar em branco*. O texto entra no documento e pode ser editado ali mesmo, sem
+   mexer no modelo guardado; **Guardar como modelo** faz o caminho de volta (o texto do documento
+   vira modelo para os próximos).
+
+   Cada declaração tem **No PDF** (só as marcadas saem), **↑ ↓** para ordenar e **🗑** para remover.
+   No PDF elas saem em folha própria (opção *Começar as declarações em nova página*, em *Layout*),
+   cada uma com local, data e linha de assinatura — prontas para imprimir e assinar.
+
+   O texto pode usar os dados que já estão no sistema, escrevendo o campo entre chaves:
+   `{RAZAO}`, `{FANTASIA}`, `{CNPJ}`, `{IE}`, `{ENDERECO}`, `{CIDADE}`, `{UF}`, `{CEP}`,
+   `{TELEFONE}`, `{EMAIL}`, `{REPRESENTANTE}`, `{CARGO}`, `{CPF_REPRESENTANTE}`, `{ORGAO}`,
+   `{UASG}`, `{MODALIDADE}`, `{EDITAL}`, `{PROCESSO}`, `{OBJETO}`, `{CLIENTE}`, `{NUMERO}`,
+   `{ANO}` e `{DATA}`. A troca acontece na hora de gerar o PDF; quando algum campo usado no
+   texto ainda está vazio, a aba avisa qual é — e o marcador (`{ORGAO}`) nunca aparece no papel.
+
+   Endpoints: `PUT /api/perfil/declaracoes` (modelos do usuário) e o campo `declaracoes` do
+   documento. **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
 
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.

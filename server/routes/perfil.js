@@ -7,6 +7,7 @@
 
 const express = require('express');
 const { perfil: Perfil, empresaPadrao, padroesPadrao } = require('../store');
+const Declaracoes = require('../../shared/declaracoes');
 
 const rotas = express.Router();
 
@@ -17,7 +18,12 @@ const CAMPOS_TEXTO_EMPRESA = [
 ];
 
 function publico(registro) {
-  return { empresa: registro.empresa, padroes: registro.padroes };
+  return {
+    empresa: registro.empresa,
+    padroes: registro.padroes,
+    // modelos de declaração do usuário (o texto é dele)
+    declaracoes: Declaracoes.normalizar(registro.declaracoes),
+  };
 }
 
 rotas.get('/', (req, res) => {
@@ -47,6 +53,17 @@ rotas.put('/padroes', (req, res) => {
   if (enviado.validadeDias !== undefined) padroes.validadeDias = Number(enviado.validadeDias) || 0;
   const atualizado = Perfil.atualizar({ padroes });
   res.json({ padroes: atualizado.padroes });
+});
+
+/**
+ * Modelos de declaração do usuário. A tela manda a lista inteira (é pequena) e
+ * o servidor guarda na ordem recebida.
+ */
+rotas.put('/declaracoes', (req, res) => {
+  const enviado = req.body || {};
+  const lista = Declaracoes.normalizar(enviado.declaracoes);
+  const atualizado = Perfil.atualizar({ declaracoes: lista });
+  res.json({ declaracoes: Declaracoes.normalizar(atualizado.declaracoes) });
 });
 
 module.exports = rotas;

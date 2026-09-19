@@ -1079,6 +1079,29 @@ input[type="search"] { padding-left: 12px; }
 .doc-item:has(.doc-marcador) { grid-template-columns: 26px 118px minmax(0, 1fr) auto; }
 .doc-item.marcado { border-color: var(--dourado-500); box-shadow: 0 0 0 1px rgba(198, 161, 91, 0.45); }
 
+/* declarações do documento (aba "Declarações" e modelos da empresa) */
+.lista-declaracoes { display: grid; gap: 12px; margin: 12px 0; }
+.declaracao {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  padding: 12px 14px;
+}
+.declaracao-cabecalho { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.declaracao-cabecalho input[type="text"] { flex: 1 1 240px; }
+.declaracao .item-acoes { margin-left: auto; }
+.declaracao.fora-do-pdf textarea,
+.declaracao.fora-do-pdf input[type="text"] { opacity: 0.6; }
+.declaracao textarea {
+  width: 100%;
+  min-height: 130px;
+  line-height: 1.45;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.declaracao-aviso { font-size: 0.78rem; color: var(--dourado-300); margin-top: 6px; }
+.titulo-bloco { margin: 22px 0 6px; font-size: 1rem; }
+
 /* caixa de seleção de cada item (só no modo seleção) */
 .item-marcador { display: flex; align-items: center; padding: 0 2px; }
 .item-marcador input { width: 18px; height: 18px; accent-color: var(--dourado-500); cursor: pointer; }

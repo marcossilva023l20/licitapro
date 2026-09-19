@@ -89,6 +89,8 @@ function verificarIds(html) {
   const criadosEmTempoDeExecucao = new Set([
     'importar-area', 'importar-arquivo', 'importar-resultado', 'importar-titulo',
     'importar-avisos', 'importar-tabela', 'importacao-todos', 'importacao-selecionados',
+    // criados no modal de declarações
+    'declaracao-modelo',
   ]);
   const faltando = [];
   ['js/app.js', 'js/editar.js', 'js/ui.js'].forEach((relativo) => {

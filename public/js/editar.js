@@ -17,6 +17,8 @@
     previaAberta: true,
     // modo "selecionar itens": marcar vários para apagar ou mover de uma vez
     selecao: { ativa: false, marcados: [] },
+    // modelos de declaração do usuário (carregados do perfil quando precisa)
+    modelosDeclaracao: null,
     avisosImportacao: [],
     itensImportados: null,
   };
@@ -211,6 +213,7 @@
     { sel: '#op-extenso', alvo: 'opcoes.mostrarPorExtenso', tipo: 'check' },
     { sel: '#op-assinatura', alvo: 'opcoes.mostrarAssinatura', tipo: 'check' },
     { sel: '#op-quebra', alvo: 'opcoes.quebrarPaginaCatalogo', tipo: 'check' },
+    { sel: '#op-declaracoes-pagina', alvo: 'opcoes.declaracoesNovaPagina', tipo: 'check' },
     { sel: '#op-logo', alvo: 'opcoes.logoNoCabecalho', tipo: 'check' },
     { sel: '#op-marcadagua', alvo: 'opcoes.marcaDagua', tipo: 'check' },
     { sel: '#op-link-compra', alvo: 'opcoes.mostrarLinkCompra', tipo: 'check' },
@@ -334,6 +337,7 @@
     });
     atualizarVisibilidadeTipo();
     atualizarVisibilidadeDesconto();
+    desenharDeclaracoes();
     desenharItens();
     desenharImagens();
     atualizarCabecalho();
@@ -972,6 +976,296 @@
     marcarSujo();
   }
 
+  // -------------------------------------------------------- declarações
+
+  /** Modelos do usuário (perfil) + os sugeridos pelo sistema. */
+  async function carregarModelosDeclaracao(forcar) {
+    if (estado.modelosDeclaracao && !forcar) return estado.modelosDeclaracao;
+    let meus = [];
+    try {
+      const resposta = await window.API.get('/api/perfil');
+      meus = (resposta.perfil && resposta.perfil.declaracoes) || [];
+    } catch (_) {
+      meus = [];
+    }
+    estado.modelosDeclaracao = meus;
+    return meus;
+  }
+
+  /** Lista de modelos para o modal: os do usuário primeiro, depois os sugeridos. */
+  function modelosParaEscolher() {
+    const meus = (estado.modelosDeclaracao || []).map((m) => Object.assign({}, m, { meu: true }));
+    const nomes = meus.map((m) => m.titulo.toLowerCase());
+    const sugeridos = window.Declaracoes.MODELOS
+      .filter((m) => nomes.indexOf(m.titulo.toLowerCase()) < 0)
+      .map((m) => Object.assign({}, m, { meu: false }));
+    return meus.concat(sugeridos);
+  }
+
+  function desenharDeclaracoes() {
+    const lista = $('#lista-declaracoes');
+    if (!lista) return;
+    const declaracoes = (estado.doc && estado.doc.declaracoes) || [];
+    const vazio = $('#declaracoes-vazio');
+    if (vazio) vazio.classList.toggle('oculto', declaracoes.length > 0);
+    lista.innerHTML = '';
+
+    declaracoes.forEach((declaracao, indice) => {
+      const bloco = document.createElement('div');
+      bloco.className = 'declaracao' + (declaracao.incluir === false ? ' fora-do-pdf' : '');
+      bloco.dataset.indice = indice;
+
+      const cabecalho = document.createElement('div');
+      cabecalho.className = 'declaracao-cabecalho';
+
+      const marca = document.createElement('label');
+      marca.className = 'checkbox-linha';
+      marca.title = 'Incluir esta declaração no PDF';
+      const caixa = document.createElement('input');
+      caixa.type = 'checkbox';
+      caixa.checked = declaracao.incluir !== false;
+      caixa.dataset.campoDeclaracao = 'incluir';
+      marca.append(caixa, Object.assign(document.createElement('span'), { textContent: 'No PDF' }));
+
+      const titulo = document.createElement('input');
+      titulo.type = 'text';
+      titulo.placeholder = 'Título da declaração (ex.: Declaração Unificada)';
+      titulo.value = declaracao.titulo || '';
+      titulo.dataset.campoDeclaracao = 'titulo';
+
+      const acoes = document.createElement('div');
+      acoes.className = 'item-acoes';
+      [
+        { acao: 'subir', texto: '↑', titulo: 'Mover para cima' },
+        { acao: 'descer', texto: '↓', titulo: 'Mover para baixo' },
+        { acao: 'modelo', texto: 'Guardar como modelo', titulo: 'Guardar este texto nos seus modelos' },
+        { acao: 'remover', texto: '🗑', titulo: 'Remover declaração' },
+      ].forEach((b) => {
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.dataset.acaoDeclaracao = b.acao;
+        botao.title = b.titulo;
+        botao.textContent = b.texto;
+        acoes.appendChild(botao);
+      });
+
+      cabecalho.append(marca, titulo, acoes);
+
+      const texto = document.createElement('textarea');
+      texto.placeholder = 'Texto da declaração. Pode usar {RAZAO}, {CNPJ}, {ORGAO}... que o sistema troca pelos dados do documento.';
+      texto.value = declaracao.texto || '';
+      texto.dataset.campoDeclaracao = 'texto';
+
+      bloco.append(cabecalho, texto);
+
+      // avisa quais campos usados no texto ainda estão vazios no documento
+      const vazios = window.Declaracoes.tokensVazios(declaracao.texto, estado.doc, (estado.doc && estado.doc.proponente) || {});
+      if (vazios.length) {
+        const aviso = document.createElement('p');
+        aviso.className = 'declaracao-aviso';
+        aviso.textContent =
+          'Sem valor no documento: ' + vazios.map((v) => '{' + v + '}').join(', ') +
+          ' — preencha os dados (ou apague o campo do texto) antes de gerar o PDF.';
+        bloco.appendChild(aviso);
+      }
+
+      lista.appendChild(bloco);
+    });
+  }
+
+  function declaracoesDoDocumento() {
+    if (!estado.doc) return [];
+    if (!Array.isArray(estado.doc.declaracoes)) estado.doc.declaracoes = [];
+    return estado.doc.declaracoes;
+  }
+
+  function desenharSelecaoDeModelos() {
+    const modelos = modelosParaEscolher();
+    const opcoes = modelos
+      .map((m, indice) => `<option value="${indice}">${UI.escaparHtml(m.titulo || 'Sem título')}${m.meu ? ' (meu modelo)' : ''}</option>`)
+      .join('');
+    UI.abrirModal({
+      titulo: 'Adicionar declaração',
+      corpo: `
+        <p class="texto-suave">Escolha um modelo para começar. O texto entra no documento e pode ser editado
+        aqui sem alterar o modelo guardado.</p>
+        <label class="campo campo-largo">Declaração
+          <select id="declaracao-modelo">${opcoes}<option value="branco">— Começar em branco —</option></select>
+        </label>
+      `,
+      botoes: [
+        { texto: 'Cancelar', classe: 'botao-fantasma', acao: () => UI.fecharModal() },
+        {
+          texto: 'Adicionar',
+          classe: 'botao-primario',
+          acao: () => {
+            const escolhido = $('#declaracao-modelo').value;
+            const nova = escolhido === 'branco'
+              ? window.Declaracoes.emBranco()
+              : window.Declaracoes.doModelo(modelos[Number(escolhido)]);
+            declaracoesDoDocumento().push(nova);
+            UI.fecharModal();
+            desenharDeclaracoes();
+            marcarSujo();
+            UI.toast('Declaração adicionada. Revise o texto e marque para sair no PDF.', 'sucesso', 6000);
+          },
+        },
+      ],
+    });
+  }
+
+  async function abrirMeusModelos() {
+    await carregarModelosDeclaracao(true);
+    const meus = estado.modelosDeclaracao || [];
+    const sugestoes = window.Declaracoes.MODELOS;
+    UI.abrirModal({
+      titulo: 'Meus modelos de declaração',
+      corpo: `
+        <p class="texto-suave">Estes textos ficam guardados com os dados da empresa e aparecem em
+        todos os documentos.</p>
+        <div id="modelos-modal-lista">
+          ${(meus.length ? meus : []).map((m, i) => `
+            <div class="declaracao">
+              <div class="declaracao-cabecalho">
+                <input type="text" data-modelo-titulo="${i}" value="${UI.escaparHtml(m.titulo || '')}" />
+                <button class="botao botao-fantasma" data-modelo-remover="${i}" type="button">🗑</button>
+              </div>
+              <textarea data-modelo-texto="${i}">${UI.escaparHtml(m.texto || '')}</textarea>
+            </div>
+          `).join('') || '<p class="texto-suave">Nenhum modelo guardado ainda.</p>'}
+        </div>
+        <p class="texto-suave">Modelos sugeridos (podem ser copiados para os seus):
+          ${sugestoes.map((m) => `<button class="botao botao-fantasma" data-modelo-copiar="${m.id}" type="button">+ ${UI.escaparHtml(m.titulo)}</button>`).join(' ')}
+        </p>
+      `,
+      botoes: [
+        { texto: 'Fechar', classe: 'botao-fantasma', acao: () => UI.fecharModal() },
+        { texto: 'Salvar modelos', classe: 'botao-primario', acao: () => salvarMeusModelos() },
+      ],
+    });
+
+    // copiar um modelo sugerido para a lista de trabalho
+    UI.$$('[data-modelo-copiar]', $('#modal')).forEach((botao) => {
+      botao.addEventListener('click', () => {
+        const modelo = sugestoes.find((m) => m.id === botao.dataset.modeloCopiar);
+        if (!modelo) return;
+        coletarModelosDoModal();
+        (estado.modelosDeclaracao = estado.modelosDeclaracao || []).push({ titulo: modelo.titulo, texto: modelo.texto });
+        abrirMeusModelos();
+      });
+    });
+    UI.$$('[data-modelo-remover]', $('#modal')).forEach((botao) => {
+      botao.addEventListener('click', () => {
+        coletarModelosDoModal();
+        (estado.modelosDeclaracao || []).splice(Number(botao.dataset.modeloRemover), 1);
+        abrirMeusModelos();
+      });
+    });
+  }
+
+  /** Lê o que está no modal para a lista em memória (antes de redesenhar/salvar). */
+  function coletarModelosDoModal() {
+    const lista = estado.modelosDeclaracao || [];
+    UI.$$('[data-modelo-titulo]', $('#modal')).forEach((campo) => {
+      const indice = Number(campo.dataset.modeloTitulo);
+      if (lista[indice]) lista[indice].titulo = campo.value;
+    });
+    UI.$$('[data-modelo-texto]', $('#modal')).forEach((campo) => {
+      const indice = Number(campo.dataset.modeloTexto);
+      if (lista[indice]) lista[indice].texto = campo.value;
+    });
+  }
+
+  async function salvarMeusModelos() {
+    coletarModelosDoModal();
+    const lista = (estado.modelosDeclaracao || []).filter((m) => m.titulo || m.texto);
+    try {
+      const resposta = await window.API.put('/api/perfil/declaracoes', { declaracoes: lista });
+      estado.modelosDeclaracao = resposta.declaracoes || [];
+      if (window.App && window.App.recarregarModelosDeclaracao) window.App.recarregarModelosDeclaracao();
+      UI.fecharModal();
+      UI.toast('Modelos de declaração salvos.', 'sucesso');
+    } catch (erro) {
+      UI.toast('Não foi possível salvar os modelos: ' + erro.message, 'erro');
+    }
+  }
+
+  function ligarDeclaracoes() {
+    $('#declaracoes-adicionar').addEventListener('click', async () => {
+      await carregarModelosDeclaracao();
+      desenharSelecaoDeModelos();
+    });
+    $('#declaracoes-modelos').addEventListener('click', () => abrirMeusModelos());
+
+    const lista = $('#lista-declaracoes');
+    lista.addEventListener('input', (evento) => {
+      const campo = evento.target.dataset.campoDeclaracao;
+      if (!campo || campo === 'incluir') return;
+      const indice = Number(evento.target.closest('.declaracao').dataset.indice);
+      const declaracao = declaracoesDoDocumento()[indice];
+      if (!declaracao) return;
+      declaracao[campo] = evento.target.value;
+      marcarSujo();
+    });
+    lista.addEventListener('change', (evento) => {
+      if (evento.target.dataset.campoDeclaracao !== 'incluir') return;
+      const bloco = evento.target.closest('.declaracao');
+      const declaracao = declaracoesDoDocumento()[Number(bloco.dataset.indice)];
+      if (!declaracao) return;
+      declaracao.incluir = evento.target.checked;
+      bloco.classList.toggle('fora-do-pdf', !declaracao.incluir);
+      marcarSujo();
+    });
+    lista.addEventListener('focusout', (evento) => {
+      if (evento.target.dataset.campoDeclaracao === 'texto' || evento.target.dataset.campoDeclaracao === 'titulo') {
+        desenharDeclaracoes();
+      }
+    });
+    lista.addEventListener('click', async (evento) => {
+      const botao = evento.target.closest('[data-acao-declaracao]');
+      if (!botao) return;
+      const bloco = botao.closest('.declaracao');
+      const indice = Number(bloco.dataset.indice);
+      const declaracoes = declaracoesDoDocumento();
+      const acao = botao.dataset.acaoDeclaracao;
+
+      if (acao === 'subir' || acao === 'descer') {
+        const destino = acao === 'subir' ? indice - 1 : indice + 1;
+        if (destino < 0 || destino >= declaracoes.length) {
+          UI.toast(acao === 'subir' ? 'Esta declaração já é a primeira.' : 'Esta declaração já é a última.', 'aviso');
+          return;
+        }
+        const movida = declaracoes[indice];
+        declaracoes.splice(indice, 1);
+        declaracoes.splice(destino, 0, movida);
+        desenharDeclaracoes();
+        marcarSujo();
+        return;
+      }
+      if (acao === 'remover') {
+        const confirma = await UI.confirmar({
+          titulo: 'Remover declaração',
+          texto: 'A declaração sai deste documento (os seus modelos guardados não mudam).',
+          textoConfirmar: 'Remover',
+          perigo: true,
+        });
+        if (!confirma) return;
+        declaracoes.splice(indice, 1);
+        desenharDeclaracoes();
+        marcarSujo();
+        return;
+      }
+      if (acao === 'modelo') {
+        const declaracao = declaracoes[indice];
+        await carregarModelosDeclaracao();
+        estado.modelosDeclaracao = (estado.modelosDeclaracao || []).concat([
+          { titulo: declaracao.titulo || 'Declaração', texto: declaracao.texto || '' },
+        ]);
+        await salvarMeusModelos();
+      }
+    });
+  }
+
   // --------------------------------------------------------- prévia e PDF
 
   function liberarPrevia() {
@@ -1492,6 +1786,9 @@
         marcarSujo();
       });
     });
+
+    // ------------------------------------------------------- declarações
+    ligarDeclaracoes();
 
     // ------------------------------------------------------------ prévia
     $('#previa-atualizar').addEventListener('click', () => atualizarPrevia(false));

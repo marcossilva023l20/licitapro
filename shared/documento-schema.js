@@ -7,11 +7,11 @@
  */
 (function (raiz, fabrica) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = fabrica(require('../shared/format'));
+    module.exports = fabrica(require('../shared/format'), require('../shared/declaracoes'));
   } else {
-    raiz.DocumentoSchema = fabrica(raiz.Formato);
+    raiz.DocumentoSchema = fabrica(raiz.Formato, raiz.Declaracoes);
   }
-})(typeof self !== 'undefined' ? self : this, function (Formato) {
+})(typeof self !== 'undefined' ? self : this, function (Formato, Declaracoes) {
   'use strict';
 
 const TIPOS = ['proposta', 'orcamento'];
@@ -90,6 +90,9 @@ function documentoBase(perfil, tipo, extras) {
       },
       desconto: { modo: 'nenhum', valor: 0 },
       acrescimo: { ativo: false, descricao: 'Frete / Instalação', valor: 0 },
+      // declarações que acompanham o documento (nenhuma vem preenchida: quem
+      // escolhe é o usuário, na aba "Declarações")
+      declaracoes: [],
       opcoes: {
         mostrarCatalogo: true,
         mostrarFotos: true,
@@ -97,6 +100,8 @@ function documentoBase(perfil, tipo, extras) {
         mostrarPorExtenso: true,
         mostrarAssinatura: true,
         quebrarPaginaCatalogo: true,
+        // as declarações saem em folha própria (é como se imprime e assina)
+        declaracoesNovaPagina: true,
         logoNoCabecalho: true,
         marcaDagua: true,
         cor: '#0B1F33',
@@ -205,6 +210,7 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       descricao: texto(acrescimo.descricao, 120) || 'Frete / Instalação',
       valor: numero(acrescimo.valor, 2),
     },
+    declaracoes: Declaracoes.normalizar(p.declaracoes === undefined ? atual.declaracoes : p.declaracoes),
     opcoes: {
       mostrarCatalogo: booleano(opcoes.mostrarCatalogo, true),
       mostrarFotos: booleano(opcoes.mostrarFotos, true),
@@ -212,6 +218,7 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       mostrarPorExtenso: booleano(opcoes.mostrarPorExtenso, true),
       mostrarAssinatura: booleano(opcoes.mostrarAssinatura, true),
       quebrarPaginaCatalogo: booleano(opcoes.quebrarPaginaCatalogo, true),
+      declaracoesNovaPagina: booleano(opcoes.declaracoesNovaPagina, true),
       logoNoCabecalho: booleano(opcoes.logoNoCabecalho, true),
       mostrarLinkCompra: booleano(opcoes.mostrarLinkCompra, false),
       marcaDagua: booleano(opcoes.marcaDagua, true),

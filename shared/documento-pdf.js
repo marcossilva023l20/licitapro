@@ -15,7 +15,7 @@
   } else {
     raiz.criarDocumentoPdf = fabrica;
   }
-})(typeof self !== 'undefined' ? self : this, function (pdfMake, Formato, Imagens) {
+})(typeof self !== 'undefined' ? self : this, function (pdfMake, Formato, Imagens, Declaracoes) {
   'use strict';
 
   // Paleta da marca (logo DEJ Solutions & Global): azul, dourado e prata.
@@ -697,7 +697,7 @@ async function montarDefinicao(doc, empresa, contexto) {
     });
   }
 
-  // 6. Local, data e assinatura
+  // Local do documento (usado nas declarações e no bloco final)
   const localInformado = (condicoes.local || proponente.cidade || '').trim();
   const uf = (proponente.uf || '').trim().toUpperCase();
   let local = localInformado;
@@ -706,6 +706,78 @@ async function montarDefinicao(doc, empresa, contexto) {
     if (!jaTemUf) local = `${localInformado} - ${uf}`;
   }
 
+  // 6. Declarações (só as que o usuário marcou no documento)
+  const declaracoes = Declaracoes ? Declaracoes.paraPdf(doc, proponente) : [];
+  if (declaracoes.length) {
+    if (opcoes.declaracoesNovaPagina !== false) conteudo.push({ text: '', pageBreak: 'before' });
+    conteudo.push({
+      text: 'DECLARAÇÕES',
+      style: 'tituloSecao',
+      color: corTitulo,
+      margin: [0, 14, 0, 6],
+    });
+
+    const assinaturaDeclaracao = opcoes.mostrarAssinatura
+      ? await carregarImagem(proponente.assinatura, 'Assinatura', relatorio)
+      : null;
+
+    declaracoes.forEach((declaracao, indice) => {
+      const bloco = [
+        {
+          text: String(declaracao.titulo || 'DECLARAÇÃO').toUpperCase(),
+          bold: true,
+          fontSize: 11.4,
+          color: corBase,
+          margin: [0, indice ? 14 : 4, 0, 4],
+        },
+        { text: declaracao.texto, alignment: 'justify', fontSize: 11.6 },
+      ];
+
+      // cada declaração sai com local, data e linha de assinatura: é assim que
+      // ela é impressa e assinada separadamente
+      if (opcoes.mostrarAssinatura) {
+        bloco.push({
+          text: `${local ? local + ', ' : ''}${Formato.dataLonga(dataDoc)}`,
+          alignment: 'right',
+          fontSize: 10.6,
+          margin: [0, 14, 0, 0],
+        });
+        bloco.push({
+          columns: [
+            { width: '*', text: '' },
+            {
+              width: 260,
+              stack: [
+                assinaturaDeclaracao
+                  ? { image: assinaturaDeclaracao, fit: [190, 50], alignment: 'center', margin: [0, 10, 0, 0] }
+                  : { text: '', margin: [0, 48, 0, 0] },
+                {
+                  canvas: [{ type: 'line', x1: 0, y1: 0, x2: 260, y2: 0, lineWidth: 0.7, lineColor: '#5B6670' }],
+                  margin: [0, 2, 0, 4],
+                },
+                { text: proponente.representante || proponente.razaoSocial || '', alignment: 'center', bold: true, fontSize: 10.2 },
+                proponente.cpfRepresentante
+                  ? { text: 'CPF: ' + Formato.cpf(proponente.cpfRepresentante), alignment: 'center', fontSize: 9.4 }
+                  : null,
+                {
+                  text: '(' + (proponente.cargoRepresentante || 'REPRESENTANTE LEGAL DA EMPRESA').replace(/^\(|\)$/g, '') + ')',
+                  alignment: 'center',
+                  fontSize: 8.9,
+                  color: '#5B6670',
+                },
+              ].filter(Boolean),
+            },
+            { width: '*', text: '' },
+          ],
+          margin: [0, 2, 0, 0],
+        });
+      }
+
+      conteudo.push(indice ? { text: '', pageBreak: 'before' } : {}, { unbreakable: true, stack: bloco });
+    });
+  }
+
+  // 7. Local, data e assinatura
   const blocoFinal = [
     {
       text: `${local ? local + ', ' : ''}${Formato.dataLonga(dataDoc)}`,

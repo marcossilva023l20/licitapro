@@ -353,11 +353,19 @@ const perfil = {
   obter() {
     const db = carregar();
     if (!db.perfil) {
-      db.perfil = { empresa: empresaPadrao(), padroes: padroesPadrao(), criadoEm: new Date().toISOString() };
+      db.perfil = {
+        empresa: empresaPadrao(),
+        padroes: padroesPadrao(),
+        // modelos de declaração guardados pelo usuário, reaproveitados nos
+        // outros documentos (o texto é dele)
+        declaracoes: [],
+        criadoEm: new Date().toISOString(),
+      };
       salvarAgora();
     } else {
       db.perfil.empresa = Object.assign(empresaPadrao(), db.perfil.empresa || {});
       db.perfil.padroes = Object.assign(padroesPadrao(), db.perfil.padroes || {});
+      if (!Array.isArray(db.perfil.declaracoes)) db.perfil.declaracoes = [];
     }
     return db.perfil;
   },

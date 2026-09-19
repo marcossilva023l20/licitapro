@@ -18,6 +18,8 @@
     pendenteEditor: null,
     // documentos marcados na lista (para excluir vários de uma vez)
     selecaoDocs: [],
+    // modelos de declaração do usuário (guardados com os dados da empresa)
+    modelosDeclaracao: [],
   };
 
   // ------------------------------------------------------------- entrada
@@ -915,6 +917,72 @@
     });
     if (estado.empresa.logo) UI.aplicarImagem($('#emp-previa-logo'), estado.empresa.logo);
     if (estado.empresa.assinatura) UI.aplicarImagem($('#emp-previa-assinatura'), estado.empresa.assinatura);
+
+    estado.modelosDeclaracao = (estado.perfil && estado.perfil.declaracoes) || [];
+    desenharModelosDeclaracao();
+  }
+
+  // ------------------------------------------- modelos de declaração
+
+  /** Lista dos modelos guardados (o texto é reaproveitado nos documentos). */
+  function desenharModelosDeclaracao() {
+    const lista = $('#lista-modelos-declaracao');
+    if (!lista) return;
+    const modelos = estado.modelosDeclaracao || [];
+    if (!modelos.length) {
+      lista.innerHTML = '<p class="texto-suave">Nenhum modelo guardado ainda. ' +
+        'Você também pode escolher um modelo sugerido (Declaração Unificada, ME/EPP/MEI) na aba ' +
+        '<strong>Declarações</strong> de qualquer documento.</p>';
+      return;
+    }
+    lista.innerHTML = modelos.map((modelo, indice) => `
+      <div class="declaracao">
+        <div class="declaracao-cabecalho">
+          <input type="text" data-modelo-titulo="${indice}" value="${UI.escaparHtml(modelo.titulo || '')}"
+            placeholder="Título (ex.: Declaração ME / EPP / MEI)" />
+          <div class="item-acoes">
+            <button class="botao botao-fantasma" data-modelo-remover="${indice}" type="button" title="Remover modelo">🗑</button>
+          </div>
+        </div>
+        <textarea data-modelo-texto="${indice}" placeholder="Texto da declaração">${UI.escaparHtml(modelo.texto || '')}</textarea>
+      </div>
+    `).join('');
+
+    UI.$$('[data-modelo-remover]', lista).forEach((botao) => {
+      botao.addEventListener('click', () => {
+        coletarModelosDeclaracao();
+        estado.modelosDeclaracao.splice(Number(botao.dataset.modeloRemover), 1);
+        desenharModelosDeclaracao();
+      });
+    });
+  }
+
+  /** Lê o que está na tela para a lista em memória. */
+  function coletarModelosDeclaracao() {
+    const lista = estado.modelosDeclaracao || [];
+    UI.$$('[data-modelo-titulo]', $('#lista-modelos-declaracao')).forEach((campo) => {
+      const indice = Number(campo.dataset.modeloTitulo);
+      if (lista[indice]) lista[indice].titulo = campo.value;
+    });
+    UI.$$('[data-modelo-texto]', $('#lista-modelos-declaracao')).forEach((campo) => {
+      const indice = Number(campo.dataset.modeloTexto);
+      if (lista[indice]) lista[indice].texto = campo.value;
+    });
+  }
+
+  async function salvarModelosDeclaracao() {
+    coletarModelosDeclaracao();
+    const lista = (estado.modelosDeclaracao || []).filter((m) => m.titulo || m.texto);
+    try {
+      const resposta = await API.put('/api/perfil/declaracoes', { declaracoes: lista });
+      estado.modelosDeclaracao = resposta.declaracoes || [];
+      if (estado.perfil) estado.perfil.declaracoes = estado.modelosDeclaracao;
+      desenharModelosDeclaracao();
+      UI.toast('Modelos de declaração salvos.', 'sucesso');
+      await enviarParaAConta('Modelos de declaração salvos na sua conta.');
+    } catch (erro) {
+      UI.toast('Não foi possível salvar os modelos: ' + erro.message, 'erro');
+    }
   }
 
 
@@ -1520,8 +1588,9 @@
   async function recarregarPerfil() {
     try {
       const resposta = await API.get('/api/perfil');
-      estado.perfil = resposta.perfil || { empresa: {}, padroes: {} };
+      estado.perfil = resposta.perfil || { empresa: {}, padroes: {}, declaracoes: [] };
       estado.empresa = Object.assign({}, estado.perfil.empresa || {});
+      estado.modelosDeclaracao = estado.perfil.declaracoes || estado.modelosDeclaracao;
       estado.padroes = Object.assign({}, estado.perfil.padroes || {});
       mostrarApp(); // nome no topo passa a ser o da empresa que veio da conta
       if (!$('#view-empresa').classList.contains('oculto')) carregarEmpresa();
@@ -1565,6 +1634,14 @@
   }
 
   function ligarEmpresa() {
+    $('#modelo-declaracao-adicionar').addEventListener('click', () => {
+      coletarModelosDeclaracao();
+      estado.modelosDeclaracao = (estado.modelosDeclaracao || []).concat([{ titulo: '', texto: '' }]);
+      desenharModelosDeclaracao();
+    });
+    $('#modelos-declaracao-salvar').addEventListener('click', salvarModelosDeclaracao);
+    $('#lista-modelos-declaracao').addEventListener('input', () => coletarModelosDeclaracao());
+
     $('#emp-salvar').addEventListener('click', async () => {
       const empresa = Object.assign({}, estado.empresa);
       CAMPOS_EMPRESA.forEach(([chave, sel]) => { empresa[chave] = $(sel).value.trim(); });
@@ -1718,6 +1795,13 @@
     },
     estado,
     estadoDocumentos: () => estado.documentos,
+    // o editor chama isto depois de salvar modelos novos na aba Declarações
+    recarregarModelosDeclaracao: async () => {
+      await recarregarPerfil();
+      estado.modelosDeclaracao = (estado.perfil && estado.perfil.declaracoes) || estado.modelosDeclaracao;
+      desenharModelosDeclaracao();
+    },
+    estadoModelosDeclaracao: () => estado.modelosDeclaracao,
   };
 
   document.addEventListener('DOMContentLoaded', iniciar);

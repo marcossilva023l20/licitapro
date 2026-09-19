@@ -12,6 +12,7 @@ const path = require('path');
 const pdfMake = require('pdfmake');
 const Formato = require('../shared/format');
 const Imagens = require('./imagens');
+const Declaracoes = require('../shared/declaracoes');
 const criarDocumentoPdf = require('../shared/documento-pdf');
 
 let fontesRegistradas = false;
@@ -34,7 +35,7 @@ function registrarFontes() {
   fontesRegistradas = true;
 }
 
-const motor = criarDocumentoPdf(pdfMake, Formato, Imagens);
+const motor = criarDocumentoPdf(pdfMake, Formato, Imagens, Declaracoes);
 
 module.exports = {
   COR_PADRAO: motor.COR_PADRAO,

@@ -59,6 +59,8 @@
         observacoes: '',
         cidadeUf: '',
       },
+      // modelos de declaração do usuário (reaproveitados nos documentos)
+      declaracoes: [],
     };
   }
 
@@ -308,6 +310,7 @@
     '../shared/importar.js',
     '../shared/modelo-importacao.js',
     '../shared/planilha-auxiliar.js',
+    '../shared/declaracoes.js',
     'vendor/pdfmake.min.js',
     'vendor/times-afm.js', // métricas da Times (Times New Roman)
   ];
@@ -318,7 +321,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '36';
+  const VERSAO_ARQUIVOS = '37';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -369,7 +372,12 @@
     // o pdfmake só existe depois do carregamento sob demanda: recria o motor
     // quando a biblioteca aparece (ou muda).
     if (!estado.motor || estado.motorPdfMake !== window.pdfMake) {
-      estado.motor = window.criarDocumentoPdf(window.pdfMake, window.Formato, window.ImagensNavegador);
+      estado.motor = window.criarDocumentoPdf(
+        window.pdfMake,
+        window.Formato,
+        window.ImagensNavegador,
+        window.Declaracoes
+      );
       estado.motorPdfMake = window.pdfMake;
     }
     return estado.motor;
@@ -460,7 +468,11 @@
 
   function perfilPublico() {
     const perfil = lerBanco().perfil;
-    return { empresa: copiar(perfil.empresa || {}), padroes: copiar(perfil.padroes || {}) };
+    return {
+      empresa: copiar(perfil.empresa || {}),
+      padroes: copiar(perfil.padroes || {}),
+      declaracoes: window.Declaracoes.normalizar(perfil.declaracoes),
+    };
   }
 
   async function responder(metodo, caminho, corpo) {
@@ -483,6 +495,12 @@
       banco.perfil.padroes = Object.assign(banco.perfil.padroes, copiar(corpo || {}));
       gravarBanco();
       return { padroes: copiar(banco.perfil.padroes) };
+    }
+
+    if (rota === '/api/perfil/declaracoes' && metodo === 'PUT') {
+      banco.perfil.declaracoes = window.Declaracoes.normalizar((corpo || {}).declaracoes);
+      gravarBanco();
+      return { declaracoes: copiar(banco.perfil.declaracoes) };
     }
 
     // -------------------------------------------------------- documentos
@@ -1015,6 +1033,12 @@
     limparTudo,
     baixarModeloPlanilha,
     motorPdf: motorPdfPronto,
+    /** Definição do PDF (usada nos testes para conferir o conteúdo sem gerar o arquivo). */
+    definicaoPdf: async (documento) => {
+      await carregarBibliotecas();
+      const banco = lerBanco();
+      return (await motorPdfPronto()).montarDefinicao(documento, banco.perfil.empresa || {}, {});
+    },
     verificarAmbiente,
     /**
      * Como este navegador está guardando os dados: se a gravação funciona, o
