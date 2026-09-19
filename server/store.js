@@ -383,6 +383,7 @@ function empresaPadrao() {
     nomeFantasia: '',
     cnpj: '',
     inscricaoEstadual: '',
+    inscricaoMunicipal: '',
     simplesNacional: true,
     telefone: '',
     email: '',

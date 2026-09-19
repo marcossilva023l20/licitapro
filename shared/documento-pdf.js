@@ -329,6 +329,7 @@ function montarTimbre(proponente, corBase, corFilete, logo) {
   const registroEmpresa = [
     documentoEmpresa,
     proponente.inscricaoEstadual ? 'IE ' + proponente.inscricaoEstadual : '',
+    proponente.inscricaoMunicipal ? 'IM ' + proponente.inscricaoMunicipal : '',
   ].filter(Boolean).join('  •  ');
 
   const localEmpresa = [proponente.cidade, proponente.uf].filter(Boolean).join('/');

@@ -12,7 +12,8 @@ const Declaracoes = require('../../shared/declaracoes');
 const rotas = express.Router();
 
 const CAMPOS_TEXTO_EMPRESA = [
-  'razaoSocial', 'nomeFantasia', 'cnpj', 'inscricaoEstadual', 'telefone', 'email', 'endereco',
+  'razaoSocial', 'nomeFantasia', 'cnpj', 'inscricaoEstadual', 'inscricaoMunicipal',
+  'telefone', 'email', 'endereco',
   'cidade', 'uf', 'cep', 'banco', 'agencia', 'conta', 'chavePix', 'representante',
   'cpfRepresentante', 'cargoRepresentante', 'logo', 'assinatura',
 ];

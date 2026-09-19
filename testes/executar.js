@@ -890,6 +890,29 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     assert.strictEqual(atualizacao.json.documento.status, 'ganha');
     assert.strictEqual(atualizacao.json.documento.itens.length, 2, 'os itens devem ser mantidos ao atualizar parcialmente');
 
+    // cadastro da empresa: a Inscrição Municipal é guardada junto de IE/CNPJ
+    const empresaSalva = await requisitar(servidor, '/api/perfil/empresa', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        razaoSocial: 'DEJ SOLUTIONS & GLOBAL LTDA', cnpj: '65.180.352/0001-11',
+        inscricaoEstadual: '123.456.78-9', inscricaoMunicipal: '9876543-2',
+      }),
+    });
+    assert.strictEqual(empresaSalva.status, 200, empresaSalva.texto);
+    assert.strictEqual(empresaSalva.json.empresa.inscricaoMunicipal, '9876543-2', 'a inscrição municipal foi salva');
+    const empresaRelida = await requisitar(servidor, '/api/perfil');
+    assert.strictEqual(empresaRelida.json.perfil.empresa.inscricaoMunicipal, '9876543-2', 'e continua no cadastro');
+
+    // o PDF da declaração sai com IM no timbre
+    const declaracaoComIM = await requisitar(servidor, '/api/declaracoes/pdf?download=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ declaracoes: [{ titulo: 'Declaração Unificada', texto: 'Declara que atende.' }] }),
+    });
+    assert.strictEqual(declaracaoComIM.status, 200, declaracaoComIM.texto);
+    assert.strictEqual(declaracaoComIM.corpo.slice(0, 5).toString(), '%PDF-', 'a folha com IM é gerada');
+
     // modelos de declaração do perfil (usados na aba "Declarações")
     const perfilInicial = await requisitar(servidor, '/api/perfil');
     assert.deepStrictEqual(perfilInicial.json.perfil.declaracoes, [], 'o perfil nasce sem modelos');
@@ -1889,6 +1912,19 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   assert.ok(timbre.includes('CNPJ 65.180.352/0001-11'), 'e o CNPJ');
   assert.ok(folha.footer(1, 2).stack.length > 0, 'e o rodapé com a numeração');
 
+  // a Inscrição Municipal entra na linha do timbre, junto do CNPJ e da IE
+  const comIM = await Pdf.montarDefinicaoDeclaracoes(
+    [{ titulo: 'Declaração Unificada', texto: 'Sou optante.' }],
+    doc,
+    Object.assign({}, empresa, { inscricaoEstadual: '123.456.78-9', inscricaoMunicipal: '9876543-2' })
+  );
+  const timbreComIM = JSON.stringify(comIM.header());
+  assert.ok(timbreComIM.includes('IE 123.456.78-9'), 'a inscrição estadual continua saindo');
+  assert.ok(timbreComIM.includes('IM 9876543-2'), 'e a municipal também');
+  assert.ok(!JSON.stringify((await Pdf.montarDefinicaoDeclaracoes(
+    [{ titulo: 'X', texto: 'Y' }], doc, empresa
+  )).header()).includes('IM '), 'sem inscrição municipal, nada aparece (só campo preenchido)');
+
   // no mesmo papel da proposta: a marca d'água da empresa atrás do texto
   assert.strictEqual(typeof folha.background, 'function', 'a folha tem marca d\'água');
   const fundo = folha.background();
@@ -1972,6 +2008,21 @@ teste('Declarações: a seção fica no painel, junto de novo orçamento e nova 
   const aberto = await abrirNoModoLocal();
   const { window, $ } = aberto;
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  // 0) o cadastro da empresa tem a Inscrição Municipal (junto de CNPJ/IE) e ela grava
+  window.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa');
+  assert.ok($('#emp-im'), 'Minha empresa tem o campo Inscrição municipal');
+  $('#emp-im').value = '9876543-2';
+  $('#emp-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => String(window.localStorage.getItem('licitapro.local.v1')).includes('9876543-2'),
+    'a inscrição municipal foi gravada'
+  );
+  const perfilComIM = await window.API.get('/api/perfil');
+  assert.strictEqual(perfilComIM.perfil.empresa.inscricaoMunicipal, '9876543-2', 'e ela fica no cadastro da empresa');
+  window.location.hash = '#/painel';
+  await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'volta ao painel');
 
   // 1) o botão está na barra do painel, ao lado de + Novo orçamento / + Nova proposta
   const barra = $('#painel-nova-proposta').parentElement;

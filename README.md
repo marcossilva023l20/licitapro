@@ -67,8 +67,10 @@ Desenvolvimento com recarga automática: `npm run dev`.
 ## 2. Como usar (fluxo do dia a dia)
 
 1. **Minha empresa** — preencha uma única vez os dados que aparecem em todas as propostas:
-   razão social, CNPJ, inscrição estadual, SIMPLES NACIONAL, telefone, e-mail, endereço,
-   banco, agência, conta, PIX, representante legal, **logo** e **assinatura digitalizada**.
+   razão social, CNPJ, inscrição estadual, **inscrição municipal**, SIMPLES NACIONAL, telefone,
+   e-mail, endereço, banco, agência, conta, PIX, representante legal, **logo** e
+   **assinatura digitalizada**. A inscrição municipal (quando preenchida) sai no timbre do PDF,
+   ao lado do CNPJ e da IE — como nos outros campos, só o que está preenchido aparece.
    Aproveite e defina os *padrões* (validade, prazo de entrega, garantia, condições de pagamento).
 
 2. **Baixar o modelo de planilha** — botão em *Painel*, *Importar planilha* ou no menu do usuário.

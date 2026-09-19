@@ -895,7 +895,8 @@
 
   const CAMPOS_EMPRESA = [
     ['razaoSocial', '#emp-razao'], ['nomeFantasia', '#emp-fantasia'], ['cnpj', '#emp-cnpj'],
-    ['inscricaoEstadual', '#emp-ie'], ['telefone', '#emp-telefone'], ['email', '#emp-email'],
+    ['inscricaoEstadual', '#emp-ie'], ['inscricaoMunicipal', '#emp-im'],
+    ['telefone', '#emp-telefone'], ['email', '#emp-email'],
     ['cidade', '#emp-cidade'], ['uf', '#emp-uf'], ['endereco', '#emp-endereco'], ['cep', '#emp-cep'],
     ['banco', '#emp-banco'], ['agencia', '#emp-agencia'], ['conta', '#emp-conta'], ['chavePix', '#emp-pix'],
     ['representante', '#emp-representante'], ['cpfRepresentante', '#emp-cpf'], ['cargoRepresentante', '#emp-cargo'],

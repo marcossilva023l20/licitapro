@@ -45,7 +45,8 @@
     return {
       criadoEm: new Date().toISOString(),
       empresa: {
-        razaoSocial: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', simplesNacional: true,
+        razaoSocial: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', inscricaoMunicipal: '',
+        simplesNacional: true,
         telefone: '', email: '', endereco: '', cidade: '', uf: '', cep: '',
         banco: '', agencia: '', conta: '', chavePix: '',
         representante: '', cpfRepresentante: '', cargoRepresentante: 'REPRESENTANTE LEGAL DA EMPRESA',
@@ -336,7 +337,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '43';
+  const VERSAO_ARQUIVOS = '44';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {

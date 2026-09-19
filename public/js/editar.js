@@ -190,6 +190,7 @@
     { sel: '#campo-prop-fantasia', alvo: 'proponente.nomeFantasia' },
     { sel: '#campo-prop-cnpj', alvo: 'proponente.cnpj' },
     { sel: '#campo-prop-ie', alvo: 'proponente.inscricaoEstadual' },
+    { sel: '#campo-prop-im', alvo: 'proponente.inscricaoMunicipal' },
     { sel: '#campo-prop-simples', alvo: 'proponente.simplesNacional', tipo: 'check' },
     { sel: '#campo-prop-telefone', alvo: 'proponente.telefone' },
     { sel: '#campo-prop-email', alvo: 'proponente.email' },
