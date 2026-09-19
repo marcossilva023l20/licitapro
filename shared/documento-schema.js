@@ -101,7 +101,6 @@ function documentoBase(perfil, tipo, extras) {
         mostrarAssinatura: true,
         quebrarPaginaCatalogo: true,
         // as declarações saem em folha própria (é como se imprime e assina)
-        declaracoesNovaPagina: true,
         logoNoCabecalho: true,
         marcaDagua: true,
         cor: '#0B1F33',
@@ -218,7 +217,6 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       mostrarPorExtenso: booleano(opcoes.mostrarPorExtenso, true),
       mostrarAssinatura: booleano(opcoes.mostrarAssinatura, true),
       quebrarPaginaCatalogo: booleano(opcoes.quebrarPaginaCatalogo, true),
-      declaracoesNovaPagina: booleano(opcoes.declaracoesNovaPagina, true),
       logoNoCabecalho: booleano(opcoes.logoNoCabecalho, true),
       mostrarLinkCompra: booleano(opcoes.mostrarLinkCompra, false),
       marcaDagua: booleano(opcoes.marcaDagua, true),

@@ -1840,7 +1840,14 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
     'tokens trocados: ' + texto
   );
 
-  // 3) só as marcadas entram no PDF — e sem token sem valor no papel
+  // 3) a declaração é documento à parte: o PDF da proposta não leva declaração
+  const definicaoProposta = await Pdf.montarDefinicao(doc, empresa);
+  const textoProposta = JSON.stringify(definicaoProposta.content);
+  assert.ok(!textoProposta.includes('DECLARAÇÕES'), 'a proposta não tem seção de declarações');
+  assert.ok(!textoProposta.includes('DECLARAÇÃO UNIFICADA'), 'nem o texto delas');
+  assert.ok(textoProposta.includes('RÁDIO'), 'mas segue com os itens');
+
+  // a lista pronta para a folha continua sendo as declarações com texto
   const paraPdf = Declaracoes.paraPdf(doc, empresa);
   assert.strictEqual(paraPdf.length, 2, 'as não marcadas ficam de fora');
   assert.strictEqual(paraPdf[0].titulo, 'Declaração Unificada', 'a primeira é a unificada');
@@ -1856,23 +1863,11 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   assert.deepStrictEqual(semDados[0].vazios, ['RAZAO', 'ORGAO'], 'a tela sabe quais campos faltam');
   assert.strictEqual(semDados[0].texto, 'Empresa , órgão .', 'e o texto sai sem o marcador');
 
-  // 5) o PDF é montado com a seção das declarações (e sem as não marcadas)
-  const definicao = await Pdf.montarDefinicao(doc, empresa);
-  const textoDoPdf = JSON.stringify(definicao.content);
-  assert.ok(textoDoPdf.includes('DECLARAÇÕES'), 'a seção DECLARAÇÕES existe no PDF');
-  assert.ok(textoDoPdf.includes('Declaração Unificada'.toUpperCase()), 'o título da unificada sai');
-  assert.ok(textoDoPdf.includes('Declaração minha'.toUpperCase()), 'a declaração do usuário também');
-  assert.ok(!textoDoPdf.includes('Declaração ME / EPP / MEI'.toUpperCase()), 'a não marcada fica de fora');
-  assert.ok(textoDoPdf.includes('pageBreak'), 'as declarações começam em folha própria');
-
-  const semDeclaracoes = await Pdf.montarDefinicao(Object.assign({}, doc, { declaracoes: [] }), empresa);
-  assert.ok(!JSON.stringify(semDeclaracoes.content).includes('DECLARAÇÕES'), 'sem declarações, nada de seção');
-
   // 6) a folha da declaração: mesmo padrão da proposta (timbre com a logo),
   // com os campos trocados e a linha de assinatura — sem a proposta inteira
   const declaracoesFolha = [
-    Object.assign(Declaracoes.doModelo(Declaracoes.MODELOS[0]), { incluir: true }),
-    { titulo: 'Declaração ME / EPP / MEI', texto: 'Enquadrada na LC 123/2006.', incluir: true },
+    Declaracoes.doModelo(Declaracoes.MODELOS[0]),
+    { titulo: 'Declaração ME / EPP / MEI', texto: 'Enquadrada na LC 123/2006.' },
   ];
   const folha = await Pdf.montarDefinicaoDeclaracoes(declaracoesFolha, doc, empresa);
   const textoFolha = JSON.stringify(folha.content);
@@ -1909,19 +1904,31 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   const saneado = Esquema.sanear({ tipo: 'proposta', declaracoes: doc.declaracoes }, perfil, 'proposta');
   assert.strictEqual(saneado.declaracoes.length, 3, 'as declarações entram no documento');
   assert.strictEqual(saneado.declaracoes[1].incluir, false, 'a marcação de cada uma é respeitada');
-  assert.strictEqual(saneado.opcoes.declaracoesNovaPagina, true, 'por padrão, folha própria');
 });
 
-teste('Declarações na tela: adicionar do modelo, marcar e gerar o PDF', async () => {
+teste('Declaração é documento à parte: não entra na proposta nem no orçamento', async () => {
   const aberto = await abrirNoModoLocal();
   const { window, $ } = aberto;
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
 
-  // dados da empresa primeiro: os tokens das declarações usam eles
-  await window.API.put('/api/perfil/empresa', {
+  // 1) o editor não tem mais a aba Declarações
+  const abas = Array.from(window.document.querySelectorAll('#abas-editor .aba')).map((b) => b.textContent.trim());
+  assert.deepStrictEqual(
+    abas,
+    ['Identificação', 'Itens e preços', 'Condições', 'Dados do proponente', 'Layout do PDF'],
+    'as abas do documento são só as do documento: ' + abas.join(' | ')
+  );
+  assert.ok(!window.document.querySelector('[data-painel="declaracoes"]'), 'não existe painel de declarações no editor');
+  assert.ok(!window.document.querySelector('#lista-declaracoes'), 'nem lista de declarações dentro da proposta');
+  assert.ok(!window.document.querySelector('#op-declaracoes-pagina'), 'nem opção de declarações no layout do PDF');
+
+  // 2) um documento com declarações gravadas (dos que existiam antes) continua
+  //    abrindo e imprimindo — só que sem a seção de declarações no papel
+  const empresa = await window.API.put('/api/perfil/empresa', {
     razaoSocial: 'DEJ SOLUTIONS & GLOBAL LTDA', cnpj: '65.180.352/0001-11',
-    cidade: 'Imperatriz', uf: 'MA', representante: 'Marcos Silva', cargoRepresentante: 'Sócio-Administrador',
+    cidade: 'Imperatriz', uf: 'MA', representante: 'Marcos Silva',
   });
+  assert.ok(empresa.empresa.cnpj, 'dados da empresa salvos');
 
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
   documento.orgao = { nome: 'UASG 787010', modalidade: 'Pregão Eletrônico', pregao: '17/2026', objeto: 'Rádios' };
@@ -1929,127 +1936,28 @@ teste('Declarações na tela: adicionar do modelo, marcar e gerar o PDF', async 
     numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 10,
     precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
+  documento.declaracoes = [{ titulo: 'Declaração Unificada', texto: '{RAZAO} declara que atende ao edital.', incluir: true }];
   const salvo = await window.API.post('/api/documentos', documento);
   window.location.hash = '#/documento/' + salvo.documento.id;
   await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+  assert.ok($('#editor-titulo').textContent.trim(), 'o documento antigo abre normalmente');
 
-  // 1) a aba existe e avisa que está vazia
-  const aba = Array.from(window.document.querySelectorAll('#abas-editor .aba'))
-    .find((b) => b.dataset.abaEditor === 'declaracoes');
-  assert.ok(aba, 'a aba Declarações existe no editor');
-  aba.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  assert.ok(!$('[data-painel="declaracoes"]').classList.contains('oculto'), 'o painel das declarações abre');
-  assert.ok(!$('#declaracoes-vazio').classList.contains('oculto'), 'avisa que não há declaração no documento');
-
-  // 2) adicionar a partir de um modelo sugerido
-  $('#declaracoes-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal de modelos abre', 8000);
-  const seletor = $('#declaracao-modelo');
-  const opcoes = Array.from(seletor.options).map((o) => o.textContent);
-  assert.ok(opcoes.some((o) => o.includes('Declaração Unificada')), 'a Declaração Unificada está na lista');
-  assert.ok(opcoes.some((o) => o.includes('ME / EPP / MEI')), 'a ME/EPP/MEI também');
-  assert.ok(opcoes.some((o) => o.includes('em branco')), 'e dá para começar em branco');
-  const indiceUnificada = Array.from(seletor.options).findIndex((o) => o.textContent.includes('Declaração Unificada'));
-  seletor.value = String(indiceUnificada);
-  Array.from($('#modal-rodape').querySelectorAll('button')).pop()
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => window.document.querySelectorAll('#lista-declaracoes .declaracao').length === 1, 'a declaração entrou');
-
-  const bloco = () => window.document.querySelector('#lista-declaracoes .declaracao');
-  assert.strictEqual(bloco().querySelector('[data-campo-declaracao="titulo"]').value, 'Declaração Unificada', 'com o título do modelo');
-  assert.ok(bloco().querySelector('[data-campo-declaracao="texto"]').value.includes('{RAZAO}'), 'e o texto com os campos entre chaves');
-  assert.strictEqual(bloco().querySelector('[data-campo-declaracao="incluir"]').checked, true, 'já entra marcada');
-
-  // 3) editar o texto
-  const texto = bloco().querySelector('[data-campo-declaracao="texto"]');
-  texto.value = '{RAZAO}, CNPJ {CNPJ}, declara que atende ao {EDITAL} do {ORGAO}.';
-  texto.dispatchEvent(new window.Event('input', { bubbles: true }));
-  texto.dispatchEvent(new window.Event('focusout', { bubbles: true }));
-
-  // 4) adicionar uma segunda, editada e desmarcada
-  $('#declaracoes-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal abre de novo', 8000);
-  $('#declaracao-modelo').value = 'branco';
-  Array.from($('#modal-rodape').querySelectorAll('button')).pop()
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => window.document.querySelectorAll('#lista-declaracoes .declaracao').length === 2, 'a segunda entrou');
-  const segundo = window.document.querySelectorAll('#lista-declaracoes .declaracao')[1];
-  const titulo2 = segundo.querySelector('[data-campo-declaracao="titulo"]');
-  titulo2.value = 'Declaração minha';
-  titulo2.dispatchEvent(new window.Event('input', { bubbles: true }));
-  const texto2 = segundo.querySelector('[data-campo-declaracao="texto"]');
-  texto2.value = 'Texto próprio do usuário.';
-  texto2.dispatchEvent(new window.Event('input', { bubbles: true }));
-  const caixa2 = segundo.querySelector('[data-campo-declaracao="incluir"]');
-  caixa2.checked = false;
-  caixa2.dispatchEvent(new window.Event('change', { bubbles: true }));
-  assert.ok(segundo.classList.contains('fora-do-pdf'), 'a desmarcada fica apagada na tela');
-
-  // 5) mover a segunda para cima
-  segundo.querySelector('[data-acao-declaracao="subir"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  const depois = window.document.querySelectorAll('#lista-declaracoes .declaracao');
-  assert.strictEqual(depois[0].querySelector('[data-campo-declaracao="titulo"]').value, 'Declaração minha', 'subiu');
-
-  // 6) guardar como modelo: fica no cadastro e reaparece em "Minha empresa"
-  depois[0].querySelector('[data-acao-declaracao="modelo"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(
-    () => window.App.estadoModelosDeclaracao().some((m) => m.titulo === 'Declaração minha'),
-    'o modelo ficou guardado com os dados da empresa',
-    20000
-  );
-  const perfil = await window.API.get('/api/perfil');
-  assert.ok(
-    perfil.perfil.declaracoes.some((m) => m.titulo === 'Declaração minha'),
-    'e está no perfil (é o que o próximo documento usa)'
-  );
-
-  // o próximo documento já oferece o modelo do usuário na lista
-  $('#declaracoes-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal abre para conferir os modelos', 8000);
-  const modelosOferecidos = Array.from($('#declaracao-modelo').options).map((o) => o.textContent);
-  assert.ok(
-    modelosOferecidos.some((o) => o.includes('Declaração minha') && o.includes('meu modelo')),
-    'o modelo do usuário aparece primeiro: ' + modelosOferecidos.join(' | ')
-  );
-  window.UI.fecharModal();
-  await ModoLocal.esperar(() => $('#modal').classList.contains('oculto'), 'modal fechado');
-
-  // 7) imprimir só a declaração: folha timbrada, no padrão da proposta
-  const baixados = [];
-  window.API.baixarBlob = (blob, nome) => { baixados.push({ blob, nome }); };
-  window.document.querySelector('#lista-declaracoes .declaracao [data-acao-declaracao="imprimir"]')
-    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => baixados.length === 1, 'a declaração individual foi gerada', 20000);
-  assert.ok(/\.pdf$/i.test(baixados[0].nome), 'o arquivo baixado é um PDF: ' + baixados[0].nome);
-  assert.ok(baixados[0].blob.size > 1000, 'e tem conteúdo: ' + baixados[0].blob.size + ' bytes');
-  const bytesDeclaracao = Buffer.from(await baixados[0].blob.arrayBuffer());
-  assert.strictEqual(bytesDeclaracao.slice(0, 5).toString(), '%PDF-', 'começa como PDF de verdade');
-
-  // o botão da barra imprime as marcadas (a primeira está marcada, a segunda não)
-  $('#declaracoes-imprimir').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => baixados.length === 2, 'as marcadas foram geradas', 20000);
-  assert.ok(/declaracao/i.test(baixados[1].nome), 'com nome de arquivo da declaração: ' + baixados[1].nome);
-
-  // 8) o PDF do documento sai com as declarações (só a marcada) e sem tokens crus
-  await $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo com as declarações', 20000);
-  const documentoSalvo = await window.API.get('/api/documentos/' + salvo.documento.id);
-  assert.strictEqual(documentoSalvo.documento.declaracoes.length, 2, 'as duas ficaram no documento');
-  assert.strictEqual(documentoSalvo.documento.declaracoes[0].titulo, 'Declaração minha', 'na ordem em que aparecem na tela');
-  assert.strictEqual(documentoSalvo.documento.declaracoes[0].incluir, false, 'com a marcação certa');
-
-  const definicao = await window.ModoEstatico.definicaoPdf(documentoSalvo.documento);
+  const definicao = await window.ModoEstatico.definicaoPdf(salvo.documento);
   const textoPdf = JSON.stringify(definicao.content);
-  assert.ok(textoPdf.includes('DECLARAÇÕES'), 'a seção sai no PDF');
-  assert.ok(textoPdf.includes('DECLARAÇÃO UNIFICADA'), 'a marcada sai');
-  assert.ok(!textoPdf.includes('Texto próprio do usuário'.toUpperCase()), 'a desmarcada fica de fora');
-  assert.ok(!/\{RAZAO\}|\{CNPJ\}|\{EDITAL\}|\{ORGAO\}/.test(textoPdf), 'nada de token cru no papel');
-  assert.ok(textoPdf.includes('UASG 787010'), 'o token {ORGAO} virou o órgão do documento');
-  assert.ok(textoPdf.includes('DEJ SOLUTIONS & GLOBAL LTDA'), 'e {RAZAO} virou a razão social');
+  assert.ok(!textoPdf.includes('DECLARAÇÕES'), 'o PDF da proposta não tem seção de declarações');
+  assert.ok(!textoPdf.includes('declara que atende ao edital'), 'nem o texto da declaração');
+  assert.ok(textoPdf.includes('RÁDIO'), 'e a proposta sai com os itens, como sempre');
+
+  // 3) a declaração inteira continua no lugar dela: a seção do painel
+  window.location.hash = '#/declaracoes';
+  await ModoLocal.esperar(() => !$('#view-declaracoes').classList.contains('oculto'), 'seção Declarações', 20000);
+  assert.ok($('#declaracoes-nova'), 'a seção é quem cria as declarações');
+  assert.ok(!$('#view-declaracoes').classList.contains('oculto'), 'e fica na tela inicial');
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
 });
+
 
 teste('Declarações: a seção fica no painel, junto de novo orçamento e nova proposta', async () => {
   const aberto = await abrirNoModoLocal();
@@ -2136,20 +2044,20 @@ teste('Declarações: a seção fica no painel, junto de novo orçamento e nova 
     'Minha empresa mostra a mesma declaração'
   );
 
-  // 6) e o documento oferece esse modelo na aba Declarações
-  window.location.hash = '#/documento/novo/proposta';
-  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
-  const aba = Array.from(window.document.querySelectorAll('#abas-editor .aba'))
-    .find((b) => b.dataset.abaEditor === 'declaracoes');
-  aba.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  $('#declaracoes-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal abre no documento', 8000);
-  const noDocumento = Array.from($('#declaracao-modelo').options).map((o) => o.textContent);
+  // 6) a declaração salva volta como modelo na hora de criar outra
+  $('#declaracoes-nova').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => !$('#modal').classList.contains('oculto'), 'o modal abre de novo', 8000);
+  const opcoesDeNovo = Array.from($('#declaracao-modelo').options).map((o) => o.textContent);
   assert.ok(
-    noDocumento.some((o) => o.includes('Declaração ME / EPP / MEI') && o.includes('meu modelo')),
-    'o modelo guardado é oferecido primeiro: ' + noDocumento.join(' | ')
+    opcoesDeNovo.some((o) => o.includes('Declaração ME / EPP / MEI') && o.includes('meu modelo')),
+    'o modelo guardado aparece primeiro: ' + opcoesDeNovo.join(' | ')
   );
   window.UI.fecharModal();
+
+  // 7) a proposta segue sem declaração: o documento à parte é só esta seção
+  window.location.hash = '#/documento/novo/proposta';
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  assert.ok(!$('#lista-declaracoes'), 'a proposta não traz lista de declarações');
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
 });

@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=39" />
+  <link rel="stylesheet" href="css/estilos.css?v=40" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -302,8 +302,9 @@
           <div>
             <h2>Declarações</h2>
             <p class="texto-suave">
-              Os textos que acompanham as suas propostas e orçamentos: declaração de ME / EPP / MEI,
-              declaração unificada, não emprego de menor — e as que você escrever.
+              Suas declarações — Declaração Unificada, ME / EPP / MEI, não emprego de menor e as que
+              você escrever. Cada uma é um <strong>documento à parte</strong>: imprime-se sozinha, em
+              folha própria, e não se mistura com a proposta nem com o orçamento.
             </p>
           </div>
           <div class="acoes-vista">
@@ -318,12 +319,13 @@
             <span class="texto-suave" id="declaracoes-contagem">Nenhuma declaração guardada</span>
           </div>
           <p class="texto-suave">
-            O texto fica guardado aqui e serve para todos os documentos: no editor, a aba
-            <strong>Declarações</strong> deixa escolher quais saem no PDF daquele documento (só as
-            marcadas são impressas, cada uma com espaço para assinatura). No texto você pode citar os
-            dados do sistema entre chaves — <code>{RAZAO}</code>, <code>{CNPJ}</code>,
-            <code>{ORGAO}</code>, <code>{EDITAL}</code>, <code>{DATA}</code> e outros: eles são
-            trocados na hora de gerar o PDF.
+            Cada declaração é um <strong>documento à parte</strong>: não entra na proposta nem no
+            orçamento. Clique no <strong>🖨</strong> da declaração e ela sai sozinha, em folha própria
+            com o timbre da empresa (a mesma logomarca da proposta) e espaço para assinar. No texto
+            você pode citar os dados do sistema entre chaves — <code>{RAZAO}</code>,
+            <code>{CNPJ}</code>, <code>{CIDADE}</code>, <code>{REPRESENTANTE}</code>,
+            <code>{CPF_REPRESENTANTE}</code>, <code>{DATA}</code> e outros: eles são trocados na hora
+            de imprimir.
           </p>
           <div id="declaracoes-lista" class="lista-declaracoes" data-lista-modelos></div>
         </div>
@@ -354,7 +356,6 @@
           <button class="aba" data-aba-editor="itens" type="button">Itens e preços</button>
           <button class="aba" data-aba-editor="condicoes" type="button">Condições</button>
           <button class="aba" data-aba-editor="proponente" type="button">Dados do proponente</button>
-          <button class="aba" data-aba-editor="declaracoes" type="button">Declarações</button>
           <button class="aba" data-aba-editor="layout" type="button">Layout do PDF</button>
         </nav>
 
@@ -625,25 +626,6 @@
               </div>
             </div>
 
-            <!-- Declarações -->
-            <div class="painel-aba oculto" data-painel="declaracoes">
-              <div class="barra-itens">
-                <button class="botao botao-primario" id="declaracoes-adicionar" type="button">+ Adicionar declaração</button>
-                <button class="botao" id="declaracoes-modelos" type="button">Meus modelos</button>
-                <button class="botao" id="declaracoes-imprimir" type="button">🖨 Imprimir marcadas</button>
-              </div>
-              <p class="texto-suave">
-                Só as declarações <strong>marcadas</strong> saem no PDF. O texto pode usar os dados do
-                documento: <code>{RAZAO}</code>, <code>{CNPJ}</code>, <code>{CIDADE}</code>, <code>{ORGAO}</code>,
-                <code>{MODALIDADE}</code>, <code>{EDITAL}</code>, <code>{DATA}</code> — e outros.
-              </p>
-              <div id="lista-declaracoes" class="lista-declaracoes"></div>
-              <p class="texto-suave vazio-itens" id="declaracoes-vazio">
-                Nenhuma declaração neste documento. Clique em <strong>Adicionar declaração</strong> para
-                começar de um modelo (Declaração Unificada, ME/EPP/MEI...) ou escrever do zero.
-              </p>
-            </div>
-
             <!-- Layout -->
             <div class="painel-aba oculto" data-painel="layout">
               <div class="lista-opcoes">
@@ -653,7 +635,6 @@
                 <label class="checkbox-linha"><input type="checkbox" id="op-extenso" /><span>Mostrar <strong>valor total por extenso</strong></span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-assinatura" /><span>Incluir <strong>bloco de assinatura</strong> do representante legal</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-quebra" /><span>Começar o <strong>catálogo em nova página</strong></span></label>
-                <label class="checkbox-linha"><input type="checkbox" id="op-declaracoes-pagina" /><span>Começar as <strong>declarações em nova página</strong> (folha própria para assinar)</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-logo" /><span>Usar <strong>logo no cabeçalho</strong> de todas as páginas</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-marcadagua" /><span>Usar a logo da empresa como <strong>marca d'água</strong> (bem apagada, atrás do texto)</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-link-compra" /><span>Mostrar o <strong>link da compra</strong> no catálogo (uso interno)</span></label>
@@ -834,14 +815,14 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=39"></script>
-  <script src="../shared/declaracoes.js?v=39"></script>
-  <script src="js/api.js?v=39"></script>
-  <script src="js/ui.js?v=39"></script>
-  <script src="js/editar.js?v=39"></script>
-  <script src="js/app.js?v=39"></script>
-  <script src="js/config-nuvem.js?v=39"></script>
-  <script src="js/modo-estatico.js?v=39"></script>
-  <script src="js/nuvem.js?v=39"></script>
+  <script src="../shared/format.js?v=40"></script>
+  <script src="../shared/declaracoes.js?v=40"></script>
+  <script src="js/api.js?v=40"></script>
+  <script src="js/ui.js?v=40"></script>
+  <script src="js/editar.js?v=40"></script>
+  <script src="js/app.js?v=40"></script>
+  <script src="js/config-nuvem.js?v=40"></script>
+  <script src="js/modo-estatico.js?v=40"></script>
+  <script src="js/nuvem.js?v=40"></script>
 </body>
 </html>

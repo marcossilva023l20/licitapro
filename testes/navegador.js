@@ -89,14 +89,11 @@ function verificarIds(html) {
   const criadosEmTempoDeExecucao = new Set([
     'importar-area', 'importar-arquivo', 'importar-resultado', 'importar-titulo',
     'importar-avisos', 'importar-tabela', 'importacao-todos', 'importacao-selecionados',
-    // criados no modal de declarações
+    // criados no modal de declarações (a seção Declarações, na tela inicial)
     'declaracao-modelo',
     // seção Declarações (painel) e os botões que levam até ela
     'declaracoes-lista', 'declaracoes-nova', 'declaracoes-salvar', 'declaracoes-contagem',
-    'painel-declaracoes', 'docs-declaracoes',
-    // imprimir a declaração (folha timbrada, no padrão da proposta)
-    'declaracoes-imprimir',
-  ]);
+    'painel-declaracoes', 'docs-declaracoes',  ]);
   const faltando = [];
   ['js/app.js', 'js/editar.js', 'js/ui.js'].forEach((relativo) => {
     const codigo = fs.readFileSync(path.join(RAIZ, 'public', relativo), 'utf8');

@@ -122,44 +122,32 @@ Desenvolvimento com recarga automática: `npm run dev`.
    Com ela oculta o PDF nem é gerado; ao mostrar, ele é gerado na hora. A escolha fica
    guardada neste navegador (`licitapro.previa.v1`).
 
-4b. **Declarações** — a seção **Declarações** fica no painel, junto dos botões *+ Novo orçamento*
-   e *+ Nova proposta* (e também no menu, na lista de documentos e em *Minha empresa → Modelos de
-   declaração*). É lá que o texto é criado uma vez e guardado para todos os documentos:
-   **+ Nova declaração** abre os modelos — **Declaração Unificada**, **Declaração ME / EPP / MEI**,
-   **Declaração de não emprego de menor** — ou *Começar em branco*; o texto é editável na própria
-   lista e **Salvar declarações** grava (o mesmo cadastro aparece em *Minha empresa*).
+4b. **Declarações** — a declaração é um **documento à parte**: fica só na seção **Declarações**,
+   no painel (junto de *+ Novo orçamento* e *+ Nova proposta*, e no menu), **não entra na proposta
+   nem no orçamento** — não há aba de declarações no editor e o PDF do documento não traz essa
+   seção. Um documento antigo que tenha declarações guardadas continua abrindo e imprimindo
+   normalmente; só as declarações não saem mais no papel dele.
 
-   No editor, a aba *Declarações* monta as declarações que acompanham aquele documento. **+ Adicionar declaração** abre a lista de modelos: os **seus modelos** (guardados
-   em *Minha empresa → Modelos de declaração*) e os sugeridos pelo sistema —
-   **Declaração Unificada**, **Declaração ME / EPP / MEI** e **Declaração de não emprego de menor** —
-   além de *Começar em branco*. O texto entra no documento e pode ser editado ali mesmo, sem
-   mexer no modelo guardado; **Guardar como modelo** faz o caminho de volta (o texto do documento
-   vira modelo para os próximos).
+   Na seção: **+ Nova declaração** abre os modelos — os **seus** (guardados, marcados como *meu
+   modelo*) e os prontos — **Declaração Unificada** (cláusulas I a VIII, na forma das declarações
+   de licitação), **Declaração ME / EPP / MEI** (LC 123/2006) e **Declaração de não emprego de
+   menor** — além de *Começar em branco*. O texto é editável na própria lista e **Salvar
+   declarações** grava (a mesma lista aparece em *Minha empresa → Modelos de declaração*).
 
-   Cada declaração tem **No PDF** (só as marcadas saem), **🖨** para **imprimir só ela**, **↑ ↓** para
-   ordenar e **🗑** para remover; o botão **🖨 Imprimir marcadas**, na barra da aba, imprime todas as
-   marcadas — uma por página.
-
-   **Imprimir a declaração** gera um PDF só dela, no **mesmo padrão da proposta**: o timbre com a
-   logomarca no cabeçalho, Times New Roman, título em destaque, texto justificado, local e data por
-   extenso e a linha de assinatura com o nome, o CPF e «(Representante Legal da empresa)». Serve
-   para levar a declaração assinada ao certame sem imprimir a proposta inteira. Na seção
-   *Declarações* do painel, o **🖨** de cada modelo faz o mesmo (ali valem os dados da empresa; os
-   campos do edital, como `{ORGAO}`, saem em branco — a tela avisa quais).
-   Os modelos guardados na seção Declarações aparecem primeiro na lista (marcados como *meu modelo*).
-   No PDF elas saem em folha própria (opção *Começar as declarações em nova página*, em *Layout*),
-   cada uma com local, data e linha de assinatura — prontas para imprimir e assinar.
+   **🖨 Imprimir** gera o PDF daquela declaração, sozinha, no **mesmo padrão da proposta**: o
+   timbre com a logomarca no cabeçalho, Times New Roman, título em destaque, texto justificado,
+   local e data por extenso e a linha de assinatura com o nome, o CPF e «(Representante Legal da
+   empresa)». É a folha que vai assinada ao certame.
 
    O texto pode usar os dados que já estão no sistema, escrevendo o campo entre chaves:
    `{RAZAO}`, `{FANTASIA}`, `{CNPJ}`, `{IE}`, `{ENDERECO}`, `{CIDADE}`, `{UF}`, `{CEP}`,
    `{TELEFONE}`, `{EMAIL}`, `{REPRESENTANTE}`, `{CARGO}`, `{CPF_REPRESENTANTE}`, `{ORGAO}`,
    `{UASG}`, `{MODALIDADE}`, `{EDITAL}`, `{PROCESSO}`, `{OBJETO}`, `{CLIENTE}`, `{NUMERO}`,
-   `{ANO}` e `{DATA}`. A troca acontece na hora de gerar o PDF; quando algum campo usado no
-   texto ainda está vazio, a aba avisa qual é — e o marcador (`{ORGAO}`) nunca aparece no papel.
+   `{ANO}` e `{DATA}`. A troca acontece na hora de imprimir; quando algum campo ainda está vazio,
+   a tela avisa qual — e o marcador (`{ORGAO}`) nunca aparece no papel.
 
-   Endpoints: `PUT /api/perfil/declaracoes` (os modelos guardados, na seção Declarações e em Minha
-   empresa), `POST /api/declaracoes/pdf` (a folha timbrada da declaração) e o campo `declaracoes` do
-   documento (o que sai naquele PDF). **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
+   Endpoints: `PUT /api/perfil/declaracoes` (as declarações guardadas, na seção e em Minha empresa)
+   e `POST /api/declaracoes/pdf` (a folha timbrada da declaração).
 
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.

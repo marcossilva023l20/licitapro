@@ -960,8 +960,8 @@
           <input type="text" data-modelo-titulo="${indice}" value="${UI.escaparHtml(modelo.titulo || '')}"
             placeholder="Título (ex.: Declaração ME / EPP / MEI)" />
           <div class="item-acoes">
-            <button class="botao botao-fantasma" data-modelo-imprimir="${indice}" type="button"
-              title="Imprimir esta declaração (folha timbrada, no padrão da proposta)">🖨</button>
+            <button class="botao" data-modelo-imprimir="${indice}" type="button"
+              title="Imprimir esta declaração em folha própria (no padrão da proposta)">🖨 Imprimir</button>
             <button class="botao botao-fantasma" data-modelo-remover="${indice}" type="button" title="Remover declaração">🗑</button>
           </div>
         </div>

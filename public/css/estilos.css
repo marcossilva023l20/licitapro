@@ -1090,8 +1090,6 @@ input[type="search"] { padding-left: 12px; }
 .declaracao-cabecalho { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
 .declaracao-cabecalho input[type="text"] { flex: 1 1 240px; }
 .declaracao .item-acoes { margin-left: auto; }
-.declaracao.fora-do-pdf textarea,
-.declaracao.fora-do-pdf input[type="text"] { opacity: 0.6; }
 .declaracao textarea {
   width: 100%;
   min-height: 130px;
@@ -1099,7 +1097,6 @@ input[type="search"] { padding-left: 12px; }
   font-family: inherit;
   font-size: 0.9rem;
 }
-.declaracao-aviso { font-size: 0.78rem; color: var(--dourado-300); margin-top: 6px; }
 .titulo-bloco { margin: 22px 0 6px; font-size: 1rem; }
 .lista-declaracoes:empty { display: none; }
 #declaracoes-contagem { white-space: nowrap; }
