@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DEJ Solutions &amp; Global — Propostas de licitação e orçamentos em PDF</title>
+  <meta name="description" content="Monte propostas de licitação e orçamentos importando a planilha de itens e gere o PDF pronto para envio." />
+  <meta name="theme-color" content="#0B1F33" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
+  <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
+       sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
+  <link rel="stylesheet" href="css/estilos.css?v=44" />
+</head>
+<body>
+  <!-- ============================ ENTRAR / CRIAR CONTA ============================
+       Só aparece no site publicado (sem servidor): cada pessoa cria a sua conta
+       e, em qualquer computador, entra com o mesmo e-mail e senha para
+       continuar de onde parou. Os dados ficam no projeto Supabase, cifrados
+       com a senha — que não é enviada para lugar nenhum. -->
+  <section class="tela-entrar oculto" id="tela-entrar">
+    <div class="cartao-entrar">
+      <div class="marca-entrar">
+        <img id="entrar-logo" src="marca/logo.png" alt="" />
+        <h1>DEJ Solutions &amp; Global</h1>
+        <p class="texto-suave">Propostas de licitação e orçamentos</p>
+      </div>
+
+      <div class="abas-entrar" id="abas-entrar">
+        <button class="aba ativa" id="aba-entrar" data-aba-entrar="entrar" type="button">Entrar</button>
+        <button class="aba" id="aba-criar" data-aba-entrar="criar" type="button">Criar conta</button>
+      </div>
+
+      <form class="form-entrar" id="form-entrar" autocomplete="on">
+        <label class="campo-entrar">
+          <span>E-mail</span>
+          <input id="entrar-usuario" name="email" type="email" spellcheck="false" autocapitalize="none"
+            autocomplete="username" placeholder="nome@empresa.com.br">
+        </label>
+        <label class="campo-entrar">
+          <span>Senha</span>
+          <input id="entrar-senha" name="senha" type="password" autocomplete="current-password"
+            placeholder="mínimo 6 caracteres">
+        </label>
+        <label class="campo-entrar oculto" id="entrar-repetir-campo">
+          <span>Repita a senha</span>
+          <input id="entrar-repetir" name="repetir" type="password" autocomplete="new-password"
+            placeholder="a mesma senha">
+        </label>
+        <button class="botao botao-primario botao-largo" id="entrar-botao" type="submit">Entrar</button>
+        <span class="mensagem-banco" id="entrar-mensagem" role="status"></span>
+      </form>
+
+      <p class="texto-suave entrar-nota">
+        A senha <strong>cifra os dados neste navegador</strong> antes de sair: no banco só existe
+        texto cifrado e a senha não é enviada para lugar nenhum. Com o mesmo e-mail e a mesma senha
+        você abre o sistema em qualquer computador.
+      </p>
+
+      <ul class="lista-passos oculto" id="entrar-passos"></ul>
+
+      <details class="onde-guardar" id="entrar-onde">
+        <summary>Usar outro projeto / testar a conexão</summary>
+        <label class="campo-entrar">
+          <span>Endereço do projeto (Supabase)</span>
+          <input id="entrar-url" name="url" type="url" spellcheck="false"
+            placeholder="https://xxxxxxxx.supabase.co">
+        </label>
+        <label class="campo-entrar">
+          <span>Chave pública do projeto (anon / publishable)</span>
+          <input id="entrar-chave" name="chave" type="text" spellcheck="false"
+            placeholder="eyJ... ou sb_publishable_...">
+        </label>
+        <div class="acoes-banco">
+          <button class="botao botao-suave" id="entrar-testar" type="button">Testar a conexão</button>
+          <button class="botao-link" id="entrar-usar-projeto" type="button">usar este projeto</button>
+          <button class="botao-link oculto" id="entrar-esquecer-projeto" type="button">voltar ao projeto do site</button>
+          <span class="mensagem-banco" id="entrar-teste-mensagem" role="status"></span>
+        </div>
+        <p class="texto-suave" id="entrar-projeto-atual"></p>
+      </details>
+
+      <p class="entrar-rodape oculto" id="entrar-rodape">
+        <button class="botao-link" id="entrar-sem-conta" type="button">
+          Continuar sem conta (os dados ficam só neste navegador)
+        </button>
+      </p>
+      <p class="texto-suave" id="entrar-aviso"></p>
+    </div>
+  </section>
+
+  <!-- ================================= APLICAÇÃO ================================= -->
+  <div id="app" class="app oculto">
+    <header class="topo">
+      <button class="botao-icone so-mobile" id="alternar-menu" title="Menu" type="button">☰</button>
+      <a class="marca marca-clara" href="#/painel">
+        <span class="marca-icone">DEJ</span>
+        <img class="marca-logo" alt="" />
+        <strong>DEJ Solutions &amp; Global</strong>
+      </a>
+
+      <nav class="navegacao" id="navegacao">
+        <a href="#/painel" data-rota="painel"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.6 12 3.5l9 7.1" /><path d="M5.4 10.2V20h13.2v-9.8" /><path d="M9.8 20v-5.4h4.4V20" /></svg>Painel</a>
+        <a href="#/documentos" data-rota="documentos"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /><path d="M9 13h6M9 17h4" /></svg>Documentos</a>
+        <a href="#/importar" data-rota="importar"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="M3 9.5h18M9 9.5V19.5M15 9.5V19.5" /></svg>Importar planilha</a>
+        <a href="#/declaracoes" data-rota="declaracoes"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /><path d="m9 14.6 2 2 4.2-4.4" /></svg>Declarações</a>
+        <a href="#/empresa" data-rota="empresa"><svg class="nav-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20.5V6.2l7-3.2v17.5" /><path d="M11 10.5h9v10H4" /><path d="M14 14h3M14 17.5h3" /></svg>Minha empresa</a>
+      </nav>
+
+      <div class="topo-acoes">
+        <button class="botao botao-primario" id="botao-nova-proposta" type="button">+ Nova proposta</button>
+        <div class="usuario-menu">
+          <button class="usuario-botao" id="botao-usuario" type="button">
+            <span class="avatar" id="avatar-usuario">?</span>
+            <span class="usuario-nome" id="nome-usuario"></span>
+          </button>
+          <div class="usuario-lista oculto" id="lista-usuario">
+            <a href="#/empresa">Dados da empresa</a>
+            <a href="/api/modelo-planilha">Baixar modelo de planilha</a>
+            <!-- modo local (sem servidor): os dados ficam neste navegador, então o
+                 backup vive aqui no menu, sem ocupar espaço na tela -->
+            <button type="button" id="menu-sair" class="oculto">Sair da conta</button>
+            <button type="button" id="local-exportar" data-modo-local class="oculto">Baixar backup</button>
+            <button type="button" id="local-importar" data-modo-local class="oculto">Restaurar backup</button>
+            <button type="button" id="local-drive" data-modo-local class="oculto">Guardar uma cópia no Drive</button>
+            <input type="file" id="local-arquivo-backup" accept="application/json,.json" class="oculto" />
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="conteudo" class="conteudo">
+      <!-- ------------------------------------------------ Painel -->
+      <section id="view-painel" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Painel</h2>
+            <p class="texto-suave" id="saudacao"></p>
+            <!-- onde os dados estão sendo salvos: banco (Supabase), arquivo do
+                 servidor ou este navegador (modo local) -->
+            <p class="situacao-dados oculto" id="situacao-dados">
+              <span id="situacao-dados-texto"></span>
+              <button class="botao-link" id="situacao-dados-rever" type="button">verificar de novo</button>
+            </p>
+            <!-- ligar o banco sem terminal: o formulário só aparece quando o
+                 sistema está rodando na própria máquina (localhost) -->
+            <div class="conectar-banco oculto" id="conectar-banco">
+              <button class="botao-link" id="banco-abrir" type="button">Conectar banco de dados</button>
+              <form class="form-banco oculto" id="banco-form" autocomplete="off">
+                <p class="titulo-banco">Conectar o banco de dados</p>
+                <label class="campo-banco">
+                  <span>Endereço do projeto (só o Supabase usa)</span>
+                  <input id="banco-url" name="banco-url" type="url" placeholder="endereço do projeto" spellcheck="false">
+                </label>
+                <label class="campo-banco">
+                  <span>Credencial: a chave do Supabase ou o JSON da conta de serviço do Firebase</span>
+                  <textarea id="banco-credencial" name="banco-credencial" rows="3"
+                    placeholder="cole aqui a chave do Supabase (eyJ...) ou o JSON do Firebase ({ ... })"
+                    spellcheck="false"></textarea>
+                </label>
+                <div class="sugestao-banco oculto" id="banco-sugestao">
+                  <span class="texto-suave" id="banco-sugestao-texto"></span>
+                  <button class="botao botao-primario" id="banco-sugestao-usar" type="button">Usar este arquivo</button>
+                </div>
+                <div class="arquivo-banco">
+                  <button class="botao botao-suave" id="banco-arquivo-botao" type="button">
+                    Escolher o arquivo .json do Firebase
+                  </button>
+                  <input id="banco-arquivo" name="banco-arquivo" type="file" accept=".json,application/json" class="oculto">
+                  <span class="texto-suave">ou arraste o arquivo para aqui</span>
+                </div>
+                <p class="ajuda-banco">
+                  <strong>Supabase:</strong> no painel do seu projeto, <em>Settings</em> → <em>API Keys</em>:
+                  copie a chave <em>service_role</em> (a que tem esse nome; num projeto novo é a
+                  <em>secret key</em>, começa com <code>sb_secret_</code>). A chave <em>anon</em>/<em>publishable</em>
+                  não serve para gravar.<br />
+                  <a class="link-banco oculto" id="banco-abrir-supabase" target="_blank" rel="noopener">
+                    Abrir a página das chaves deste projeto no Supabase</a><br />
+                  <strong>Firebase:</strong> Project settings → Service accounts → Generate new private key
+                  (o arquivo <code>.json</code> inteiro).<br />
+                  A credencial fica só neste servidor (arquivo <code>.env</code> e pasta <code>data/</code>)
+                  e nunca é enviada ao navegador.
+                </p>
+                <div class="acoes-banco">
+                  <button class="botao botao-primario" id="banco-salvar" type="submit">Salvar e testar</button>
+                  <button class="botao-link" id="banco-cancelar" type="button">cancelar</button>
+                  <span class="mensagem-banco" id="banco-mensagem" role="status"></span>
+                </div>
+              </form>
+            </div>
+
+            <!-- Conta e nuvem: no site publicado (GitHub Pages) não existe
+                 servidor, então os dados ficam no projeto Supabase da pessoa,
+                 cifrados com a senha da conta (veja supabase/nuvem.sql). -->
+            <details class="nuvem-bloco oculto" id="nuvem-bloco">
+              <summary>Conta e nuvem</summary>
+              <p class="texto-suave" id="nuvem-status"></p>
+              <div class="acoes-banco">
+                <button class="botao botao-suave" id="nuvem-entrar" type="button">Entrar numa conta</button>
+                <button class="botao botao-suave oculto" id="nuvem-sincronizar" type="button">Sincronizar agora</button>
+                <button class="botao botao-suave" id="nuvem-testar" type="button">Testar a conta</button>
+                <button class="botao-link oculto" id="nuvem-link" type="button">link para o outro computador</button>
+                <button class="botao-link oculto" id="nuvem-sair" type="button">sair da conta</button>
+                <button class="botao-link" id="nuvem-diagnostico" type="button">copiar o diagnóstico</button>
+                <span class="mensagem-banco" id="nuvem-mensagem" role="status"></span>
+              </div>
+              <ul class="lista-passos oculto" id="nuvem-passos"></ul>
+              <input class="oculto" id="nuvem-link-caixa" readonly spellcheck="false"
+                aria-label="Link para abrir o sistema em outro computador">
+              <textarea class="oculto caixa-diagnostico" id="nuvem-diagnostico-caixa" readonly
+                spellcheck="false" aria-label="Diagnóstico da conta (para copiar)"></textarea>
+            </details>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao" id="painel-novo-orcamento" type="button">+ Novo orçamento</button>
+            <button class="botao botao-primario" id="painel-nova-proposta" type="button">+ Nova proposta</button>
+            <button class="botao" id="painel-declaracoes" type="button">+ Declarações</button>
+          </div>
+        </div>
+
+        <div class="cartoes-indicadores">
+          <div class="cartao-indicador">
+            <span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2.5H7A2 2 0 0 0 5 4.5v15a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7.5z" /><path d="M14 2.5v5h5" /></svg></span>
+            <span class="rotulo">Documentos</span>
+            <strong id="ind-total">0</strong>
+            <span class="texto-suave" id="ind-total-valor">R$ 0,00 em valores</span>
+          </div>
+          <div class="cartao-indicador">
+            <span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.5 2.5 10.8 13.2" /><path d="M21.5 2.5 15 21l-4.2-7.8L3 9z" /></svg></span>
+            <span class="rotulo">Propostas enviadas</span>
+            <strong id="ind-enviadas">0</strong>
+            <span class="texto-suave">aguardando resultado</span>
+          </div>
+          <div class="cartao-indicador destaque">
+            <span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 5.5H4.5V7a3 3 0 0 0 3 3" /><path d="M17 5.5h2.5V7a3 3 0 0 1-3 3" /><path d="M12 14v3.5M8.5 20.5h7" /></svg></span>
+            <span class="rotulo">Propostas ganhas</span>
+            <strong id="ind-ganhas">0</strong>
+            <span class="texto-suave">parabéns!</span>
+          </div>
+          <div class="cartao-indicador">
+            <span class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4.5 20.5h15" /></svg></span>
+            <span class="rotulo">Modelo de importação</span>
+            <a class="botao botao-claro" href="/api/modelo-planilha">Baixar planilha .xlsx</a>
+            <span class="texto-suave">preencha os itens e envie no site</span>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho">
+            <h3>Últimos documentos</h3>
+            <a class="link" href="#/documentos">ver todos</a>
+          </div>
+          <div id="painel-recentes" class="lista-documentos"></div>
+        </div>
+
+      </section>
+
+      <!-- ------------------------------------------------ Documentos -->
+      <section id="view-documentos" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Documentos</h2>
+            <p class="texto-suave">Propostas e orçamentos salvos neste sistema.</p>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao" id="docs-novo-orcamento" type="button">+ Novo orçamento</button>
+            <button class="botao botao-primario" id="docs-nova-proposta" type="button">+ Nova proposta</button>
+            <button class="botao" id="docs-declaracoes" type="button">+ Declarações</button>
+          </div>
+        </div>
+
+        <div class="filtros">
+          <input type="search" id="filtro-busca" placeholder="Buscar por órgão, cliente ou número..." />
+          <select id="filtro-tipo">
+            <option value="">Todos os tipos</option>
+            <option value="proposta">Propostas</option>
+            <option value="orcamento">Orçamentos</option>
+          </select>
+          <select id="filtro-status">
+            <option value="">Todos os status</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="enviada">Enviada</option>
+            <option value="ganha">Ganha</option>
+            <option value="perdida">Perdida</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+
+        <div class="barra-documentos">
+          <button class="botao" id="docs-selecionar-todos" type="button">Selecionar todos</button>
+          <button class="botao" id="docs-desmarcar-todos" type="button">Desmarcar todos</button>
+          <button class="botao botao-perigo" id="docs-excluir-selecionados" type="button" disabled>Excluir selecionados</button>
+          <button class="botao botao-perigo" id="docs-excluir-todos" type="button">Excluir todos</button>
+          <span class="barra-selecao-contagem" id="docs-selecao-contagem">Nenhum documento selecionado</span>
+        </div>
+
+        <div id="lista-documentos" class="lista-documentos"></div>
+      </section>
+
+      <!-- ------------------------------------------------ Editor -->
+      <section id="view-declaracoes" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Declarações</h2>
+            <p class="texto-suave">
+              Suas declarações — Declaração Unificada, ME / EPP / MEI, não emprego de menor e as que
+              você escrever. Cada uma é um <strong>documento à parte</strong>: imprime-se sozinha, em
+              folha própria, e não se mistura com a proposta nem com o orçamento.
+            </p>
+          </div>
+          <div class="acoes-vista">
+            <button class="botao botao-primario" id="declaracoes-nova" data-acao-modelos="nova" type="button">+ Nova declaração</button>
+            <button class="botao" id="declaracoes-salvar" data-acao-modelos="salvar" type="button">Salvar declarações</button>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho">
+            <h3>Minhas declarações</h3>
+            <span class="texto-suave" id="declaracoes-contagem">Nenhuma declaração guardada</span>
+          </div>
+          <p class="texto-suave">
+            Cada declaração é um <strong>documento à parte</strong>: não entra na proposta nem no
+            orçamento. Clique no <strong>🖨 Imprimir</strong> da declaração e ela sai sozinha, em folha
+            própria com o timbre da empresa, a marca d'água da logomarca atrás do texto e espaço para
+            assinar. No texto
+            você pode citar os dados do sistema entre chaves — <code>{RAZAO}</code>,
+            <code>{CNPJ}</code>, <code>{CIDADE}</code>, <code>{REPRESENTANTE}</code>,
+            <code>{CPF_REPRESENTANTE}</code>, <code>{DATA}</code> e outros: eles são trocados na hora
+            de imprimir.
+          </p>
+          <div id="declaracoes-lista" class="lista-declaracoes" data-lista-modelos></div>
+        </div>
+      </section>
+
+      <section id="view-editor" class="vista oculto">
+        <div class="editor-topo">
+          <div class="editor-topo-info">
+            <button class="botao botao-fantasma" id="editor-voltar" type="button">← Voltar</button>
+            <div>
+              <h2 id="editor-titulo">Nova proposta</h2>
+              <p class="texto-suave" id="editor-subtitulo"></p>
+            </div>
+          </div>
+          <div class="editor-topo-acoes">
+            <span class="etiqueta-estado" id="editor-estado">Não salvo</span>
+            <button class="botao" id="editor-importar" type="button">Importar planilha</button>
+            <button class="botao" id="editor-exportar" type="button">Exportar itens</button>
+            <button class="botao" id="editor-planilha" type="button">Planilha auxiliar</button>
+            <button class="botao" id="editor-previa" type="button" aria-pressed="true" title="Mostrar ou ocultar a pré-visualização do PDF">Pré-visualização</button>
+            <button class="botao" id="editor-salvar" type="button">Salvar</button>
+            <button class="botao botao-primario" id="editor-gerar-pdf" type="button">Gerar PDF</button>
+          </div>
+        </div>
+
+        <nav class="abas-editor" id="abas-editor">
+          <button class="aba ativa" data-aba-editor="identificacao" type="button">Identificação</button>
+          <button class="aba" data-aba-editor="itens" type="button">Itens e preços</button>
+          <button class="aba" data-aba-editor="condicoes" type="button">Condições</button>
+          <button class="aba" data-aba-editor="proponente" type="button">Dados do proponente</button>
+          <button class="aba" data-aba-editor="layout" type="button">Layout do PDF</button>
+        </nav>
+
+        <div class="editor-corpo">
+          <div class="editor-formulario">
+            <!-- Identificação -->
+            <div class="painel-aba" data-painel="identificacao">
+              <div class="grade-2">
+                <label class="campo">Tipo de documento
+                  <select id="campo-tipo">
+                    <option value="proposta">Proposta de licitação</option>
+                    <option value="orcamento">Orçamento comercial</option>
+                  </select>
+                </label>
+                <label class="campo">Status
+                  <select id="campo-status">
+                    <option value="rascunho">Rascunho</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="ganha">Ganha</option>
+                    <option value="perdida">Perdida</option>
+                    <option value="cancelada">Cancelada</option>
+                  </select>
+                </label>
+                <label class="campo">Número — sequencial
+                  <input type="number" id="campo-numero-sequencial" min="1" step="1" />
+                </label>
+                <label class="campo">Ano
+                  <input type="number" id="campo-numero-ano" min="2000" max="2100" step="1" />
+                </label>
+                <label class="campo">Data do documento
+                  <input type="date" id="campo-data" />
+                </label>
+              </div>
+
+              <div class="grupo-proposta">
+                <h3>Dados do órgão (proposta de licitação)</h3>
+                <div class="grade-2">
+                  <label class="campo campo-largo">Órgão / UASG
+                    <input type="text" id="campo-orgao-nome" placeholder="Ex.: UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA EM BRASÍLIA" />
+                  </label>
+                  <label class="campo">UASG
+                    <input type="text" id="campo-orgao-uasg" placeholder="787010" />
+                  </label>
+                  <label class="campo">Modalidade
+                    <select id="campo-orgao-modalidade"></select>
+                  </label>
+                  <label class="campo">Edital / Pregão
+                    <input type="text" id="campo-orgao-pregao" placeholder="Pregão nº 17/2026" />
+                  </label>
+                  <label class="campo">Prazo de entrega
+                    <input type="text" id="campo-orgao-prazo" placeholder="Conforme Edital." />
+                  </label>
+                  <label class="campo campo-largo">Objeto
+                    <textarea id="campo-orgao-objeto" rows="2" placeholder="Aquisição de rádios transceptores e acessórios..."></textarea>
+                  </label>
+                </div>
+              </div>
+
+              <div class="grupo-orcamento oculto">
+                <h3>Dados do cliente (orçamento)</h3>
+                <div class="grade-2">
+                  <label class="campo campo-largo">Cliente / empresa
+                    <input type="text" id="campo-cliente-nome" placeholder="Nome do cliente" />
+                  </label>
+                  <label class="campo">CNPJ / CPF
+                    <input type="text" id="campo-cliente-cnpj" placeholder="00.000.000/0001-00" />
+                  </label>
+                  <label class="campo">Contato
+                    <input type="text" id="campo-cliente-contato" placeholder="Nome do responsável" />
+                  </label>
+                  <label class="campo">Telefone
+                    <input type="text" id="campo-cliente-telefone" placeholder="(00) 00000-0000" />
+                  </label>
+                  <label class="campo">E-mail
+                    <input type="email" id="campo-cliente-email" placeholder="contato@cliente.com.br" />
+                  </label>
+                  <label class="campo campo-largo">Endereço
+                    <input type="text" id="campo-cliente-endereco" placeholder="Rua, número, bairro, cidade - UF, CEP" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Itens -->
+            <div class="painel-aba oculto" data-painel="itens">
+              <div class="barra-itens">
+                <button class="botao botao-primario" id="itens-adicionar" type="button">+ Adicionar item</button>
+                <button class="botao" id="itens-importar" type="button">Importar da planilha</button>
+                <button class="botao" id="itens-selecionar" type="button" aria-pressed="false">Selecionar itens</button>
+                <button class="botao" id="itens-organizar" type="button"
+                  title="Coloca os itens na ordem do número do item (1, 2, 3, 15...)">Organizar por item nº</button>
+                <button class="botao" id="itens-limpar" type="button">Limpar itens</button>
+                <div class="ferramenta-margem">
+                  <span>Margem sobre o custo:</span>
+                  <input type="number" id="margem-percentual" value="30" min="-90" max="500" step="1" />
+                  <span>%</span>
+                  <button class="botao" id="aplicar-margem" type="button">Aplicar em todos</button>
+                </div>
+              </div>
+
+              <div class="barra-selecao oculto" id="itens-selecao">
+                <span class="barra-selecao-contagem" id="itens-selecao-contagem">Nenhum item selecionado</span>
+                <button class="botao botao-fantasma" id="itens-selecionar-todos" type="button">Marcar todos</button>
+                <button class="botao" id="itens-subir-todos" type="button"
+                  title="Move os itens marcados para cima: os números acompanham a nova ordem">↑ Mover para cima</button>
+                <button class="botao" id="itens-descer-todos" type="button"
+                  title="Move os itens marcados para baixo: os números acompanham a nova ordem">↓ Mover para baixo</button>
+                <button class="botao botao-perigo" id="itens-remover-todos" type="button">Remover selecionados</button>
+                <button class="botao botao-fantasma" id="itens-selecao-concluir" type="button">Concluir seleção</button>
+              </div>
+
+              <div id="lista-itens" class="lista-itens"></div>
+              <p class="texto-suave vazio-itens" id="itens-vazio">
+                Nenhum item ainda. Clique em <strong>Adicionar item</strong> ou importe a planilha com os itens do edital.
+              </p>
+
+              <div class="resumo-valores">
+                <div><span>Itens</span><strong id="resumo-qtd-itens">0</strong></div>
+                <div><span>Subtotal</span><strong id="resumo-subtotal">R$ 0,00</strong></div>
+                <div><span>Custo total</span><strong id="resumo-custo">R$ 0,00</strong></div>
+                <div><span>Lucro estimado</span><strong id="resumo-lucro">R$ 0,00</strong>
+                  <em class="percentual-lucro" id="resumo-lucro-percentual">0%</em></div>
+                <div class="destaque"><span>Total</span><strong id="resumo-total">R$ 0,00</strong></div>
+              </div>
+
+              <div class="bloco-desconto">
+                <label class="checkbox-linha opcao-desconto">
+                  <input type="checkbox" id="op-desconto-frete" />
+                  <span>Usar <strong>desconto</strong> e <strong>frete / instalação</strong> neste documento
+                    <em class="texto-suave">(opcional — no orçamento já vem marcado)</em></span>
+                </label>
+                <div class="grade-2 oculto" id="bloco-desconto-frete-campos">
+                <label class="campo">Desconto
+                  <select id="campo-desconto-modo">
+                    <option value="nenhum">Sem desconto</option>
+                    <option value="percentual">Percentual (%)</option>
+                    <option value="valor">Valor (R$)</option>
+                  </select>
+                </label>
+                <label class="campo">Valor do desconto
+                  <input type="text" id="campo-desconto-valor" inputmode="decimal" placeholder="0,00" />
+                </label>
+                <label class="campo checkbox-linha">
+                  <input type="checkbox" id="campo-acrescimo-ativo" />
+                  <span>Incluir frete / instalação</span>
+                </label>
+                <label class="campo">Descrição do acréscimo
+                  <input type="text" id="campo-acrescimo-descricao" placeholder="Frete / Instalação" />
+                </label>
+                <label class="campo">Valor do acréscimo
+                  <input type="text" id="campo-acrescimo-valor" inputmode="decimal" placeholder="0,00" />
+                </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Condições -->
+            <div class="painel-aba oculto" data-painel="condicoes">
+              <div class="grade-2">
+                <label class="campo">Validade da proposta (dias)
+                  <input type="number" id="campo-validade" min="0" step="1" />
+                </label>
+                <label class="campo">Local (cidade - UF)
+                  <input type="text" id="campo-local" placeholder="Fortaleza - CE" />
+                </label>
+                <label class="campo">Prazo de entrega
+                  <input type="text" id="campo-prazo-entrega" placeholder="Conforme Edital." />
+                </label>
+                <label class="campo">Garantia
+                  <input type="text" id="campo-garantia" placeholder="12 meses contra defeitos de fabricação" />
+                </label>
+                <label class="campo campo-largo">Condições de pagamento
+                  <textarea id="campo-pagamento" rows="2" placeholder="Ex.: 30 dias após o recebimento definitivo, mediante nota fiscal."></textarea>
+                </label>
+                <label class="campo campo-largo">Observações gerais
+                  <textarea id="campo-observacoes" rows="3" placeholder="Informações adicionais que aparecem na proposta."></textarea>
+                </label>
+              </div>
+            </div>
+
+            <!-- Proponente -->
+            <div class="painel-aba oculto" data-painel="proponente">
+              <p class="texto-suave">
+                Estes dados são copiados de <a href="#/empresa">Minha empresa</a>. Altere aqui se este documento
+                precisar de dados diferentes — os próximos documentos continuam usando os dados cadastrados.
+              </p>
+              <div class="grade-2">
+                <label class="campo campo-largo">Razão social
+                  <input type="text" id="campo-prop-razao" />
+                </label>
+                <label class="campo">Nome fantasia
+                  <input type="text" id="campo-prop-fantasia" />
+                </label>
+                <label class="campo">CNPJ
+                  <input type="text" id="campo-prop-cnpj" />
+                </label>
+                <label class="campo">Inscrição estadual
+                  <input type="text" id="campo-prop-ie" />
+                </label>
+                <label class="campo">Inscrição municipal
+                  <input type="text" id="campo-prop-im" />
+                </label>
+                <label class="campo checkbox-linha">
+                  <input type="checkbox" id="campo-prop-simples" />
+                  <span>Enquadrada no SIMPLES NACIONAL</span>
+                </label>
+                <label class="campo">Telefone
+                  <input type="text" id="campo-prop-telefone" />
+                </label>
+                <label class="campo">E-mail
+                  <input type="text" id="campo-prop-email" />
+                </label>
+                <label class="campo">Cidade
+                  <input type="text" id="campo-prop-cidade" />
+                </label>
+                <label class="campo">UF
+                  <input type="text" id="campo-prop-uf" maxlength="2" />
+                </label>
+                <label class="campo campo-largo">Endereço
+                  <input type="text" id="campo-prop-endereco" />
+                </label>
+                <label class="campo">CEP
+                  <input type="text" id="campo-prop-cep" />
+                </label>
+                <label class="campo">Banco
+                  <input type="text" id="campo-prop-banco" />
+                </label>
+                <label class="campo">Agência
+                  <input type="text" id="campo-prop-agencia" />
+                </label>
+                <label class="campo">Conta corrente
+                  <input type="text" id="campo-prop-conta" />
+                </label>
+                <label class="campo">Chave PIX
+                  <input type="text" id="campo-prop-pix" />
+                </label>
+                <label class="campo">Representante legal
+                  <input type="text" id="campo-prop-representante" />
+                </label>
+                <label class="campo">CPF do representante
+                  <input type="text" id="campo-prop-cpf" />
+                </label>
+                <label class="campo campo-largo">Cargo do representante
+                  <input type="text" id="campo-prop-cargo" />
+                </label>
+              </div>
+
+              <div class="grade-2">
+                <div class="campo-upload">
+                  <span class="rotulo-campo">Logo da empresa</span>
+                  <div class="upload-area">
+                    <img id="previa-logo" alt="Logo" class="previa-imagem oculto" />
+                    <div class="upload-acoes">
+                      <input type="file" id="arquivo-logo" accept="image/*" class="oculto" />
+                      <button class="botao" type="button" data-upload="logo">Enviar imagem</button>
+                      <button class="botao botao-fantasma" type="button" data-remover="logo">Remover</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="campo-upload">
+                  <span class="rotulo-campo">Assinatura digitalizada</span>
+                  <div class="upload-area">
+                    <img id="previa-assinatura" alt="Assinatura" class="previa-imagem oculto" />
+                    <div class="upload-acoes">
+                      <input type="file" id="arquivo-assinatura" accept="image/*" class="oculto" />
+                      <button class="botao" type="button" data-upload="assinatura">Enviar imagem</button>
+                      <button class="botao botao-fantasma" type="button" data-remover="assinatura">Remover</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Layout -->
+            <div class="painel-aba oculto" data-painel="layout">
+              <div class="lista-opcoes">
+                <label class="checkbox-linha"><input type="checkbox" id="op-catalogo" /><span>Incluir página de <strong>catálogo</strong> com descrições e fotos</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-fotos" /><span>Mostrar <strong>fotos dos produtos</strong> no catálogo</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-bancarios" /><span>Mostrar <strong>dados bancários</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-extenso" /><span>Mostrar <strong>valor total por extenso</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-assinatura" /><span>Incluir <strong>bloco de assinatura</strong> do representante legal</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-quebra" /><span>Começar o <strong>catálogo em nova página</strong></span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-logo" /><span>Usar <strong>logo no cabeçalho</strong> de todas as páginas</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-marcadagua" /><span>Usar a logo da empresa como <strong>marca d'água</strong> (bem apagada, atrás do texto)</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-link-compra" /><span>Mostrar o <strong>link da compra</strong> no catálogo (uso interno)</span></label>
+              </div>
+              <label class="campo campo-cor">Cor principal do documento
+                <input type="color" id="op-cor" value="#0B1F33" />
+              </label>
+            </div>
+          </div>
+
+          <aside class="editor-previa">
+            <div class="previa-cabecalho">
+              <h3>Pré-visualização</h3>
+              <div>
+                <button class="botao botao-fantasma" id="previa-atualizar" type="button">Atualizar</button>
+                <button class="botao botao-fantasma" id="previa-baixar" type="button">Baixar PDF</button>
+              </div>
+            </div>
+            <div class="previa-quadro" id="previa-quadro">
+              <p class="texto-suave" id="previa-aviso">Clique em <strong>Atualizar</strong> para ver o PDF.</p>
+              <iframe id="previa-iframe" title="Pré-visualização do PDF" class="oculto"></iframe>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ Importar -->
+      <section id="view-importar" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Importar planilha de itens</h2>
+            <p class="texto-suave">Envie a planilha no formato do modelo para preencher a proposta automaticamente.</p>
+          </div>
+          <a class="botao botao-primario" href="/api/modelo-planilha">Baixar modelo .xlsx</a>
+        </div>
+
+        <div class="bloco">
+          <div class="area-upload" id="area-upload">
+            <input type="file" id="arquivo-planilha" accept=".xlsx,.xls,.csv,.ods" class="oculto" />
+            <p class="area-upload-icone"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4.5" /><path d="m7.5 9 4.5-4.5L16.5 9" /><path d="M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15" /></svg></p>
+            <p><strong>Arraste a planilha aqui</strong> ou clique para escolher o arquivo</p>
+            <p class="texto-suave">Aceita .xlsx, .xls, .csv e .ods — até 15 MB</p>
+          </div>
+
+          <div class="colunas-modelo">
+            <h3>Colunas do modelo</h3>
+            <ul id="lista-colunas-modelo"></ul>
+            <p class="texto-suave">"Descreva_Edital" e "Quantidade" são obrigatórias. As demais colunas são opcionais e podem ficar vazias.</p>
+          </div>
+        </div>
+
+        <div class="bloco oculto" id="bloco-importacao">
+          <div class="bloco-cabecalho">
+            <h3 id="importacao-titulo">Itens encontrados</h3>
+            <div class="acoes-vista">
+              <button class="botao" id="importacao-marcar" type="button">Desmarcar todos</button>
+              <button class="botao botao-primario" id="importacao-criar-proposta" type="button">Criar proposta com os itens</button>
+              <button class="botao" id="importacao-criar-orcamento" type="button">Criar orçamento</button>
+            </div>
+          </div>
+
+          <div class="grade-2">
+            <label class="campo">Ou adicionar os itens num documento existente
+              <select id="importacao-documento"><option value="">Selecione...</option></select>
+            </label>
+            <div class="campo">
+              <span class="rotulo-campo">&nbsp;</span>
+              <button class="botao botao-largo" id="importacao-adicionar" type="button">Adicionar ao documento selecionado</button>
+            </div>
+          </div>
+
+          <div id="importacao-avisos" class="avisos oculto"></div>
+          <div id="importacao-tabela" class="tabela-rolavel"></div>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------ Empresa -->
+      <section id="view-empresa" class="vista oculto">
+        <div class="cabecalho-vista">
+          <div>
+            <h2>Minha empresa</h2>
+            <p class="texto-suave">Estes dados preenchem automaticamente todas as propostas e orçamentos.</p>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Dados cadastrais e bancários</h3></div>
+          <div class="grade-2">
+            <label class="campo campo-largo">Razão social<input type="text" id="emp-razao" /></label>
+            <label class="campo">Nome fantasia<input type="text" id="emp-fantasia" /></label>
+            <label class="campo">CNPJ<input type="text" id="emp-cnpj" placeholder="00.000.000/0001-00" /></label>
+            <label class="campo">Inscrição estadual<input type="text" id="emp-ie" /></label>
+            <label class="campo">Inscrição municipal<input type="text" id="emp-im" /></label>
+            <label class="campo checkbox-linha"><input type="checkbox" id="emp-simples" /><span>Enquadrada no SIMPLES NACIONAL</span></label>
+            <label class="campo">Telefone<input type="text" id="emp-telefone" placeholder="(00) 00000-0000" /></label>
+            <label class="campo">E-mail<input type="text" id="emp-email" /></label>
+            <label class="campo">Cidade<input type="text" id="emp-cidade" /></label>
+            <label class="campo">UF<input type="text" id="emp-uf" maxlength="2" /></label>
+            <label class="campo campo-largo">Endereço<input type="text" id="emp-endereco" /></label>
+            <label class="campo">CEP<input type="text" id="emp-cep" /></label>
+            <label class="campo">Banco<input type="text" id="emp-banco" /></label>
+            <label class="campo">Agência<input type="text" id="emp-agencia" /></label>
+            <label class="campo">Conta corrente<input type="text" id="emp-conta" /></label>
+            <label class="campo">Chave PIX<input type="text" id="emp-pix" /></label>
+            <label class="campo">Representante legal<input type="text" id="emp-representante" /></label>
+            <label class="campo">CPF do representante<input type="text" id="emp-cpf" /></label>
+            <label class="campo campo-largo">Cargo<input type="text" id="emp-cargo" /></label>
+          </div>
+
+          <div class="grade-2">
+            <div class="campo-upload">
+              <span class="rotulo-campo">Logo da empresa</span>
+              <div class="upload-area">
+                <img id="emp-previa-logo" alt="Logo" class="previa-imagem oculto" />
+                <div class="upload-acoes">
+                  <input type="file" id="emp-arquivo-logo" accept="image/*" class="oculto" />
+                  <button class="botao" type="button" data-upload-emp="logo">Enviar imagem</button>
+                  <button class="botao botao-fantasma" type="button" data-remover-emp="logo">Remover</button>
+                </div>
+              </div>
+            </div>
+            <div class="campo-upload">
+              <span class="rotulo-campo">Assinatura digitalizada</span>
+              <div class="upload-area">
+                <img id="emp-previa-assinatura" alt="Assinatura" class="previa-imagem oculto" />
+                <div class="upload-acoes">
+                  <input type="file" id="emp-arquivo-assinatura" accept="image/*" class="oculto" />
+                  <button class="botao" type="button" data-upload-emp="assinatura">Enviar imagem</button>
+                  <button class="botao botao-fantasma" type="button" data-remover-emp="assinatura">Remover</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="botao botao-primario" id="emp-salvar" type="button">Salvar dados da empresa</button>
+
+          <h3 class="titulo-bloco">Modelos de declaração</h3>
+          <p class="texto-suave">
+            As mesmas declarações da seção <a href="#/declaracoes">Declarações</a>, no painel — que é
+            também onde elas são impressas. Guarde aqui o que você usa sempre (Declaração Unificada,
+            ME/EPP/MEI...): cada declaração é um <strong>documento à parte</strong>, sai sozinha em
+            folha própria e <strong>não entra na proposta nem no orçamento</strong>.
+          </p>
+          <div id="lista-modelos-declaracao" class="lista-declaracoes" data-lista-modelos></div>
+          <div class="acoes-vista">
+            <button class="botao" id="modelo-declaracao-adicionar" data-acao-modelos="nova" type="button">+ Nova declaração</button>
+            <button class="botao botao-primario" id="modelos-declaracao-salvar" data-acao-modelos="salvar" type="button">Salvar declarações</button>
+          </div>
+        </div>
+
+        <div class="bloco">
+          <div class="bloco-cabecalho"><h3>Padrões para novos documentos</h3></div>
+          <div class="grade-2">
+            <label class="campo">Validade (dias)<input type="number" id="pad-validade" min="0" /></label>
+            <label class="campo">Cidade - UF<input type="text" id="pad-cidade" placeholder="Fortaleza - CE" /></label>
+            <label class="campo">Prazo de entrega<input type="text" id="pad-prazo" /></label>
+            <label class="campo">Garantia<input type="text" id="pad-garantia" /></label>
+            <label class="campo campo-largo">Condições de pagamento<textarea id="pad-pagamento" rows="2"></textarea></label>
+            <label class="campo campo-largo">Observações padrão<textarea id="pad-observacoes" rows="2"></textarea></label>
+          </div>
+          <button class="botao botao-primario" id="pad-salvar" type="button">Salvar padrões</button>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <!-- ================================ COMPONENTES ================================ -->
+  <div id="caixa-toasts" class="caixa-toasts"></div>
+
+  <div id="modal" class="modal oculto">
+    <div class="modal-fundo" data-fechar-modal></div>
+    <div class="modal-caixa" role="dialog" aria-modal="true">
+      <header class="modal-cabecalho">
+        <h3 id="modal-titulo">Título</h3>
+        <button class="botao-icone" data-fechar-modal type="button" title="Fechar">✕</button>
+      </header>
+      <div class="modal-corpo" id="modal-corpo"></div>
+      <footer class="modal-rodape" id="modal-rodape"></footer>
+    </div>
+  </div>
+
+  <script src="../shared/format.js?v=44"></script>
+  <script src="../shared/declaracoes.js?v=44"></script>
+  <script src="js/api.js?v=44"></script>
+  <script src="js/ui.js?v=44"></script>
+  <script src="js/editar.js?v=44"></script>
+  <script src="js/app.js?v=44"></script>
+  <script src="js/config-nuvem.js?v=44"></script>
+  <script src="js/modo-estatico.js?v=44"></script>
+  <script src="js/nuvem.js?v=44"></script>
+</body>
+</html>

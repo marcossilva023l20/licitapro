@@ -1,0 +1,36 @@
+{
+  "name": "licitapro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema web para gerar propostas de licitação e orçamentos em PDF a partir de uma planilha de itens.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "testes": "node testes/executar.js",
+    "modelo": "node scripts/gerar-modelo.js",
+    "paginas": "node scripts/paginas.js",
+    "fontes": "node scripts/fontes-padrao.js",
+    "supabase": "node scripts/banco.js",
+    "banco": "node scripts/banco.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "licitacao",
+    "proposta",
+    "orcamento",
+    "pdf"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "pdfmake": "^0.3.11",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  }
+}
