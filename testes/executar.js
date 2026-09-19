@@ -793,6 +793,56 @@ teste('PDF: orçamento em paisagem e cabeçalho só na primeira página', async 
   );
 });
 
+teste('Inscrição municipal: sai no PDF do documento e nas planilhas exportadas', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const PlanilhaAuxiliar = require(path.join(RAIZ, 'shared', 'planilha-auxiliar'));
+  const XLSX = require('xlsx');
+
+  // o documento guarda a inscrição municipal do proponente (aba Dados do proponente)
+  const saneado = Esquema.sanear(
+    { tipo: 'proposta', proponente: { razaoSocial: 'DEJ LTDA', inscricaoEstadual: '123.456.78-9', inscricaoMunicipal: '9876543-2' } },
+    {}, 'proposta'
+  );
+  assert.strictEqual(saneado.proponente.inscricaoMunicipal, '9876543-2', 'o documento não descarta a inscrição municipal');
+
+  // no PDF do documento ela aparece nos dados do proponente, junto da estadual
+  const doc = Object.assign({}, documentoExemplo('proposta'), {
+    proponente: Object.assign({}, documentoExemplo('proposta').proponente, { inscricaoMunicipal: '9876543-2' }),
+  });
+  const comIM = JSON.stringify((await Pdf.montarDefinicao(doc, {})).content);
+  assert.ok(comIM.includes('Inscrição Estadual'), 'a inscrição estadual continua saindo');
+  assert.ok(comIM.includes('Inscrição Municipal'), 'e a municipal também');
+  // o número sai como os outros documentos da casa (só os dígitos, sem máscara)
+  assert.ok(comIM.includes('98765432'), 'com o número informado: ' + comIM.slice(comIM.indexOf('Inscrição Municipal'), comIM.indexOf('Inscrição Municipal') + 60));
+
+  const semIM = JSON.stringify((await Pdf.montarDefinicao(documentoExemplo('proposta'), {})).content);
+  assert.ok(!semIM.includes('Inscrição Municipal'), 'sem o campo preenchido, nada aparece (só o que existe)');
+
+  // e o PDF sai de verdade, com o número dentro do arquivo
+  const arquivo = Buffer.from(await Pdf.gerarPdf(doc, {})).toString('latin1');
+  assert.ok(arquivo.length > 1000, 'o PDF foi gerado: ' + arquivo.length + ' bytes');
+
+  // a planilha auxiliar (Resumo) leva IE e IM da empresa
+  const empresa = {
+    razaoSocial: 'D.E.J SOLUTIONS & GLOBAL LTDA', cnpj: '65.180.352/0001-11',
+    inscricaoEstadual: '073159573', inscricaoMunicipal: '9876543-2',
+  };
+  const livro = XLSX.read(PlanilhaAuxiliar.gerarBuffer({ tipo: 'proposta', itens: [] }, empresa), { type: 'buffer' });
+  const resumo = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' });
+  const achar = (rotulo) => {
+    const linha = resumo.find((l) => l[0] === rotulo);
+    return linha ? linha[1] : undefined;
+  };
+  assert.strictEqual(achar('Inscrição estadual'), '073159573', 'a planilha exportada traz a IE');
+  assert.strictEqual(achar('Inscrição municipal'), '9876543-2', 'e a inscrição municipal');
+
+  // a declaração também sabe citar a inscrição municipal: {IM}
+  const Declaracoes = require(path.join(RAIZ, 'shared', 'declaracoes'));
+  const texto = Declaracoes.substituirTokens('IM {IM} / IE {IE}', {}, empresa);
+  assert.strictEqual(texto, 'IM 9876543-2 / IE 073159573', 'o campo {IM} é trocado no texto da declaração');
+});
+
 teste('PDF: a declaração de aceitação não existe mais (a pedido do usuário)', async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
@@ -989,6 +1039,10 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
       XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens']).length >= 1,
       'a planilha auxiliar tem os itens do documento'
     );
+    const resumoAuxiliar = XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Resumo'], { header: 1, defval: '' });
+    const rotulosDoResumo = resumoAuxiliar.map((l) => l[0]);
+    assert.ok(rotulosDoResumo.includes('Inscrição estadual'), 'a planilha exportada tem a linha da inscrição estadual');
+    assert.ok(rotulosDoResumo.includes('Inscrição municipal'), 'e a da inscrição municipal');
 
     // exportar itens para planilha
     const planilha = await requisitar(servidor, `/api/documentos/${id}/planilha`);
@@ -1027,6 +1081,23 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     assert.strictEqual(empresaSalva.json.empresa.inscricaoMunicipal, '9876543-2', 'a inscrição municipal foi salva');
     const empresaRelida = await requisitar(servidor, '/api/perfil');
     assert.strictEqual(empresaRelida.json.perfil.empresa.inscricaoMunicipal, '9876543-2', 'e continua no cadastro');
+
+    // a planilha auxiliar passa a mostrar IE e IM no resumo, e o PDF do
+    // documento sai com a inscrição municipal nos dados do proponente
+    const auxiliarComIM = await requisitar(servidor, `/api/documentos/${id}/planilha-auxiliar`);
+    const resumoComIM = XLSX.utils.sheet_to_json(
+      XLSX.read(auxiliarComIM.corpo, { type: 'buffer' }).Sheets['Resumo'], { header: 1, defval: '' }
+    );
+    const valorNoResumo = (rotulo) => {
+      const linha = resumoComIM.find((l) => l[0] === rotulo);
+      return linha ? linha[1] : undefined;
+    };
+    assert.strictEqual(valorNoResumo('Inscrição estadual'), '123.456.78-9', 'a IE da empresa no resumo da planilha');
+    assert.strictEqual(valorNoResumo('Inscrição municipal'), '9876543-2', 'e a IM da empresa no resumo da planilha');
+
+    const pdfDoDocumento = await requisitar(servidor, `/api/documentos/${id}/pdf?download=1`);
+    assert.strictEqual(pdfDoDocumento.status, 200, pdfDoDocumento.texto);
+    assert.ok(pdfDoDocumento.corpo.length > 1000, 'o PDF do documento foi gerado com a inscrição municipal');
 
     // o PDF da declaração sai com IM no timbre
     const declaracaoComIM = await requisitar(servidor, '/api/declaracoes/pdf?download=1', {
@@ -1934,6 +2005,55 @@ teste('Layout do PDF: orientação (retrato/paisagem) e cabeçalho só na primei
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento reaberto', 20000);
   assert.strictEqual($('#op-orientacao').value, 'paisagem', 'a paisagem volta marcada ao reabrir');
   assert.strictEqual($('#op-cabecalho-primeira').checked, true, 'a caixa do cabeçalho volta marcada');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Dados do proponente: a inscrição municipal do documento é gravada e volta ao reabrir', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 10,
+    precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  // o campo existe na aba Dados do proponente, ao lado da inscrição estadual
+  const campo = $('#campo-prop-im');
+  assert.ok(campo, 'o campo Inscrição municipal está na aba Dados do proponente');
+  assert.ok($('#campo-prop-ie'), 'e a inscrição estadual continua lá');
+
+  // preenche e salva: o documento guarda (antes a inscrição municipal era descartada ao salvar)
+  $('#campo-prop-ie').value = '123.456.78-9';
+  $('#campo-prop-ie').dispatchEvent(new window.Event('input', { bubbles: true }));
+  campo.value = '9876543-2';
+  campo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
+
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  assert.strictEqual(relido.documento.proponente.inscricaoMunicipal, '9876543-2', 'a inscrição municipal ficou no documento');
+  assert.strictEqual(relido.documento.proponente.inscricaoEstadual, '123.456.78-9', 'junto da estadual');
+
+  // o PDF em tela sai com a linha nos dados do proponente
+  const definicao = await window.ModoEstatico.definicaoPdf(relido.documento);
+  const textoPdf = JSON.stringify(definicao.content);
+  assert.ok(textoPdf.includes('Inscrição Municipal'), 'o PDF do documento mostra a inscrição municipal');
+  assert.ok(textoPdf.includes('98765432'), 'com o número informado');
+
+  // reabrir mostra o que foi salvo
+  window.location.hash = '#/painel';
+  await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'volta ao painel', 20000);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento reaberto', 20000);
+  assert.strictEqual($('#campo-prop-im').value, '9876543-2', 'o campo volta preenchido ao reabrir');
 
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();

@@ -113,6 +113,7 @@
     { chave: 'FANTASIA', descricao: 'nome fantasia', de: (doc, empresa) => empresa.nomeFantasia || '' },
     { chave: 'CNPJ', descricao: 'CNPJ da empresa', de: (doc, empresa) => (empresa.cnpj ? Formato.cnpj(empresa.cnpj) : '') },
     { chave: 'IE', descricao: 'inscrição estadual', de: (doc, empresa) => empresa.inscricaoEstadual || '' },
+    { chave: 'IM', descricao: 'inscrição municipal', de: (doc, empresa) => empresa.inscricaoMunicipal || '' },
     { chave: 'ENDERECO', descricao: 'endereço da empresa', de: (doc, empresa) => empresa.endereco || '' },
     { chave: 'CIDADE', descricao: 'cidade da empresa', de: (doc, empresa) => empresa.cidade || '' },
     { chave: 'UF', descricao: 'UF da empresa', de: (doc, empresa) => empresa.uf || '' },

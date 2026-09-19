@@ -599,6 +599,16 @@ async function montarDefinicao(doc, empresa, contexto) {
         (proponente.simplesNacional ? '  —  Enquadrada no SIMPLES NACIONAL' : ''),
     ]);
   }
+  // a inscrição municipal sai junto da estadual (só quando preenchida)
+  if (proponente.inscricaoMunicipal) {
+    dadosProponente.push([
+      'Inscrição Municipal',
+      Formato.somenteDigitos(proponente.inscricaoMunicipal) +
+        (!proponente.inscricaoEstadual && proponente.simplesNacional
+          ? '  —  Enquadrada no SIMPLES NACIONAL'
+          : ''),
+    ]);
+  }
   if (proponente.telefone) dadosProponente.push(['Telefone', Formato.telefone(proponente.telefone)]);
   if (proponente.email) dadosProponente.push(['E-mail', proponente.email]);
   const enderecoCompleto = montarEndereco(proponente);

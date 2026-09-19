@@ -138,6 +138,8 @@
       ['Razão social', (empresa && empresa.razaoSocial) || (doc.proponente && doc.proponente.razaoSocial) || ''],
       ['Nome fantasia', (empresa && empresa.nomeFantasia) || (doc.proponente && doc.proponente.nomeFantasia) || ''],
       ['CNPJ', (empresa && empresa.cnpj) || (doc.proponente && doc.proponente.cnpj) || ''],
+      ['Inscrição estadual', (empresa && empresa.inscricaoEstadual) || (doc.proponente && doc.proponente.inscricaoEstadual) || ''],
+      ['Inscrição municipal', (empresa && empresa.inscricaoMunicipal) || (doc.proponente && doc.proponente.inscricaoMunicipal) || ''],
       [''],
       ['ITENS E VALORES'],
       ['Quantidade de itens', (doc.itens || []).length],

@@ -27,8 +27,8 @@ Título do documento (PROPOSTA DE FORNECIMENTO / ORÇAMENTO Nº 001/2026)
 Dados do órgão (UASG, modalidade, pregão, objeto, prazo)  — proposta
 Identificação do cliente (CNPJ, contato, endereço)      — orçamento
    ↓
-Dados do proponente (CNPJ, inscrição estadual, SIMPLES NACIONAL, telefone,
-                     e-mail, endereço, dados bancários, PIX)
+Dados do proponente (CNPJ, inscrição estadual, inscrição municipal, SIMPLES NACIONAL,
+                     telefone, e-mail, endereço, dados bancários, PIX)
    ↓
 TABELA DE PREÇOS (item, especificação, marca/modelo, UND, QTD, valor unitário, valor total)
    ↓

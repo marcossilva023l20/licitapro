@@ -167,6 +167,7 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       nomeFantasia: texto(proponente.nomeFantasia, 300),
       cnpj: texto(proponente.cnpj, 30),
       inscricaoEstadual: texto(proponente.inscricaoEstadual, 40),
+      inscricaoMunicipal: texto(proponente.inscricaoMunicipal, 40),
       simplesNacional: booleano(proponente.simplesNacional, true),
       telefone: texto(proponente.telefone, 30),
       email: texto(proponente.email, 200),
