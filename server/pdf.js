@@ -52,4 +52,13 @@ module.exports = {
     registrarFontes();
     return motor.gerarPdf(doc, empresa, contexto);
   },
+  nomeArquivoDeclaracao: motor.nomeArquivoDeclaracao,
+  async montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto) {
+    registrarFontes();
+    return motor.montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto);
+  },
+  async gerarPdfDeclaracoes(declaracoes, doc, empresa, contexto) {
+    registrarFontes();
+    return motor.gerarPdfDeclaracoes(declaracoes, doc, empresa, contexto);
+  },
 };

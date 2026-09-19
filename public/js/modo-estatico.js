@@ -336,7 +336,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '38';
+  const VERSAO_ARQUIVOS = '39';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -584,6 +584,26 @@
       const removidos = antes - banco.documentos.length;
       if (removidos) gravarBanco();
       return { ok: true, removidos };
+    }
+
+    if (rota === '/api/declaracoes/pdf' && metodo === 'POST') {
+      const lista = ((corpo && corpo.declaracoes) || [(corpo || {}).declaracao])
+        .filter((d) => d && (String(d.titulo || '').trim() || String(d.texto || '').trim()));
+      if (!lista.length) {
+        throw Object.assign(new Error('Escolha pelo menos uma declaração para imprimir.'), { status: 400 });
+      }
+      await carregarPesadas();
+      const documento = (corpo && corpo.documento) || {};
+      const empresa = Object.assign({}, lerBanco().perfil.empresa || {}, documento.proponente || {});
+      const motor = await motorPdfPronto();
+      const fotosIgnoradas = [];
+      const buffer = await motor.gerarPdfDeclaracoes(lista, documento, empresa, { relatorio: fotosIgnoradas });
+      return {
+        __blob: new Blob([buffer], { type: 'application/pdf' }),
+        __nome: motor.nomeArquivoDeclaracao(lista),
+        __fotosIgnoradas: fotosIgnoradas.length,
+        __fotosDetalhe: motor.descreverFotosIgnoradas(fotosIgnoradas),
+      };
     }
 
     if (rota === '/api/documentos/previa-pdf' && metodo === 'POST') {
@@ -900,6 +920,7 @@
     const pedirServidor = API.pedir.bind(API);
     const baixarServidor = API.baixar.bind(API);
     const previaServidor = API.previaPdf.bind(API);
+    const declaracaoServidor = API.pdfDeclaracao.bind(API);
     const enviarServidor = API.enviarArquivo.bind(API);
     const precisaModoLocal = (erro) => Boolean(erro && erro.semServidor);
 
@@ -969,6 +990,24 @@
         const resposta = await respostaLocal('POST', '/api/documentos/previa-pdf', documento);
         API.ultimasFotosIgnoradas = anotarFotos(resposta);
         return resposta.__blob;
+      }
+    };
+
+    /** A folha da declaração (o mesmo pedido do servidor, pelo armazenamento local). */
+    async function pdfDeclaracaoLocal(corpo) {
+      const resposta = await respostaLocal('POST', '/api/declaracoes/pdf', corpo);
+      API.ultimasFotosIgnoradas = anotarFotos(resposta);
+      return Object.assign({ blob: resposta.__blob, nomeArquivo: resposta.__nome }, API.ultimasFotosIgnoradas);
+    }
+
+    API.pdfDeclaracao = async function (declaracoes, documento) {
+      const corpo = { declaracoes, documento: documento || null };
+      if (estado.ativo) return pdfDeclaracaoLocal(corpo);
+      try {
+        return await declaracaoServidor(declaracoes, documento);
+      } catch (erro) {
+        if (!precisaModoLocal(erro)) throw erro;
+        return pdfDeclaracaoLocal(corpo);
       }
     };
 

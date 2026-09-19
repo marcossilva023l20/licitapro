@@ -136,7 +136,16 @@ Desenvolvimento com recarga automática: `npm run dev`.
    mexer no modelo guardado; **Guardar como modelo** faz o caminho de volta (o texto do documento
    vira modelo para os próximos).
 
-   Cada declaração tem **No PDF** (só as marcadas saem), **↑ ↓** para ordenar e **🗑** para remover.
+   Cada declaração tem **No PDF** (só as marcadas saem), **🖨** para **imprimir só ela**, **↑ ↓** para
+   ordenar e **🗑** para remover; o botão **🖨 Imprimir marcadas**, na barra da aba, imprime todas as
+   marcadas — uma por página.
+
+   **Imprimir a declaração** gera um PDF só dela, no **mesmo padrão da proposta**: o timbre com a
+   logomarca no cabeçalho, Times New Roman, título em destaque, texto justificado, local e data por
+   extenso e a linha de assinatura com o nome, o CPF e «(Representante Legal da empresa)». Serve
+   para levar a declaração assinada ao certame sem imprimir a proposta inteira. Na seção
+   *Declarações* do painel, o **🖨** de cada modelo faz o mesmo (ali valem os dados da empresa; os
+   campos do edital, como `{ORGAO}`, saem em branco — a tela avisa quais).
    Os modelos guardados na seção Declarações aparecem primeiro na lista (marcados como *meu modelo*).
    No PDF elas saem em folha própria (opção *Começar as declarações em nova página*, em *Layout*),
    cada uma com local, data e linha de assinatura — prontas para imprimir e assinar.
@@ -149,7 +158,8 @@ Desenvolvimento com recarga automática: `npm run dev`.
    texto ainda está vazio, a aba avisa qual é — e o marcador (`{ORGAO}`) nunca aparece no papel.
 
    Endpoints: `PUT /api/perfil/declaracoes` (os modelos guardados, na seção Declarações e em Minha
-   empresa) e o campo `declaracoes` do documento (o que sai naquele PDF). **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
+   empresa), `POST /api/declaracoes/pdf` (a folha timbrada da declaração) e o campo `declaracoes` do
+   documento (o que sai naquele PDF). **Nenhuma declaração vem preenchida por padrão**: quem escolhe é você.
 
 5. **Gerar PDF** — botão verde em cima do editor (ou na lista de documentos).
    O arquivo sai com o nome `Proposta_001-2026_orgao.pdf` / `Orcamento_001-2026_cliente.pdf`.

@@ -1028,6 +1028,7 @@
       [
         { acao: 'subir', texto: '↑', titulo: 'Mover para cima' },
         { acao: 'descer', texto: '↓', titulo: 'Mover para baixo' },
+        { acao: 'imprimir', texto: '🖨', titulo: 'Imprimir esta declaração (folha timbrada, no padrão da proposta)' },
         { acao: 'modelo', texto: 'Guardar como modelo', titulo: 'Guardar este texto nos seus modelos' },
         { acao: 'remover', texto: '🗑', titulo: 'Remover declaração' },
       ].forEach((b) => {
@@ -1158,6 +1159,7 @@
   function ligarDeclaracoes() {
     $('#declaracoes-adicionar').addEventListener('click', () => desenharSelecaoDeModelos());
     $('#declaracoes-modelos').addEventListener('click', () => abrirMeusModelos());
+    $('#declaracoes-imprimir').addEventListener('click', () => imprimirDeclaracao(null));
 
     const lista = $('#lista-declaracoes');
     lista.addEventListener('input', (evento) => {
@@ -1217,6 +1219,10 @@
         marcarSujo();
         return;
       }
+      if (acao === 'imprimir') {
+        await imprimirDeclaracao(indice);
+        return;
+      }
       if (acao === 'modelo') {
         const declaracao = declaracoes[indice];
         await carregarModelosDeclaracao();
@@ -1226,6 +1232,53 @@
         await salvarMeusModelos();
       }
     });
+  }
+
+  /**
+   * Imprime a declaração em folha própria — o mesmo padrão da proposta, com o
+   * timbre e a logomarca — sem gerar o documento inteiro. Sem índice, saem todas
+   * as marcadas (uma por página).
+   */
+  async function imprimirDeclaracao(indice) {
+    const declaracoes = declaracoesDoDocumento();
+    const escolhidas = indice == null
+      ? declaracoes.filter((d) => d.incluir !== false && String(d.texto || '').trim())
+      : [declaracoes[indice]].filter(Boolean);
+    if (!escolhidas.length) {
+      UI.toast(
+        indice == null
+          ? 'Marque pelo menos uma declaração (e escreva o texto) para imprimir.'
+          : 'Esta declaração está sem texto.',
+        'aviso'
+      );
+      return;
+    }
+
+    // campos entre chaves sem valor: avisa antes de sair no papel
+    const proponente = (estado.doc && estado.doc.proponente) || {};
+    const vazios = [];
+    escolhidas.forEach((declaracao) => {
+      window.Declaracoes.tokensVazios(declaracao.texto, estado.doc, proponente).forEach((chave) => {
+        if (vazios.indexOf(chave) < 0) vazios.push(chave);
+      });
+    });
+
+    try {
+      const arquivo = await window.API.pdfDeclaracao(escolhidas, estado.doc);
+      window.API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
+      UI.toast('Declaração pronta: ' + arquivo.nomeArquivo, 'sucesso');
+      UI.avisarFotosIgnoradas(window.API.ultimasFotosIgnoradas);
+      if (vazios.length) {
+        UI.toast(
+          'No papel, ' + vazios.map((c) => '{' + c + '}').join(', ') + ' sairão sem valor: ' +
+            'preencha esses dados no documento ou tire o campo do texto.',
+          'aviso',
+          9000
+        );
+      }
+    } catch (erro) {
+      UI.toast('Não foi possível imprimir a declaração: ' + erro.message, 'erro');
+    }
   }
 
   // --------------------------------------------------------- prévia e PDF

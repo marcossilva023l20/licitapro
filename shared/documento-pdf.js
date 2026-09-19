@@ -304,58 +304,17 @@ function cabecalhoTabela(corBase, colunas) {
 
 // ------------------------------------------------------------------ cláusulas
 
-// -------------------------------------------------------------- PDF principal
-
 /**
- * Monta a definição do documento pdfmake.
- * @param {object} doc dados do documento (proposta/orçamento)
- * @param {object} empresa dados cadastrais do usuário (usado quando o documento não traz os dados)
+ * Timbre do papel: a faixa azul-marinho com a logo da empresa em um selo branco
+ * — a mesma identidade do site. Vale para o documento inteiro e para as folhas
+ * de declaração, que saem no mesmo padrão da proposta.
+ *
+ * @param {object} proponente dados da empresa (razão social, CNPJ, endereço...)
+ * @param {string} corBase cor da faixa (a escolhida no documento ou a da marca)
+ * @param {string} corFilete cor do filete dourado abaixo da faixa
+ * @param {object|null} logo imagem da logo já carregada (ou null)
  */
-async function montarDefinicao(doc, empresa, contexto) {
-  const relatorio = contexto && Array.isArray(contexto.relatorio) ? contexto.relatorio : [];
-  // Quando o usuário escolhe uma cor própria, o documento fica monocromático
-  // nela; sem escolha, vale a paleta da marca (azul + dourado da logo).
-  const corInformada = String((doc.opcoes && doc.opcoes.cor) || '').trim();
-  const corPropria = /^#[0-9a-fA-F]{6}$/.test(corInformada) && corInformada.toUpperCase() !== COR_PADRAO;
-  const corBase = cor(corInformada || COR_PADRAO);
-  const corTitulo = corPropria ? corBase : COR_DOURADA;
-  const corFilete = corPropria ? corBase : COR_FILETE;
-  const proponente = Object.assign({}, empresa || {}, doc.proponente || {});
-  const opcoes = Object.assign(
-    {
-      mostrarCatalogo: true,
-      mostrarFotos: true,
-      mostrarDadosBancarios: true,
-      mostrarPorExtenso: true,
-      mostrarAssinatura: true,
-      quebrarPaginaCatalogo: true,
-      logoNoCabecalho: true,
-      mostrarLinkCompra: false,
-      marcaDagua: true,
-    },
-    doc.opcoes || {}
-  );
-  const itens = (doc.itens || []).filter((i) => String(i.descricao || '').trim());
-  const totais = calcularTotais(Object.assign({}, doc, { itens }));
-  const numero = numeroFormatado(doc);
-  const titulo = tituloDocumento(doc);
-  const dataDoc = Formato.dataISO(doc.data) || Formato.dataISO(new Date());
-  // Logo da empresa (a do cadastro ou a logo padrão do sistema, em public/marca)
-  const referencia = referenciaLogo(proponente);
-  const logo = opcoes.logoNoCabecalho && referencia.referencia
-    ? await carregarImagem(referencia.referencia, 'Logo da empresa', relatorio, referencia.padrao)
-    : null;
-
-  // Marca d'água: a mesma imagem, bem apagada, atrás do conteúdo de todas as
-  // páginas. Se ela não puder ser usada, o PDF sai sem marca d'água (nunca falha).
-  const marcaDagua = opcoes.marcaDagua && referencia.referencia
-    ? await carregarImagem(referencia.referencia, "Marca d'água", relatorio, referencia.padrao)
-    : null;
-
-  // ------------------------------------------------------------- cabeçalho
-  // Faixa azul-marinho com a logo em um selo branco: a mesma identidade do
-  // site (topo escuro, destaques dourados). O corpo do documento continua
-  // claro, porque é papel — e vai ser impresso.
+function montarTimbre(proponente, corBase, corFilete, logo) {
   const nomeEmpresa = proponente.razaoSocial || proponente.nomeFantasia || '';
   const fantasiaEmpresa = proponente.nomeFantasia && proponente.nomeFantasia !== nomeEmpresa
     ? proponente.nomeFantasia
@@ -442,8 +401,19 @@ async function montarDefinicao(doc, empresa, contexto) {
       },
     ],
   };
+  return { cabecalho, nomeEmpresa, documentoEmpresa, localEmpresa, tintaFaixa };
+}
 
-  const rodape = (paginaAtual, totalPaginas) => ({
+/**
+ * Rodapé do papel: empresa/CNPJ à esquerda e a identificação (documento ou
+ * declaração) com a numeração das páginas à direita.
+ */
+function rodapeDoDocumento(opcoes) {
+  const dados = opcoes || {};
+  const nomeEmpresa = dados.nomeEmpresa || '';
+  const documentoEmpresa = dados.documentoEmpresa || '';
+  const identificacao = dados.identificacao || '';
+  return (paginaAtual, totalPaginas) => ({
     margin: [42, 6, 42, 0],
     stack: [
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 0.6, lineColor: '#C9D2DA' }] },
@@ -457,7 +427,7 @@ async function montarDefinicao(doc, empresa, contexto) {
           },
           {
             width: 'auto',
-            text: `${titulo} nº ${numero}  •  Página ${paginaAtual} de ${totalPaginas}`,
+            text: [identificacao, `Página ${paginaAtual} de ${totalPaginas}`].filter(Boolean).join('  •  '),
             fontSize: 8.3,
             color: '#7A848D',
             alignment: 'right',
@@ -467,6 +437,70 @@ async function montarDefinicao(doc, empresa, contexto) {
       },
     ],
   });
+}
+
+// -------------------------------------------------------------- PDF principal
+
+/**
+ * Monta a definição do documento pdfmake.
+ * @param {object} doc dados do documento (proposta/orçamento)
+ * @param {object} empresa dados cadastrais do usuário (usado quando o documento não traz os dados)
+ */
+async function montarDefinicao(doc, empresa, contexto) {
+  const relatorio = contexto && Array.isArray(contexto.relatorio) ? contexto.relatorio : [];
+  // Quando o usuário escolhe uma cor própria, o documento fica monocromático
+  // nela; sem escolha, vale a paleta da marca (azul + dourado da logo).
+  const corInformada = String((doc.opcoes && doc.opcoes.cor) || '').trim();
+  const corPropria = /^#[0-9a-fA-F]{6}$/.test(corInformada) && corInformada.toUpperCase() !== COR_PADRAO;
+  const corBase = cor(corInformada || COR_PADRAO);
+  const corTitulo = corPropria ? corBase : COR_DOURADA;
+  const corFilete = corPropria ? corBase : COR_FILETE;
+  const proponente = Object.assign({}, empresa || {}, doc.proponente || {});
+  const opcoes = Object.assign(
+    {
+      mostrarCatalogo: true,
+      mostrarFotos: true,
+      mostrarDadosBancarios: true,
+      mostrarPorExtenso: true,
+      mostrarAssinatura: true,
+      quebrarPaginaCatalogo: true,
+      logoNoCabecalho: true,
+      mostrarLinkCompra: false,
+      marcaDagua: true,
+    },
+    doc.opcoes || {}
+  );
+  const itens = (doc.itens || []).filter((i) => String(i.descricao || '').trim());
+  const totais = calcularTotais(Object.assign({}, doc, { itens }));
+  const numero = numeroFormatado(doc);
+  const titulo = tituloDocumento(doc);
+  const dataDoc = Formato.dataISO(doc.data) || Formato.dataISO(new Date());
+  // Logo da empresa (a do cadastro ou a logo padrão do sistema, em public/marca)
+  const referencia = referenciaLogo(proponente);
+  const logo = opcoes.logoNoCabecalho && referencia.referencia
+    ? await carregarImagem(referencia.referencia, 'Logo da empresa', relatorio, referencia.padrao)
+    : null;
+
+  // Marca d'água: a mesma imagem, bem apagada, atrás do conteúdo de todas as
+  // páginas. Se ela não puder ser usada, o PDF sai sem marca d'água (nunca falha).
+  const marcaDagua = opcoes.marcaDagua && referencia.referencia
+    ? await carregarImagem(referencia.referencia, "Marca d'água", relatorio, referencia.padrao)
+    : null;
+
+  // ------------------------------------------------------------- cabeçalho
+  const timbre = montarTimbre(proponente, corBase, corFilete, logo);
+  const cabecalho = timbre.cabecalho;
+  const nomeEmpresa = timbre.nomeEmpresa;
+  const documentoEmpresa = timbre.documentoEmpresa;
+
+  const rodape = rodapeDoDocumento({
+    nomeEmpresa,
+    documentoEmpresa,
+    identificacao: `${titulo} nº ${numero}`,
+  });
+
+  const localEmpresa = timbre.localEmpresa;
+  const tintaFaixa = timbre.tintaFaixa;
 
   // -------------------------------------------------------------- conteúdo
   const conteudo = [];
@@ -876,6 +910,173 @@ function montarEndereco(proponente) {
   return partes.join(', ');
 }
 
+/**
+ * Folha de declaração: uma declaração (ou várias, uma por página) impressa no
+ * mesmo padrão da proposta — timbre com a logomarca, Times New Roman, texto
+ * justificado, local/data e linha de assinatura. Serve para levar a declaração
+ * assinada ao certame sem imprimir a proposta inteira.
+ *
+ * @param {object|object[]} declaracoes uma declaração ou a lista delas
+ * @param {object} doc documento em tela (dá o contexto dos campos {ORGAO} etc.)
+ * @param {object} empresa dados cadastrais do usuário
+ */
+async function montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto) {
+  const relatorio = contexto && Array.isArray(contexto.relatorio) ? contexto.relatorio : [];
+  const documento = doc || {};
+  const lista = (Array.isArray(declaracoes) ? declaracoes : [declaracoes])
+    .filter((d) => d && String(d.texto || '').trim());
+  const proponente = Object.assign({}, empresa || {}, documento.proponente || {});
+  const opcoes = Object.assign(
+    { logoNoCabecalho: true, marcaDagua: false, mostrarAssinatura: true },
+    documento.opcoes || {},
+    contexto && contexto.opcoes ? contexto.opcoes : {}
+  );
+
+  const corInformada = String((documento.opcoes && documento.opcoes.cor) || '').trim();
+  const corPropria = /^#[0-9a-fA-F]{6}$/.test(corInformada) && corInformada.toUpperCase() !== COR_PADRAO;
+  const corBase = cor(corInformada || COR_PADRAO);
+  const corTitulo = corPropria ? corBase : COR_DOURADA;
+  const corFilete = corPropria ? corBase : COR_FILETE;
+
+  const referencia = referenciaLogo(proponente);
+  const logo = opcoes.logoNoCabecalho && referencia.referencia
+    ? await carregarImagem(referencia.referencia, 'Logo da empresa', relatorio, referencia.padrao)
+    : null;
+  const marcaDagua = opcoes.marcaDagua && referencia.referencia
+    ? await carregarImagem(referencia.referencia, "Marca d'água", relatorio, referencia.padrao)
+    : null;
+
+  const timbre = montarTimbre(proponente, corBase, corFilete, logo);
+
+  const dataDoc = Formato.dataISO(documento.data) || Formato.dataISO(new Date());
+  const uf = String(proponente.uf || '').trim().toUpperCase();
+  const localInformado = (documento.condicoes && documento.condicoes.local) || proponente.cidade || '';
+  let local = String(localInformado).trim();
+  if (local && uf && !new RegExp(`[-/\\s]${uf}$`, 'i').test(local)) local = `${local} - ${uf}`;
+
+  const assinatura = opcoes.mostrarAssinatura
+    ? await carregarImagem(proponente.assinatura, 'Assinatura', relatorio)
+    : null;
+
+  const conteudo = [];
+  lista.forEach((declaracao, indice) => {
+    if (indice) conteudo.push({ text: '', pageBreak: 'before' });
+    const texto = Declaracoes
+      ? Declaracoes.substituirTokens(declaracao.texto, documento, proponente)
+      : String(declaracao.texto || '');
+
+    const folha = [
+      {
+        text: String(declaracao.titulo || 'DECLARAÇÃO').trim().toUpperCase(),
+        alignment: 'center',
+        bold: true,
+        fontSize: 15.5,
+        color: corTitulo,
+        characterSpacing: 0.3,
+        margin: [0, 2, 0, 16],
+      },
+      { text: texto, alignment: 'justify', fontSize: 12.2, lineHeight: 1.25 },
+    ];
+
+    if (opcoes.mostrarAssinatura) {
+      folha.push({
+        text: `${local ? '(' + local + ') ' : ''}${Formato.dataLonga(dataDoc)}.`,
+        alignment: 'right',
+        fontSize: 11.4,
+        margin: [0, 22, 0, 0],
+      });
+      folha.push({
+        columns: [
+          { width: '*', text: '' },
+          {
+            width: 280,
+            stack: [
+              assinatura
+                ? { image: assinatura, fit: [200, 52], alignment: 'center', margin: [0, 8, 0, 0] }
+                : { text: '', margin: [0, 46, 0, 0] },
+              {
+                canvas: [{ type: 'line', x1: 0, y1: 0, x2: 280, y2: 0, lineWidth: 0.7, lineColor: '#5B6670' }],
+                margin: [0, 2, 0, 5],
+              },
+              {
+                text: proponente.representante || timbre.nomeEmpresa || '',
+                alignment: 'center',
+                bold: true,
+                fontSize: 11,
+              },
+              proponente.cpfRepresentante
+                ? { text: 'CPF: ' + Formato.cpf(proponente.cpfRepresentante), alignment: 'center', fontSize: 9.6 }
+                : null,
+              {
+                text: '(Representante Legal da empresa)',
+                alignment: 'center',
+                fontSize: 9.2,
+                color: '#5B6670',
+              },
+            ].filter(Boolean),
+          },
+          { width: '*', text: '' },
+        ],
+        margin: [0, 6, 0, 0],
+      });
+    }
+
+    conteudo.push({ unbreakable: true, stack: folha });
+  });
+
+  const identificacao = [
+    'Declaração',
+    documento.tipo ? `${tituloDocumento(documento)} nº ${numeroFormatado(documento)}` : '',
+  ].filter(Boolean).join('  •  ');
+
+  return {
+    pageSize: 'A4',
+    pageMargins: [42, 124, 42, 52],
+    ...(marcaDagua
+      ? {
+          background: () => ({
+            image: marcaDagua,
+            width: 330,
+            opacity: 0.08,
+            alignment: 'center',
+            margin: [0, 285, 0, 0],
+          }),
+        }
+      : {}),
+    header: () => timbre.cabecalho,
+    footer: rodapeDoDocumento({
+      nomeEmpresa: timbre.nomeEmpresa,
+      documentoEmpresa: timbre.documentoEmpresa,
+      identificacao,
+    }),
+    content: conteudo.length ? conteudo : [{ text: 'Nenhuma declaração para imprimir.', color: '#7A848D' }],
+    info: {
+      title: (lista[0] && lista[0].titulo) || 'Declaração',
+      author: timbre.nomeEmpresa || 'DEJ Solutions & Global',
+      subject: 'Declaração',
+    },
+    defaultStyle: { font: 'Times New Roman', fontSize: 12.4, color: '#26303A', lineHeight: 1.2 },
+  };
+}
+
+/** Nome do arquivo da declaração, ex.: Declaracao_Declaracao-Unificada.pdf */
+function nomeArquivoDeclaracao(declaracoes) {
+  const primeira = (Array.isArray(declaracoes) ? declaracoes[0] : declaracoes) || {};
+  const quantas = Array.isArray(declaracoes) ? declaracoes.length : 1;
+  const titulo = String(primeira.titulo || '').trim();
+  // "Declaração Unificada" já diz o que é: não repete a palavra no nome do arquivo
+  const base = /^declara/i.test(titulo) ? titulo : 'Declaração ' + (titulo || 'sem título');
+  const nome = Formato.slug(base).slice(0, 60) || 'declaracao';
+  return `${nome}${quantas > 1 ? '_e_outras' : ''}.pdf`;
+}
+
+/** Gera o PDF das declarações e devolve um Buffer. */
+async function gerarPdfDeclaracoes(declaracoes, doc, empresa, contexto) {
+  const definicao = await montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto);
+  const pdf = pdfMake.createPdf(definicao);
+  return pdf.getBuffer();
+}
+
 /** Gera o PDF e devolve um Buffer. */
 async function gerarPdf(doc, empresa, contexto) {
   const definicao = await montarDefinicao(doc, empresa, contexto);
@@ -896,6 +1097,9 @@ function nomeArquivo(doc, proponente) {
   return {
     gerarPdf,
     montarDefinicao,
+    montarDefinicaoDeclaracoes,
+    gerarPdfDeclaracoes,
+    nomeArquivoDeclaracao,
     descreverFotosIgnoradas,
     calcularTotais,
     nomeArquivo,

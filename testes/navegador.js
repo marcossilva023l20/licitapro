@@ -94,6 +94,8 @@ function verificarIds(html) {
     // seção Declarações (painel) e os botões que levam até ela
     'declaracoes-lista', 'declaracoes-nova', 'declaracoes-salvar', 'declaracoes-contagem',
     'painel-declaracoes', 'docs-declaracoes',
+    // imprimir a declaração (folha timbrada, no padrão da proposta)
+    'declaracoes-imprimir',
   ]);
   const faltando = [];
   ['js/app.js', 'js/editar.js', 'js/ui.js'].forEach((relativo) => {

@@ -103,6 +103,41 @@
       return Object.assign({ blob, nomeArquivo }, fotos);
     },
     /** Gera o PDF a partir dos dados em tela (sem salvar). */
+    /**
+     * Folha da declaração: o PDF timbrado (mesmo padrão da proposta) de uma ou
+     * mais declarações, sem imprimir o documento inteiro.
+     */
+    async pdfDeclaracao(declaracoes, documento) {
+      const lista = Array.isArray(declaracoes) ? declaracoes : [declaracoes];
+      const resposta = await fetch('/api/declaracoes/pdf', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ declaracoes: lista, documento: documento || null }),
+      });
+      if (!resposta.ok) {
+        let mensagem = 'Não foi possível gerar a declaração.';
+        try {
+          const corpo = await resposta.json();
+          mensagem = corpo.erro || mensagem;
+        } catch (_) { /* resposta não é JSON */ }
+        throw new Error(mensagem);
+      }
+      const blob = await resposta.blob();
+      const disposicao = resposta.headers.get('content-disposition') || '';
+      const nome = /filename="([^"]+)"/.exec(disposicao);
+      const vazios = resposta.headers.get('x-campos-vazios') || '';
+      const aviso = vazios ? decodeURIComponent(vazios).split(',').filter(Boolean) : [];
+      // a tela usa o mesmo aviso das fotos ignoradas
+      window.API.ultimasFotosIgnoradas = {
+        fotosIgnoradas: Number(resposta.headers.get('x-fotos-ignoradas') || 0),
+        detalheFotosIgnoradas: resposta.headers.get('x-fotos-ignoradas-detalhe')
+          ? decodeURIComponent(resposta.headers.get('x-fotos-ignoradas-detalhe'))
+          : '',
+      };
+      return { blob, nomeArquivo: nome ? nome[1] : 'declaracao.pdf', camposVazios: aviso };
+    },
+
     async previaPdf(documento) {
       const resposta = await fetch('/api/documentos/previa-pdf', {
         method: 'POST',

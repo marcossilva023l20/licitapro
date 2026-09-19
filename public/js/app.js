@@ -960,6 +960,8 @@
           <input type="text" data-modelo-titulo="${indice}" value="${UI.escaparHtml(modelo.titulo || '')}"
             placeholder="Título (ex.: Declaração ME / EPP / MEI)" />
           <div class="item-acoes">
+            <button class="botao botao-fantasma" data-modelo-imprimir="${indice}" type="button"
+              title="Imprimir esta declaração (folha timbrada, no padrão da proposta)">🖨</button>
             <button class="botao botao-fantasma" data-modelo-remover="${indice}" type="button" title="Remover declaração">🗑</button>
           </div>
         </div>
@@ -1026,6 +1028,37 @@
         },
       ],
     });
+  }
+
+  /**
+   * Imprime uma declaração guardada: sai a folha timbrada (o mesmo padrão da
+   * proposta, com a logomarca) para assinar. Como aqui não há documento, valem os
+   * dados da empresa — os campos do edital ficam sem valor e a tela avisa quais.
+   */
+  async function imprimirModeloDeclaracao(indice) {
+    coletarModelosDeclaracao();
+    const modelo = (estado.modelosDeclaracao || [])[indice];
+    if (!modelo || !String(modelo.texto || '').trim()) {
+      UI.toast('Escreva o texto da declaração antes de imprimir.', 'aviso');
+      return;
+    }
+    try {
+      const arquivo = await API.pdfDeclaracao([modelo], null);
+      API.baixarBlob(arquivo.blob, arquivo.nomeArquivo);
+      UI.toast('Declaração pronta: ' + arquivo.nomeArquivo, 'sucesso');
+      UI.avisarFotosIgnoradas(API.ultimasFotosIgnoradas);
+      if (arquivo.camposVazios && arquivo.camposVazios.length) {
+        UI.toast(
+          'No papel, ' + arquivo.camposVazios.map((c) => '{' + c + '}').join(', ') +
+            ' sairão sem valor (são dados do documento). Para saírem preenchidos, imprima pela aba ' +
+            'Declarações do documento.',
+          'aviso',
+          9000
+        );
+      }
+    } catch (erro) {
+      UI.toast('Não foi possível imprimir a declaração: ' + erro.message, 'erro');
+    }
   }
 
   /** "+ Nova declaração": escolhe um modelo (ou em branco) e guarda na lista de trabalho. */
@@ -1707,6 +1740,11 @@
     listasDeDeclaracoes().forEach((lista) => {
       lista.addEventListener('input', () => coletarModelosDeclaracao(lista));
       lista.addEventListener('click', (evento) => {
+        const imprimir = evento.target.closest('[data-modelo-imprimir]');
+        if (imprimir) {
+          imprimirModeloDeclaracao(Number(imprimir.dataset.modeloImprimir));
+          return;
+        }
         const botao = evento.target.closest('[data-modelo-remover]');
         if (!botao) return;
         coletarModelosDeclaracao(lista);
@@ -1881,6 +1919,7 @@
     // o editor usa o mesmo escolhedor de modelos da seção Declarações
     escolherModeloDeclaracao,
     adicionarModeloDeclaracao,
+    imprimirModeloDeclaracao,
     listasDeDeclaracoes,
     // o editor chama isto depois de salvar modelos novos na aba Declarações
     recarregarModelosDeclaracao: async () => {

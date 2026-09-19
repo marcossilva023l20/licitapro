@@ -921,6 +921,30 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     const pdfComDeclaracoes = await requisitar(servidor, `/api/documentos/${id}/pdf?download=1`);
     assert.ok(pdfComDeclaracoes.corpo.length > 40000, 'o PDF com declaração é gerado');
 
+    // imprimir só a declaração: folha timbrada, no padrão da proposta
+    const folhaDeclaracao = await requisitar(servidor, '/api/declaracoes/pdf?download=1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        declaracoes: [{ titulo: 'Declaração Unificada', texto: 'A Empresa {RAZAO} declara que atende ao {EDITAL}.' }],
+        documento: { tipo: 'proposta', numero: { sequencial: 45, ano: 2026 }, orgao: { nome: 'UASG 787010' } },
+      }),
+    });
+    assert.strictEqual(folhaDeclaracao.status, 200, folhaDeclaracao.texto);
+    assert.ok(folhaDeclaracao.headers['content-type'].includes('application/pdf'), 'a resposta é um PDF');
+    assert.ok(
+      String(folhaDeclaracao.headers['content-disposition']).includes('declaracao-unificada.pdf'),
+      'com nome de arquivo próprio: ' + folhaDeclaracao.headers['content-disposition']
+    );
+    assert.strictEqual(folhaDeclaracao.corpo.slice(0, 5).toString(), '%PDF-', 'o arquivo é um PDF de verdade');
+
+    const semDeclaracao = await requisitar(servidor, '/api/declaracoes/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({ declaracoes: [] }),
+    });
+    assert.strictEqual(semDeclaracao.status, 400, 'sem declaração escolhida, avisa: ' + semDeclaracao.texto);
+
     // excluir
     const exclusao = await requisitar(servidor, `/api/documentos/${id}`, { method: 'DELETE' });
     assert.strictEqual(exclusao.status, 200);
@@ -1794,6 +1818,7 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   const empresa = {
     razaoSocial: 'DEJ SOLUTIONS & GLOBAL LTDA', cnpj: '65.180.352/0001-11',
     cidade: 'Imperatriz', uf: 'MA', representante: 'Marcos Silva', cargoRepresentante: 'Sócio-Administrador',
+    cpfRepresentante: '001.711.915-44',
   };
   const doc = {
     tipo: 'proposta', numeroFormatado: '045/2026', data: '2026-09-16',
@@ -1843,7 +1868,42 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   const semDeclaracoes = await Pdf.montarDefinicao(Object.assign({}, doc, { declaracoes: [] }), empresa);
   assert.ok(!JSON.stringify(semDeclaracoes.content).includes('DECLARAÇÕES'), 'sem declarações, nada de seção');
 
-  // 6) o documento guarda a lista (schema) e o perfil guarda os modelos
+  // 6) a folha da declaração: mesmo padrão da proposta (timbre com a logo),
+  // com os campos trocados e a linha de assinatura — sem a proposta inteira
+  const declaracoesFolha = [
+    Object.assign(Declaracoes.doModelo(Declaracoes.MODELOS[0]), { incluir: true }),
+    { titulo: 'Declaração ME / EPP / MEI', texto: 'Enquadrada na LC 123/2006.', incluir: true },
+  ];
+  const folha = await Pdf.montarDefinicaoDeclaracoes(declaracoesFolha, doc, empresa);
+  const textoFolha = JSON.stringify(folha.content);
+  assert.ok(textoFolha.includes('DECLARAÇÃO UNIFICADA'), 'o título da declaração sai em destaque');
+  assert.ok(textoFolha.includes('DECLARAÇÃO ME / EPP / MEI'), 'e o da segunda também');
+  assert.strictEqual((textoFolha.match(/pageBreak/g) || []).length, 1, 'cada declaração em sua página');
+  assert.ok(!/\{(RAZAO|CNPJ|MODALIDADE|EDITAL|ORGAO|CPF_REPRESENTANTE)\}/.test(textoFolha), 'nenhum campo fica cru no papel');
+  assert.ok(textoFolha.includes('DEJ SOLUTIONS & GLOBAL LTDA'), 'a empresa entra pelo {RAZAO}');
+  assert.ok(textoFolha.includes('(Representante Legal da empresa)'), 'tem a linha para assinar');
+  assert.ok(textoFolha.includes('Marcos Silva'), 'com o nome do representante');
+  assert.ok(textoFolha.includes('CPF: 001.711.915-44'), 'e o CPF');
+  assert.ok(textoFolha.includes('16 de setembro de 2026'), 'com a data por extenso do documento');
+  assert.ok(!textoFolha.includes('RÁDIO'), 'não leva a tabela de itens da proposta');
+
+  // o timbre é o mesmo da proposta: cabeçalho e rodapé com a empresa
+  assert.strictEqual(typeof folha.header, 'function', 'a folha tem o timbre no cabeçalho');
+  const timbre = JSON.stringify(folha.header().stack);
+  assert.ok(timbre.includes('DEJ SOLUTIONS & GLOBAL LTDA'), 'o timbre traz a razão social');
+  assert.ok(timbre.includes('CNPJ 65.180.352/0001-11'), 'e o CNPJ');
+  assert.ok(folha.footer(1, 2).stack.length > 0, 'e o rodapé com a numeração');
+
+  const pdfFolha = await Pdf.gerarPdfDeclaracoes(declaracoesFolha, doc, empresa);
+  assert.strictEqual(pdfFolha.slice(0, 5).toString(), '%PDF-', 'o arquivo é um PDF');
+  assert.ok(pdfFolha.length > 30000, 'com conteúdo: ' + pdfFolha.length + ' bytes');
+  assert.strictEqual(Pdf.nomeArquivoDeclaracao(declaracoesFolha), 'declaracao-unificada_e_outras.pdf', 'e nome de arquivo próprio');
+
+  // sem dados da empresa, os campos do edital saem vazios — e a lista diz quais
+  const semEmpresa = await Pdf.montarDefinicaoDeclaracoes([{ titulo: 'X', texto: 'Empresa {RAZAO}, órgão {ORGAO}.' }], {}, {});
+  assert.ok(JSON.stringify(semEmpresa.content).includes('Empresa , órgão .'), 'o texto sai sem os marcadores');
+
+  // 7) o documento guarda a lista (schema) e o perfil guarda os modelos
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema.js'));
   const perfil = { empresa, padroes: {} };
   const saneado = Esquema.sanear({ tipo: 'proposta', declaracoes: doc.declaracoes }, perfil, 'proposta');
@@ -1955,7 +2015,23 @@ teste('Declarações na tela: adicionar do modelo, marcar e gerar o PDF', async 
   window.UI.fecharModal();
   await ModoLocal.esperar(() => $('#modal').classList.contains('oculto'), 'modal fechado');
 
-  // 7) o PDF do documento sai com as declarações (só a marcada) e sem tokens crus
+  // 7) imprimir só a declaração: folha timbrada, no padrão da proposta
+  const baixados = [];
+  window.API.baixarBlob = (blob, nome) => { baixados.push({ blob, nome }); };
+  window.document.querySelector('#lista-declaracoes .declaracao [data-acao-declaracao="imprimir"]')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => baixados.length === 1, 'a declaração individual foi gerada', 20000);
+  assert.ok(/\.pdf$/i.test(baixados[0].nome), 'o arquivo baixado é um PDF: ' + baixados[0].nome);
+  assert.ok(baixados[0].blob.size > 1000, 'e tem conteúdo: ' + baixados[0].blob.size + ' bytes');
+  const bytesDeclaracao = Buffer.from(await baixados[0].blob.arrayBuffer());
+  assert.strictEqual(bytesDeclaracao.slice(0, 5).toString(), '%PDF-', 'começa como PDF de verdade');
+
+  // o botão da barra imprime as marcadas (a primeira está marcada, a segunda não)
+  $('#declaracoes-imprimir').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => baixados.length === 2, 'as marcadas foram geradas', 20000);
+  assert.ok(/declaracao/i.test(baixados[1].nome), 'com nome de arquivo da declaração: ' + baixados[1].nome);
+
+  // 8) o PDF do documento sai com as declarações (só a marcada) e sem tokens crus
   await $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo com as declarações', 20000);
   const documentoSalvo = await window.API.get('/api/documentos/' + salvo.documento.id);
@@ -2042,6 +2118,17 @@ teste('Declarações: a seção fica no painel, junto de novo orçamento e nova 
   const depois = await window.API.get('/api/perfil');
   assert.strictEqual(depois.perfil.padroes.garantia, '12 meses', 'os padrões foram salvos');
   assert.strictEqual(depois.perfil.declaracoes.length, 1, 'e as declarações continuam guardadas');
+
+  // 4c) o 🖨 da seção imprime o modelo guardado em folha timbrada
+  const baixados = [];
+  window.API.baixarBlob = (blob, nome) => { baixados.push({ blob, nome }); };
+  window.document.querySelector('#declaracoes-lista [data-modelo-imprimir]')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => baixados.length === 1, 'a declaração guardada foi impressa', 20000);
+  assert.ok(/\.pdf$/i.test(baixados[0].nome), 'arquivo PDF: ' + baixados[0].nome);
+  assert.ok(baixados[0].blob.size > 1000, 'com conteúdo: ' + baixados[0].blob.size + ' bytes');
+  const bytes = Buffer.from(await baixados[0].blob.arrayBuffer());
+  assert.strictEqual(bytes.slice(0, 5).toString(), '%PDF-', 'é um PDF de verdade');
 
   // 5) a mesma lista aparece em Minha empresa (um cadastro só)
   assert.strictEqual(

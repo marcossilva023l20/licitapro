@@ -17,6 +17,7 @@ const banco = require('./banco');
 const credenciais = require('./credenciais');
 const rotasPerfil = require('./routes/perfil');
 const rotasDocumentos = require('./routes/documentos');
+const rotasDeclaracoes = require('./routes/declaracoes');
 const rotasArquivos = require('./routes/arquivos');
 
 const app = express();
@@ -40,6 +41,7 @@ app.use((req, res, next) => {
 
 app.use('/api/perfil', rotasPerfil);
 app.use('/api/documentos', rotasDocumentos);
+app.use('/api/declaracoes', rotasDeclaracoes);
 app.use('/api', rotasArquivos);
 
 /**
