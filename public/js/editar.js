@@ -214,6 +214,8 @@
     { sel: '#op-quebra', alvo: 'opcoes.quebrarPaginaCatalogo', tipo: 'check' },
     { sel: '#op-logo', alvo: 'opcoes.logoNoCabecalho', tipo: 'check' },
     { sel: '#op-marcadagua', alvo: 'opcoes.marcaDagua', tipo: 'check' },
+    { sel: '#op-cabecalho-primeira', alvo: 'opcoes.cabecalhoSoNaPrimeiraPagina', tipo: 'check' },
+    { sel: '#op-orientacao', alvo: 'opcoes.orientacao' },
     { sel: '#op-link-compra', alvo: 'opcoes.mostrarLinkCompra', tipo: 'check' },
     { sel: '#op-cor', alvo: 'opcoes.cor' },
   ];
@@ -1591,6 +1593,8 @@
           quebrarPaginaCatalogo: true,
           logoNoCabecalho: true,
           mostrarLinkCompra: false,
+          orientacao: 'retrato',
+          cabecalhoSoNaPrimeiraPagina: false,
           cor: '#0B1F33',
         },
       };

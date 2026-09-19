@@ -682,6 +682,117 @@ teste('PDF: respeita as opções de layout (sem catálogo e sem assinatura)', as
   assert.ok(!texto.includes('REPRESENTANTE LEGAL DA EMPRESA'), 'a assinatura não deveria aparecer');
 });
 
+/**
+ * A faixa do timbre (fundo da empresa) desenhada em cada página do PDF: devolve,
+ * por página, a posição e o tamanho do retângulo largo que fica no topo da folha.
+ */
+function faixasDoTimbre(buffer) {
+  const zlib = require('zlib');
+  const arquivo = Buffer.from(buffer).toString('latin1');
+  const kids = arquivo.match(/\/Kids\s*\[([\s\S]*?)\]/);
+  if (!kids) return [];
+  const paginas = kids[1].match(/(\d+) 0 R/g).map((x) => Number(x.split(' ')[0]));
+  return paginas.map((numero) => {
+    const pagina = arquivo.match(new RegExp('[^0-9]' + numero + ' 0 obj([\\s\\S]*?)endobj'))[1];
+    const conteudo = Number(pagina.match(/\/Contents\s+(\d+)\s+0\s+R/)[1]);
+    const objeto = arquivo.match(new RegExp('[^0-9]' + conteudo + ' 0 obj([\\s\\S]*?)endobj'))[1];
+    const inicio = objeto.indexOf('stream');
+    const fim = objeto.indexOf('endstream');
+    const bruto = Buffer.from(objeto.slice(inicio + 6, fim).replace(/^[\r\n]+/, ''), 'latin1');
+    let texto;
+    try { texto = zlib.inflateSync(bruto).toString('latin1'); } catch (e) { texto = bruto.toString('latin1'); }
+    // [x, y, largura, altura] de cada retângulo; a faixa é o retângulo largo no
+    // alto da folha (o resto do documento começa bem abaixo)
+    return (texto.match(/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re/g) || [])
+      .map((achado) => achado.split(' ').map(Number))
+      .filter((r) => r[1] <= 70 && r[2] > 250);
+  });
+}
+
+teste('PDF: orçamento em paisagem e cabeçalho só na primeira página', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const doc = documentoExemplo('orcamento');
+  doc.opcoes.mostrarCatalogo = false;
+
+  // o padrão continua retrato, com o cabeçalho repetido em todas as páginas
+  const retrato = await Pdf.montarDefinicao(doc, {});
+  assert.strictEqual(retrato.pageOrientation, 'portrait', 'o documento nasce em retrato');
+  assert.strictEqual(typeof retrato.header, 'function', 'o cabeçalho repete por página');
+  assert.deepStrictEqual(retrato.pageMargins, [42, 124, 42, 52], 'margens de sempre');
+
+  // paisagem: o papel deita e a página fica mais larga que alta
+  doc.opcoes.orientacao = 'paisagem';
+  const paisagem = await Pdf.montarDefinicao(doc, {});
+  assert.strictEqual(paisagem.pageOrientation, 'landscape', 'papel deitado');
+  const caixa = Buffer.from(await Pdf.gerarPdf(doc, {})).toString('latin1')
+    .match(/MediaBox\s*\[([^\]]+)\]/)[1].trim().split(/\s+/).map(Number);
+  assert.ok(caixa[2] > caixa[3], 'página mais larga que alta: ' + caixa.join(' x '));
+  assert.ok(
+    Math.abs(caixa[2] - 841.89) < 1 && Math.abs(caixa[3] - 595.28) < 1,
+    'A4 deitado no arquivo: ' + caixa.join(' x ')
+  );
+
+  // volta ao retrato quando a pessoa desfaz a escolha
+  const deVolta = await Pdf.montarDefinicao(
+    Object.assign({}, doc, { opcoes: Object.assign({}, doc.opcoes, { orientacao: 'retrato' }) }),
+    {}
+  );
+  assert.strictEqual(deVolta.pageOrientation, 'portrait', 'retrato de novo');
+
+  // cabeçalho (timbre) só na primeira página
+  doc.opcoes.orientacao = 'retrato';
+  doc.opcoes.cabecalhoSoNaPrimeiraPagina = true;
+  const soPrimeira = await Pdf.montarDefinicao(doc, {});
+  assert.strictEqual(soPrimeira.header, undefined, 'sem cabeçalho repetido nas páginas seguintes');
+  assert.ok(
+    JSON.stringify(soPrimeira.content[0]).includes('65.180.352 BRENA HENRIQUE DO NASCIMENTO'),
+    'a faixa da empresa abre a página 1'
+  );
+  assert.deepStrictEqual(soPrimeira.pageMargins, [42, 30, 42, 52], 'da página 2 em diante o texto começa no topo');
+
+  // no arquivo: a faixa sai uma vez só e as páginas seguintes ficam sem o timbre
+  const longo = documentoExemplo('orcamento');
+  longo.itens = Array.from({ length: 40 }, (_, i) => ({
+    numeroItem: String(i + 1), descricao: 'ITEM ' + (i + 1) + ' PARA OCUPAR A PÁGINA', unidade: 'UND',
+    quantidade: i + 1, valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i,
+    marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }));
+  longo.opcoes = Object.assign({}, longo.opcoes, {
+    mostrarCatalogo: false, marcaDagua: false, cabecalhoSoNaPrimeiraPagina: true,
+  });
+  const paginas = faixasDoTimbre(await Pdf.gerarPdf(longo, {}));
+  assert.ok(paginas.length > 1, 'o documento de teste tem mais de uma página: ' + paginas.length);
+  assert.strictEqual(paginas[0].length, 1, 'a faixa do timbre aparece uma vez na primeira página');
+  assert.deepStrictEqual(paginas[0][0].slice(0, 4), [130, 30, 423.28, paginas[0][0][3]], 'a faixa abre a folha, no topo');
+  assert.ok(paginas.slice(1).every((faixas) => faixas.length === 0), 'nenhuma faixa nas páginas seguintes');
+
+  // com a caixa desmarcada (padrão), o timbre volta a todas as páginas, como sempre saiu
+  const repetido = Object.assign({}, longo, {
+    opcoes: Object.assign({}, longo.opcoes, { cabecalhoSoNaPrimeiraPagina: false }),
+  });
+  const todas = faixasDoTimbre(await Pdf.gerarPdf(repetido, {}));
+  assert.ok(todas.length > 1, 'o documento repetido também tem mais de uma página');
+  assert.ok(todas.every((faixas) => faixas.length === 1), 'cabeçalho em todas as páginas');
+  assert.deepStrictEqual(todas[0][0].slice(0, 3), [130, 22, 423.28], 'na primeira página o timbre fica onde sempre ficou');
+
+  // o esquema guarda as duas escolhas e mantém o padrão de quem não mexeu
+  const salvo = Esquema.sanear(
+    { tipo: 'orcamento', opcoes: { orientacao: 'paisagem', cabecalhoSoNaPrimeiraPagina: true } },
+    {}, 'orcamento'
+  );
+  assert.strictEqual(salvo.opcoes.orientacao, 'paisagem', 'a paisagem é gravada');
+  assert.strictEqual(salvo.opcoes.cabecalhoSoNaPrimeiraPagina, true, 'a escolha do cabeçalho é gravada');
+  const padrao = Esquema.sanear({ tipo: 'orcamento' }, {}, 'orcamento');
+  assert.strictEqual(padrao.opcoes.orientacao, 'retrato', 'retrato é o padrão');
+  assert.strictEqual(padrao.opcoes.cabecalhoSoNaPrimeiraPagina, false, 'cabeçalho em todas as páginas é o padrão');
+  assert.strictEqual(
+    Esquema.sanear({ tipo: 'orcamento', opcoes: { orientacao: 'deitado' } }, {}, 'orcamento').opcoes.orientacao,
+    'retrato',
+    'valor desconhecido volta ao padrão (documento antigo abre igual)'
+  );
+});
+
 teste('PDF: a declaração de aceitação não existe mais (a pedido do usuário)', async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
@@ -855,6 +966,19 @@ teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async
     });
     assert.strictEqual(previa.status, 200, previa.texto);
     assert.strictEqual(previa.corpo.subarray(0, 5).toString(), '%PDF-');
+
+    // pré-visualização em paisagem e sem o cabeçalho nas páginas seguintes
+    const previaPaisagem = await requisitar(servidor, '/api/documentos/previa-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify(Object.assign({}, doc, {
+        opcoes: Object.assign({}, doc.opcoes, { orientacao: 'paisagem', cabecalhoSoNaPrimeiraPagina: true }),
+      })),
+    });
+    assert.strictEqual(previaPaisagem.status, 200, previaPaisagem.texto);
+    const caixa = previaPaisagem.corpo.toString('latin1').match(/MediaBox\s*\[([^\]]+)\]/)[1].trim().split(/\s+/).map(Number);
+    assert.ok(caixa[2] > caixa[3], 'a pré-visualização em paisagem sai deitada: ' + caixa.join(' x '));
+    assert.ok(previaPaisagem.corpo.length > 1000, 'o PDF em paisagem tem conteúdo: ' + previaPaisagem.corpo.length + ' bytes');
 
     // planilha auxiliar (itens no formato do modelo + resumo)
     const auxiliar = await requisitar(servidor, `/api/documentos/${id}/planilha-auxiliar`);
@@ -1737,6 +1861,59 @@ teste('Itens: o lucro estimado mostra também a porcentagem', async () => {
   window.location.hash = '#/documento/' + outro.documento.id;
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento vazio carregado', 20000);
   await ModoLocal.esperar(() => $('#resumo-lucro-percentual').textContent.startsWith('0,0%'), 'percentual zerado sem itens');
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Layout do PDF: orientação (retrato/paisagem) e cabeçalho só na primeira página', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
+    precoCusto: 1150, precoVenda: 1490, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  // as duas opções ficam na aba Layout do PDF, com o padrão de sempre
+  const orientacao = $('#op-orientacao');
+  const soPrimeira = $('#op-cabecalho-primeira');
+  assert.ok(orientacao && soPrimeira, 'as duas opções existem na aba Layout do PDF');
+  assert.strictEqual(orientacao.value, 'retrato', 'o documento começa em retrato');
+  assert.strictEqual(soPrimeira.checked, false, 'e com o cabeçalho em todas as páginas');
+
+  // orçamento em paisagem e cabeçalho só na primeira página
+  orientacao.value = 'paisagem';
+  orientacao.dispatchEvent(new window.Event('change', { bubbles: true }));
+  soPrimeira.checked = true;
+  soPrimeira.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.match($('#editor-estado').textContent, /Não salvo|Alterações não salvas/, 'a tela percebe a mudança');
+
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
+
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  assert.strictEqual(relido.documento.opcoes.orientacao, 'paisagem', 'a paisagem foi gravada no documento');
+  assert.strictEqual(relido.documento.opcoes.cabecalhoSoNaPrimeiraPagina, true, 'e o cabeçalho só na primeira também');
+
+  // a definição do PDF (a mesma do navegador) sai com as duas escolhas
+  const definicao = await window.ModoEstatico.definicaoPdf(relido.documento);
+  assert.strictEqual(definicao.pageOrientation, 'landscape', 'o PDF do orçamento fica deitado');
+  assert.strictEqual(definicao.header, undefined, 'sem cabeçalho repetido nas páginas seguintes');
+
+  // reabrir o documento mostra as escolhas salvas (nada se perde)
+  window.location.hash = '#/painel';
+  await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'volta ao painel', 20000);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento reaberto', 20000);
+  assert.strictEqual($('#op-orientacao').value, 'paisagem', 'a paisagem volta marcada ao reabrir');
+  assert.strictEqual($('#op-cabecalho-primeira').checked, true, 'a caixa do cabeçalho volta marcada');
+
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
 });

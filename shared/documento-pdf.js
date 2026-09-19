@@ -414,10 +414,13 @@ function rodapeDoDocumento(opcoes) {
   const nomeEmpresa = dados.nomeEmpresa || '';
   const documentoEmpresa = dados.documentoEmpresa || '';
   const identificacao = dados.identificacao || '';
+  // O filete acompanha a largura útil do papel (em paisagem o documento é
+  // mais largo); sem largura informada, vale o A4 retrato.
+  const larguraLinha = Number(dados.largura) > 0 ? Number(dados.largura) : 511;
   return (paginaAtual, totalPaginas) => ({
     margin: [42, 6, 42, 0],
     stack: [
-      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 511, y2: 0, lineWidth: 0.6, lineColor: '#C9D2DA' }] },
+      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: larguraLinha, y2: 0, lineWidth: 0.6, lineColor: '#C9D2DA' }] },
       {
         columns: [
           {
@@ -468,6 +471,10 @@ async function montarDefinicao(doc, empresa, contexto) {
       logoNoCabecalho: true,
       mostrarLinkCompra: false,
       marcaDagua: true,
+      // papel do documento: retrato (padrão) ou paisagem
+      orientacao: 'retrato',
+      // cabeçalho (timbre) repetido em todas as páginas ou só na primeira
+      cabecalhoSoNaPrimeiraPagina: false,
     },
     doc.opcoes || {}
   );
@@ -488,6 +495,15 @@ async function montarDefinicao(doc, empresa, contexto) {
     ? await carregarImagem(referencia.referencia, "Marca d'água", relatorio, referencia.padrao)
     : null;
 
+  // Retrato (padrão) ou paisagem: o orçamento, com muitas colunas, fica bem
+  // ajustado no papel deitado.
+  const paisagem = String(opcoes.orientacao || '').toLowerCase() === 'paisagem';
+  // Cabeçalho (timbre) só na primeira página: nas demais o texto começa logo no
+  // topo, sem repetir a faixa da empresa.
+  const cabecalhoSoNaPrimeira = opcoes.cabecalhoSoNaPrimeiraPagina === true;
+  // largura útil do papel (A4 retrato 595,28 − margens de 42; paisagem 841,89)
+  const larguraConteudo = (paisagem ? 841.89 : 595.28) - 84;
+
   // ------------------------------------------------------------- cabeçalho
   const timbre = montarTimbre(proponente, corBase, corFilete, logo);
   const cabecalho = timbre.cabecalho;
@@ -498,6 +514,7 @@ async function montarDefinicao(doc, empresa, contexto) {
     nomeEmpresa,
     documentoEmpresa,
     identificacao: `${titulo} nº ${numero}`,
+    largura: larguraConteudo,
   });
 
   const localEmpresa = timbre.localEmpresa;
@@ -784,12 +801,22 @@ async function montarDefinicao(doc, empresa, contexto) {
 
   conteudo.push(...blocoFinal);
 
+  // Com o cabeçalho só na primeira página, a faixa da empresa vira o primeiro
+  // bloco do conteúdo: ela sai no alto da página 1 e as seguintes ficam livres,
+  // com o texto começando logo no topo.
+  const conteudoFinal = cabecalhoSoNaPrimeira
+    ? [{ stack: cabecalho.stack, margin: [0, 0, 0, 14] }].concat(conteudo)
+    : conteudo;
+
   return {
     pageSize: 'A4',
+    pageOrientation: paisagem ? 'landscape' : 'portrait',
     // topo: espaço para a faixa da empresa (o timbre ocupa ~87 pt a partir de
     // 22 pt do topo; a margem reserva isso e ainda deixa um respiro antes do
-    // conteúdo — se a faixa crescer, esta margem precisa acompanhar)
-    pageMargins: [42, 124, 42, 52],
+    // conteúdo — se a faixa crescer, esta margem precisa acompanhar).
+    // Sem o cabeçalho repetido, a faixa entra no conteúdo e a margem do topo
+    // volta a ser a de um texto normal.
+    pageMargins: cabecalhoSoNaPrimeira ? [42, 30, 42, 52] : [42, 124, 42, 52],
     ...(marcaDagua
       ? {
           background: () => ({
@@ -797,18 +824,19 @@ async function montarDefinicao(doc, empresa, contexto) {
             width: 330,
             opacity: 0.08,
             alignment: 'center',
-            margin: [0, 285, 0, 0],
+            // no papel deitado a marca d'água sobe para ficar no meio da folha
+            margin: [0, paisagem ? 133 : 285, 0, 0],
           }),
         }
       : {}),
-    header: () => cabecalho,
+    ...(cabecalhoSoNaPrimeira ? {} : { header: () => cabecalho }),
     footer: (paginaAtual, totalPaginas) => rodape(paginaAtual, totalPaginas),
     defaultStyle: { font: 'Times New Roman', fontSize: 12.4, color: '#26303A', lineHeight: 1.2 },
     styles: {
       tituloPrincipal: { fontSize: 16.5, bold: true, characterSpacing: 0.3 },
       tituloSecao: { fontSize: 11.0, bold: true, characterSpacing: 0.6, margin: [0, 4, 0, 2] },
     },
-    content: conteudo,
+    content: conteudoFinal,
     info: {
       title: `${titulo} ${numero} - ${nomeEmpresa || ''}`.trim(),
       author: nomeEmpresa || 'DEJ Solutions & Global',

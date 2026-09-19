@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230B1F33'/%3E%3Cpath d='M23 15v34' stroke='white' stroke-width='6.5' stroke-linecap='round'/%3E%3Cpath d='M23 15h9a17 17 0 0 1 0 34h-9' fill='none' stroke='white' stroke-width='6.5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='47' cy='49' r='7' fill='%23C6A15B'/%3E%3C/svg%3E" />
   <!-- ?v= (versão dos arquivos): aumente junto com VERSAO_ARQUIVOS em js/modo-estatico.js
        sempre que publicar mudanças de css/js — evita o navegador usar o arquivo antigo. -->
-  <link rel="stylesheet" href="css/estilos.css?v=44" />
+  <link rel="stylesheet" href="css/estilos.css?v=45" />
 </head>
 <body>
   <!-- ============================ ENTRAR / CRIAR CONTA ============================
@@ -641,10 +641,17 @@
                 <label class="checkbox-linha"><input type="checkbox" id="op-quebra" /><span>Começar o <strong>catálogo em nova página</strong></span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-logo" /><span>Usar <strong>logo no cabeçalho</strong> de todas as páginas</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-marcadagua" /><span>Usar a logo da empresa como <strong>marca d'água</strong> (bem apagada, atrás do texto)</span></label>
+                <label class="checkbox-linha"><input type="checkbox" id="op-cabecalho-primeira" /><span>Deixar o <strong>cabeçalho só na primeira página</strong> — nas demais o texto começa no topo, sem a faixa da empresa</span></label>
                 <label class="checkbox-linha"><input type="checkbox" id="op-link-compra" /><span>Mostrar o <strong>link da compra</strong> no catálogo (uso interno)</span></label>
               </div>
               <label class="campo campo-cor">Cor principal do documento
                 <input type="color" id="op-cor" value="#0B1F33" />
+              </label>
+              <label class="campo campo-orientacao">Orientação da página
+                <select id="op-orientacao">
+                  <option value="retrato">Retrato (vertical)</option>
+                  <option value="paisagem">Paisagem (horizontal) — o orçamento fica bem ajustado</option>
+                </select>
               </label>
             </div>
           </div>
@@ -820,14 +827,14 @@
     </div>
   </div>
 
-  <script src="../shared/format.js?v=44"></script>
-  <script src="../shared/declaracoes.js?v=44"></script>
-  <script src="js/api.js?v=44"></script>
-  <script src="js/ui.js?v=44"></script>
-  <script src="js/editar.js?v=44"></script>
-  <script src="js/app.js?v=44"></script>
-  <script src="js/config-nuvem.js?v=44"></script>
-  <script src="js/modo-estatico.js?v=44"></script>
-  <script src="js/nuvem.js?v=44"></script>
+  <script src="../shared/format.js?v=45"></script>
+  <script src="../shared/declaracoes.js?v=45"></script>
+  <script src="js/api.js?v=45"></script>
+  <script src="js/ui.js?v=45"></script>
+  <script src="js/editar.js?v=45"></script>
+  <script src="js/app.js?v=45"></script>
+  <script src="js/config-nuvem.js?v=45"></script>
+  <script src="js/modo-estatico.js?v=45"></script>
+  <script src="js/nuvem.js?v=45"></script>
 </body>
 </html>

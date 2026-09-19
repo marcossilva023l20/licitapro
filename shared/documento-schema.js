@@ -103,6 +103,9 @@ function documentoBase(perfil, tipo, extras) {
         // as declarações saem em folha própria (é como se imprime e assina)
         logoNoCabecalho: true,
         marcaDagua: true,
+        // papel do documento e repetição do cabeçalho (aba Layout do PDF)
+        orientacao: 'retrato',
+        cabecalhoSoNaPrimeiraPagina: false,
         cor: '#0B1F33',
       },
       criadoEm: agora.toISOString(),
@@ -220,6 +223,10 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
       logoNoCabecalho: booleano(opcoes.logoNoCabecalho, true),
       mostrarLinkCompra: booleano(opcoes.mostrarLinkCompra, false),
       marcaDagua: booleano(opcoes.marcaDagua, true),
+      // retrato é o padrão; qualquer outra coisa volta ao padrão (documento de
+      // antes desta opção continua abrindo e imprimindo igual)
+      orientacao: String(opcoes.orientacao || '').toLowerCase() === 'paisagem' ? 'paisagem' : 'retrato',
+      cabecalhoSoNaPrimeiraPagina: booleano(opcoes.cabecalhoSoNaPrimeiraPagina, false),
       cor: CORES.test(String(opcoes.cor || '')) ? String(opcoes.cor) : '#0B1F33',
     },
     criadoEm: atual.criadoEm || new Date().toISOString(),
