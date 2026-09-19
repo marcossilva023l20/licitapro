@@ -701,11 +701,11 @@ function faixasDoTimbre(buffer) {
     const bruto = Buffer.from(objeto.slice(inicio + 6, fim).replace(/^[\r\n]+/, ''), 'latin1');
     let texto;
     try { texto = zlib.inflateSync(bruto).toString('latin1'); } catch (e) { texto = bruto.toString('latin1'); }
-    // [x, y, largura, altura] de cada retângulo; a faixa é o retângulo largo no
-    // alto da folha (o resto do documento começa bem abaixo)
+    // [x, y, largura, altura] de cada retângulo; a faixa do timbre é o retângulo
+    // largo e alto que fica no topo da folha (as linhas da tabela são baixas)
     return (texto.match(/([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re/g) || [])
       .map((achado) => achado.split(' ').map(Number))
-      .filter((r) => r[1] <= 70 && r[2] > 250);
+      .filter((r) => r[1] <= 70 && r[2] > 250 && r[3] > 50);
   });
 }
 
