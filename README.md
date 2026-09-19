@@ -135,9 +135,10 @@ Desenvolvimento com recarga automática: `npm run dev`.
    declarações** grava (a mesma lista aparece em *Minha empresa → Modelos de declaração*).
 
    **🖨 Imprimir** gera o PDF daquela declaração, sozinha, no **mesmo padrão da proposta**: o
-   timbre com a logomarca no cabeçalho, Times New Roman, título em destaque, texto justificado,
-   local e data por extenso e a linha de assinatura com o nome, o CPF e «(Representante Legal da
-   empresa)». É a folha que vai assinada ao certame.
+   timbre com a logomarca no cabeçalho, a **marca d'água** da logomarca (bem apagada) atrás do
+   texto, Times New Roman, título em destaque, texto justificado, local e data por extenso e a
+   linha de assinatura com o nome, o CPF e «(Representante Legal da empresa)». É a folha que vai
+   assinada ao certame.
 
    O texto pode usar os dados que já estão no sistema, escrevendo o campo entre chaves:
    `{RAZAO}`, `{FANTASIA}`, `{CNPJ}`, `{IE}`, `{ENDERECO}`, `{CIDADE}`, `{UF}`, `{CEP}`,

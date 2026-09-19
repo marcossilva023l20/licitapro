@@ -1889,6 +1889,15 @@ teste('Declarações: modelos, tokens e o que sai no PDF', async () => {
   assert.ok(timbre.includes('CNPJ 65.180.352/0001-11'), 'e o CNPJ');
   assert.ok(folha.footer(1, 2).stack.length > 0, 'e o rodapé com a numeração');
 
+  // no mesmo papel da proposta: a marca d'água da empresa atrás do texto
+  assert.strictEqual(typeof folha.background, 'function', 'a folha tem marca d\'água');
+  const fundo = folha.background();
+  assert.ok(fundo && fundo.image, 'a marca d\'água é a logomarca da empresa');
+  assert.ok(Number(fundo.opacity) > 0 && Number(fundo.opacity) < 0.3, 'bem apagada, como no PDF do documento');
+
+  const semMarca = await Pdf.montarDefinicaoDeclaracoes(declaracoesFolha, doc, empresa, { opcoes: { marcaDagua: false } });
+  assert.strictEqual(semMarca.background, undefined, 'e pode ser desligada por quem chama');
+
   const pdfFolha = await Pdf.gerarPdfDeclaracoes(declaracoesFolha, doc, empresa);
   assert.strictEqual(pdfFolha.slice(0, 5).toString(), '%PDF-', 'o arquivo é um PDF');
   assert.ok(pdfFolha.length > 30000, 'com conteúdo: ' + pdfFolha.length + ' bytes');

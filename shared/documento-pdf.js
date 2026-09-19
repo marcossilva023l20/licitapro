@@ -855,8 +855,12 @@ async function montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto) {
   const lista = (Array.isArray(declaracoes) ? declaracoes : [declaracoes])
     .filter((d) => d && String(d.texto || '').trim());
   const proponente = Object.assign({}, empresa || {}, documento.proponente || {});
+  // A folha sai com o mesmo papel da proposta: timbre com a logomarca e a
+  // marca d'água da empresa atrás do texto (bem apagada, como no PDF do
+  // documento). Quem manda é quem chama: opções do documento e do contexto
+  // podem desligar qualquer uma delas.
   const opcoes = Object.assign(
-    { logoNoCabecalho: true, marcaDagua: false, mostrarAssinatura: true },
+    { logoNoCabecalho: true, marcaDagua: true, mostrarAssinatura: true },
     documento.opcoes || {},
     contexto && contexto.opcoes ? contexto.opcoes : {}
   );
