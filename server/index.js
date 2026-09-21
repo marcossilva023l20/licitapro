@@ -26,7 +26,9 @@ app.set('trust proxy', true);
 
 // --------------------------------------------------------------- middlewares
 
-app.use(express.json({ limit: '8mb' }));
+// 16 MB: um documento com os 2000 itens (descrições, catálogo e fotos) precisa
+// de folga para chegar inteiro ao servidor
+app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // cabeçalhos de segurança básicos

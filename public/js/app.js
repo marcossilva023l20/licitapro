@@ -878,9 +878,30 @@
         botao.textContent = 'Adicionando...';
         const resposta = await API.get('/api/documentos/' + id);
         const documento = resposta.documento;
-        documento.itens = (documento.itens || []).concat(itens);
+        // o documento guarda até MAX_ITENS itens: o que não couber é avisado
+        // aqui, em vez de desaparecer no salvamento
+        const limite = Number(window.DocumentoSchema && window.DocumentoSchema.MAX_ITENS) || 2000;
+        const existentes = (documento.itens || []).length;
+        const cabem = Math.max(0, limite - existentes);
+        const entraram = itens.slice(0, cabem);
+        if (!entraram.length) {
+          UI.toast(
+            'Este documento já tem os ' + limite + ' itens que o sistema guarda. ' +
+              'Crie uma segunda proposta para os itens novos.',
+            'aviso'
+          );
+          return;
+        }
+        documento.itens = (documento.itens || []).concat(entraram);
         await API.put('/api/documentos/' + id, documento);
-        UI.toast(itens.length + ' itens adicionados ao documento.', 'sucesso');
+        UI.toast(entraram.length + ' itens adicionados ao documento.', 'sucesso');
+        if (entraram.length < itens.length) {
+          UI.toast(
+            'O documento chegou ao limite de ' + limite + ' itens: ' +
+              (itens.length - entraram.length) + ' ficaram de fora. Crie uma segunda proposta com eles.',
+            'aviso'
+          );
+        }
         window.location.hash = '#/documento/' + id;
       } catch (erro) {
         UI.toast(erro.message, 'erro');

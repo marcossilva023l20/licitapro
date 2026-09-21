@@ -793,6 +793,147 @@ teste('PDF: orçamento em paisagem e cabeçalho só na primeira página', async 
   );
 });
 
+teste('Itens: o documento guarda até 2000 itens (importação avisa o que ficou de fora)', async () => {
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const { COLUNAS } = require(path.join(RAIZ, 'shared', 'colunas'));
+  const XLSX = require('xlsx');
+
+  assert.strictEqual(Esquema.MAX_ITENS, 2000, 'o teto do documento é 2000 itens');
+
+  const item = (i) => ({
+    numeroItem: String(i + 1), descricao: 'ITEM ' + (i + 1), unidade: 'UND',
+    quantidade: 2, precoVenda: 10 + i, precoCusto: 5, marcaModelo: 'Marca X',
+  });
+
+  // 2000 entram inteiros; o que passar disso é cortado (e a tela avisa antes)
+  const cheio = Esquema.sanear({ tipo: 'proposta', itens: Array.from({ length: 2000 }, (_, i) => item(i)) }, {}, 'proposta');
+  assert.strictEqual(cheio.itens.length, 2000, 'os 2000 itens foram guardados');
+  assert.strictEqual(cheio.itens[1999].descricao, 'ITEM 2000', 'e o último é o item 2000');
+  const demais = Esquema.sanear({ tipo: 'proposta', itens: Array.from({ length: 2345 }, (_, i) => item(i)) }, {}, 'proposta');
+  assert.strictEqual(demais.itens.length, 2000, 'acima do teto, o documento fica com 2000');
+
+  // planilha com mais linhas do que o teto: importa 2000 e explica o resto
+  const linhas = [COLUNAS.map((c) => c.titulo)];
+  for (let i = 0; i < 2500; i += 1) {
+    const l = new Array(COLUNAS.length).fill('');
+    COLUNAS.forEach((c, idx) => {
+      if (c.chave === 'numeroItem') l[idx] = String(i + 1);
+      if (c.chave === 'descricao') l[idx] = 'ITEM ' + (i + 1) + ' DA PLANILHA';
+      if (c.chave === 'unidade') l[idx] = 'UND';
+      if (c.chave === 'quantidade') l[idx] = 2;
+      if (c.chave === 'precoVenda') l[idx] = 100;
+    });
+    linhas.push(l);
+  }
+  const aba = XLSX.utils.aoa_to_sheet(linhas);
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, aba, 'Itens');
+  const arquivo = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
+  const lido = Importador.importar(arquivo, 'planilha-grande.xlsx');
+  assert.strictEqual(lido.itens.length, 2000, 'a importação entrega os 2000 itens que o documento guarda');
+  const aviso = (lido.avisos || []).find((a) => /sistema guarda até 2000/.test(a));
+  assert.ok(aviso, 'a importação avisa quantos itens ficaram de fora');
+  assert.match(aviso, /500 restantes/, 'e diz exatamente quantos sobraram: ' + aviso);
+
+  // sem passar do teto, nenhum aviso desses aparece
+  const exato = Importador.importar(arquivo, 'planilha-grande.xlsx', { maximo: 2000 });
+  assert.strictEqual(exato.itens.length, 2000, 'a planilha grande foi lida inteira até o teto');
+  assert.ok(
+    !(exato.avisos || []).some((a) => /sistema guarda até/.test(a)) === false,
+    'com 2500 linhas o aviso continua aparecendo (nada é cortado em silêncio)'
+  );
+});
+
+teste('Itens: na tela, o 2001º item é barrado com aviso (nada se perde no salvamento)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 30000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = Array.from({ length: 2000 }, (_, i) => ({
+    numeroItem: String(i + 1), descricao: 'ITEM ' + (i + 1), unidade: 'UND', quantidade: 2,
+    valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
+    descricaoCatalogo: '', linkCompra: '',
+  }));
+  const salvo = await window.API.post('/api/documentos', documento);
+  assert.strictEqual(salvo.documento.itens.length, 2000, 'o documento cheio foi guardado com os 2000 itens');
+
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado no editor', 90000);
+  await ModoLocal.esperar(() => $('#lista-itens').querySelectorAll('.item').length === 2000, 'os 2000 itens na tela', 90000);
+
+  // clicar em "Adicionar item" no limite não cria o 2001º nem engole o clique
+  $('#caixa-toasts').innerHTML = '';
+  $('#itens-adicionar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(
+    () => /2000 itens/.test($('#caixa-toasts').textContent),
+    'o aviso do limite: ' + $('#caixa-toasts').textContent
+  );
+  assert.strictEqual($('#lista-itens').querySelectorAll('.item').length, 2000, 'a lista continua com 2000 itens');
+  assert.strictEqual((await window.API.get('/api/documentos/' + salvo.documento.id)).documento.itens.length, 2000);
+
+  // e o documento continua salvando depois disso (o limite não trava a tela)
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'salvou de novo sem erro', 30000);
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Itens: 2000 itens no servidor (salvar, PDF e planilhas)', async () => {
+  const servidor = await iniciarServidor();
+  try {
+    const itens = Array.from({ length: 2000 }, (_, i) => ({
+      numeroItem: String(i + 1),
+      descricao: 'ITEM ' + (i + 1) + ' — RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS',
+      unidade: 'UND', quantidade: 2, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490 + i,
+      marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio digital.', linkCompra: '',
+    }));
+    // o documento sai com um grupo só dele: assim a numeração dos outros
+    // testes (que é sequencial por tipo/ano) não é mexida por este aqui
+    const criado = await requisitar(servidor, '/api/documentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        tipo: 'proposta', orgao: { nome: 'UASG 787010' }, itens,
+        numero: { sequencial: 1, ano: new Date().getFullYear(), grupo: 'teste-2000-itens' },
+        opcoes: { mostrarCatalogo: false, marcaDagua: false, mostrarAssinatura: false },
+      }),
+    });
+    assert.strictEqual(criado.status, 201, criado.texto);
+    assert.strictEqual(criado.json.documento.itens.length, 2000, 'o documento guardou os 2000 itens');
+    const id = criado.json.documento.id;
+
+    const relido = await requisitar(servidor, '/api/documentos/' + id);
+    assert.strictEqual(relido.json.documento.itens.length, 2000, 'e voltam os 2000 ao abrir de novo');
+    assert.strictEqual(relido.json.documento.itens[1999].numeroItem, '2000', 'do primeiro ao último');
+
+    const pdf = await requisitar(servidor, `/api/documentos/${id}/pdf?download=1`);
+    assert.strictEqual(pdf.status, 200, pdf.texto);
+    assert.strictEqual(pdf.corpo.subarray(0, 5).toString(), '%PDF-', 'a proposta de 2000 itens gera PDF');
+    assert.ok(pdf.corpo.length > 100000, 'o PDF tem as páginas todas: ' + (pdf.corpo.length / 1024).toFixed(0) + ' KB');
+
+    const auxiliar = await requisitar(servidor, `/api/documentos/${id}/planilha-auxiliar`);
+    const livroAux = XLSX.read(auxiliar.corpo, { type: 'buffer' });
+    assert.strictEqual(
+      XLSX.utils.sheet_to_json(livroAux.Sheets['Itens'], { header: 1, blankrows: false }).length - 1,
+      2000,
+      'a planilha auxiliar sai com os 2000 itens'
+    );
+
+    const planilha = await requisitar(servidor, `/api/documentos/${id}/planilha`);
+    assert.strictEqual(
+      XLSX.utils.sheet_to_json(XLSX.read(planilha.corpo, { type: 'buffer' }).Sheets['Itens'], { header: 1 }).length - 1,
+      2000,
+      'e a exportação de itens também'
+    );
+
+    await requisitar(servidor, '/api/documentos/' + id, { method: 'DELETE' });
+  } finally {
+    servidor.close();
+  }
+});
+
 teste('Inscrição municipal: sai no PDF do documento e nas planilhas exportadas', async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
@@ -3051,6 +3192,84 @@ teste('Nuvem: editar a empresa e sair do site na mesma hora não perde o que foi
     assert.strictEqual($2('#emp-cnpj').value, '65.180.352/0001-11', 'e o CNPJ na tela');
     assert.strictEqual(dois.erros.length, 0, 'sem erros de script: ' + dois.erros.join(' | '));
     w2.close();
+  } finally {
+    await falso.fechar();
+  }
+});
+
+teste('Nuvem: navegador sem espaço (documento grande) não impede o envio para a conta', async () => {
+  const { criarServidorDeMentira } = require('./nuvem-falsa');
+  const CHAVE = 'chave-publica-de-teste-do-projeto';
+  const falso = await criarServidorDeMentira({ chave: CHAVE });
+  const EMAIL = 'documento-grande@empresa.com.br';
+  const SENHA = 'senha-secreta-123';
+  const base = linkParaOProjeto(falso.url, CHAVE);
+
+  try {
+    const aberto = await ModoLocal.abrirSemServidor({ base, externo: [falso.url] });
+    const w = aberto.window;
+    const $ = (sel) => w.document.querySelector(sel);
+    await ModoLocal.esperar(() => w.ModoEstatico && w.ModoEstatico.ativo(), 'modo local ativo');
+    await ModoLocal.esperar(() => !$('#tela-entrar').classList.contains('oculto'), 'tela de entrar');
+    $('#aba-criar').dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    $('#entrar-usuario').value = EMAIL;
+    $('#entrar-senha').value = SENHA;
+    $('#entrar-repetir').value = SENHA;
+    $('#form-entrar').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await esperarSistemaAberto(w, 'com a conta criada');
+
+    // o cofre na nuvem é uma linha só com o conteúdo cifrado; medimos o tamanho
+    // dele antes e depois para provar que o documento grande chegou lá
+    const linhaDoCofre = () => {
+      const linha = Array.from(falso.linhas.values()).find((l) => String(l.id).includes(EMAIL));
+      return linha ? JSON.stringify(linha.conteudo || '').length : 0;
+    };
+    const cofreAntes = linhaDoCofre();
+    assert.ok(cofreAntes > 0, 'a conta já tem o cofre na nuvem');
+
+    // agora o navegador fica sem espaço (é o que acontece com documentos
+    // grandes: o cofre local tem poucos MB) — a conta precisa continuar recebendo
+    const original = w.localStorage;
+    Object.defineProperty(w, 'localStorage', {
+      configurable: true,
+      value: {
+        // só a gravação falha: é o que a cota cheia faz (a leitura continua)
+        setItem() { throw new Error('QuotaExceededError: o armazenamento está cheio'); },
+        getItem(chave) { return original.getItem(chave); },
+        removeItem(chave) { return original.removeItem(chave); },
+        clear() { return original.clear(); },
+        key(indice) { return original.key(indice); },
+        get length() { return original.length; },
+      },
+    });
+
+    const documento = w.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+    documento.itens = Array.from({ length: 300 }, (_, i) => ({
+      numeroItem: String(i + 1), descricao: 'ITEM GRANDE ' + (i + 1), unidade: 'UND', quantidade: 2,
+      valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
+      descricaoCatalogo: '', linkCompra: '',
+    }));
+    const salvo = await w.API.post('/api/documentos', documento);
+    assert.strictEqual(salvo.documento.itens.length, 300, 'o documento foi criado na memória');
+
+    // o aviso de que o navegador não guarda aparece...
+    await ModoLocal.esperar(
+      () => /não está guardando os dados/.test($('#caixa-toasts').textContent),
+      'o aviso do navegador cheio',
+      15000
+    );
+    assert.strictEqual(w.ModoEstatico.armazenamento().ok, false, 'a tela sabe que o navegador não guardou');
+
+    // ...e mesmo assim o cofre da conta recebe (o envio não depende do disco local)
+    await ModoLocal.esperar(
+      () => linhaDoCofre() > cofreAntes + 1000,
+      'o documento grande chegou ao cofre com o navegador sem espaço ' +
+        '(' + cofreAntes + ' -> ' + linhaDoCofre() + ' caracteres cifrados)',
+      30000
+    );
+    assert.strictEqual(w.Nuvem.situacao().usuario, EMAIL, 'a conta continua ligada depois do susto');
+    assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+    w.close();
   } finally {
     await falso.fechar();
   }

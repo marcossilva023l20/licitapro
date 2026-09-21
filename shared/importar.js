@@ -20,7 +20,9 @@
   'use strict';
 
   const CAMPOS_NUMERICOS = ['quantidade', 'valorReferencia', 'precoCusto', 'precoVenda'];
-  const MAX_LINHAS = 3000;
+  // Mesmo teto do documento (shared/documento-schema.js): a planilha pode ter
+  // mais linhas, mas o que não couber é avisado na tela — nada some calado.
+  const MAX_LINHAS = 2000;
 
   const temBuffer = () => typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function';
 
@@ -122,7 +124,8 @@
       throw new Error('A coluna "Descricao_Edital" não foi encontrada na planilha.');
     }
 
-    for (let i = linhaCabecalho + 1; i < matriz.length && itens.length < MAX_LINHAS; i += 1) {
+    let linhasComDescricao = 0;
+    for (let i = linhaCabecalho + 1; i < matriz.length; i += 1) {
       const linha = matriz[i] || [];
       const registro = {};
       Object.entries(mapa).forEach(([indice, chave]) => {
@@ -131,6 +134,9 @@
 
       const descricao = String(registro.descricao || '').trim();
       if (!descricao) continue; // linha vazia / em branco no meio
+      linhasComDescricao += 1;
+      // da linha que passa do teto em diante só contamos, para avisar depois
+      if (itens.length >= MAX_LINHAS) continue;
 
       const item = {
         numeroItem: String(registro.numeroItem || '').trim() || String(itens.length + 1),
@@ -180,6 +186,14 @@
 
     if (!itens.length) {
       throw new Error('Nenhum item encontrado. Verifique se a planilha tem dados a partir da linha 2.');
+    }
+
+    if (linhasComDescricao > MAX_LINHAS) {
+      avisos.unshift(
+        `A planilha tem ${linhasComDescricao} itens e o sistema guarda até ${MAX_LINHAS} por documento: ` +
+          `entraram os primeiros ${MAX_LINHAS}. ` +
+          `Para levar os ${linhasComDescricao - MAX_LINHAS} restantes, crie uma segunda proposta com eles.`
+      );
     }
 
     return {

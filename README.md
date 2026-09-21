@@ -83,6 +83,11 @@ Desenvolvimento com recarga automática: `npm run dev`.
    confirmação dizendo quantos documentos serão excluídos. A exclusão em lote usa a rota
    `POST /api/documentos/excluir` (`{ ids: [...] }`), que também funciona no modo local.
 
+   Cada documento guarda **até 2000 itens** (quantidade que atende às licitações grandes e ainda
+   gera o PDF em poucos segundos). Se a planilha tiver mais linhas, o sistema importa os 2000
+   primeiros e **avisa quantos ficaram de fora**, para entrarem numa segunda proposta — nada é
+   cortado em silêncio.
+
 3. **Importar planilha** — arraste o arquivo preenchido. O sistema mostra os itens encontrados,
    avisa sobre linhas com problema e permite:
 

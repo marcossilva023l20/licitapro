@@ -54,9 +54,14 @@ function itemNovo(base, indice) {
   };
 }
 
+// Quantos itens um documento aceita. É o teto do sistema (a planilha-modelo
+// aceita 3000 linhas, mas a proposta guarda 2000 itens — o que cabe com folga
+// nas licitações e ainda gera o PDF em poucos segundos).
+const MAX_ITENS = 2000;
+
 function sanearItens(itens) {
   if (!Array.isArray(itens)) return [];
-  return itens.slice(0, 800).map((item, i) => itemNovo(item, i));
+  return itens.slice(0, MAX_ITENS).map((item, i) => itemNovo(item, i));
 }
 
 function documentoBase(perfil, tipo, extras) {
@@ -235,5 +240,5 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
   };
 }
 
-  return { sanear, TIPOS, STATUS, documentoBase, sanearItens };
+  return { sanear, TIPOS, STATUS, documentoBase, sanearItens, MAX_ITENS };
 });

@@ -184,16 +184,15 @@
   function gravarBanco(opcoes) {
     const config = opcoes || {};
     if (!config.substituir) juntarComOQueEstaSalvo();
+    let guardou = true;
     try {
       window.localStorage.setItem(CHAVE_BANCO, JSON.stringify(estado.banco));
       estado.removidos.clear();
       estado.armazenamentoOk = true;
       estado.motivoArmazenamento = '';
       estado.ultimoSalvamento = { ok: true, em: new Date().toISOString(), motivo: '' };
-      // com a nuvem ligada, o que foi gravado aqui vai para lá logo depois
-      if (window.Nuvem && window.Nuvem.agendarEnvio) window.Nuvem.agendarEnvio();
-      return true;
     } catch (erro) {
+      guardou = false;
       const motivo = (erro && erro.message) || 'armazenamento indisponível';
       estado.armazenamentoOk = false;
       estado.motivoArmazenamento = motivo;
@@ -202,13 +201,17 @@
         avisoSalvamento = true;
         window.UI && window.UI.toast(
           'Este navegador não está guardando os dados (' + motivo + '). ' +
-            'Baixe um backup pelo menu antes de fechar e tente fora da janela privada.',
+            'Em documentos grandes o espaço do navegador enche: entre numa conta para guardar na ' +
+            'nuvem ou baixe um backup pelo menu antes de fechar.',
           'erro', 15000
         );
       }
       console.warn('[modo local] falha ao gravar:', motivo);
-      return false;
     }
+    // Com a nuvem ligada, o que está na memória vai para lá de qualquer forma:
+    // navegador sem espaço (documentos grandes) não pode parar a sincronização.
+    if (window.Nuvem && window.Nuvem.agendarEnvio) window.Nuvem.agendarEnvio();
+    return guardou;
   }
 
   // --------------------------------------------------------- IndexedDB
@@ -337,7 +340,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '47';
+  const VERSAO_ARQUIVOS = '48';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {

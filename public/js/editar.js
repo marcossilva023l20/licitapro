@@ -308,6 +308,29 @@
   // ------------------------------------------------------------ formulário
 
   /**
+   * Quantos itens um documento guarda (o mesmo teto do esquema, no servidor).
+   * A tela nunca deixa passar disso: em vez de perder item no salvamento, ela
+   * avisa na hora.
+   */
+  function limiteDeItens() {
+    const doSchema = Number(window.DocumentoSchema && window.DocumentoSchema.MAX_ITENS);
+    return doSchema > 0 ? doSchema : 2000;
+  }
+
+  /** Cabe mais um item neste documento? Se não couber, avisa e devolve false. */
+  function cabeMaisUmItem(quantos) {
+    const total = (estado.doc.itens || []).length + (quantos || 1);
+    const limite = limiteDeItens();
+    if (total <= limite) return true;
+    UI.toast(
+      'Este documento já tem os ' + limite + ' itens que o sistema guarda. ' +
+        'Para mais itens, use uma segunda proposta.',
+      'aviso'
+    );
+    return false;
+  }
+
+  /**
    * O papel do PDF (retrato ou paisagem) é um dado só, mostrado em três
    * lugares: o botão da barra do editor, os dois botões da aba "Layout do PDF"
    * e o campo que fica guardado no documento. Aqui os três são sincronizados.
@@ -1384,6 +1407,7 @@
         return;
       }
       if (acao === 'duplicar') {
+        if (!cabeMaisUmItem(1)) return;
         const antes = capturarEstadoItens();
         const copia = JSON.parse(JSON.stringify(itens[indice]));
         copia.numeroItem = String(itens.length + 1);
@@ -1439,6 +1463,7 @@
 
     $('#itens-adicionar').addEventListener('click', () => {
       estado.doc.itens = estado.doc.itens || [];
+      if (!cabeMaisUmItem(1)) return;
       estado.doc.itens.push(itemVazio());
       desenharItens();
       marcarSujo();
@@ -1655,11 +1680,19 @@
   async function novoComItens(tipo, itens) {
     await novo(tipo);
     if (!estado.doc) return;
-    estado.doc.itens = itens.slice();
+    const limite = limiteDeItens();
+    estado.doc.itens = itens.slice(0, limite);
     desenharItens();
     estado.sujo = true;
     abrirAba('itens');
-    UI.toast(itens.length + ' itens carregados. Revise e clique em Gerar PDF.', 'sucesso');
+    UI.toast(estado.doc.itens.length + ' itens carregados. Revise e clique em Gerar PDF.', 'sucesso');
+    if (itens.length > limite) {
+      UI.toast(
+        'A planilha tinha ' + itens.length + ' itens: entraram os ' + limite + ' que o documento guarda. ' +
+          'Para os outros, crie uma segunda proposta.',
+        'aviso'
+      );
+    }
   }
 
   function abrirAba(nome) {
