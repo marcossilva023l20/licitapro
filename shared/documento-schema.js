@@ -43,6 +43,7 @@ function itemNovo(base, indice) {
     descricao: texto(b.descricao, 4000),
     unidade: texto(b.unidade, 12).toUpperCase() || 'UND',
     quantidade: numero(b.quantidade, 3),
+    valorReferencia: numero(b.valorReferencia, 2),
     precoCusto: numero(b.precoCusto, 2),
     precoVenda: numero(b.precoVenda, 2),
     marcaModelo: texto(b.marcaModelo, 160),

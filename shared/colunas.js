@@ -48,6 +48,14 @@
       apelidos: ['quantidade', 'qtd', 'qtde', 'quant', 'qde'],
     },
     {
+      chave: 'valorReferencia',
+      titulo: 'Valor_Referencia',
+      rotulo: 'Valor de Referência',
+      dica: 'Valor unitário estimado no edital (opcional). Ex.: 1.600,00',
+      largura: 16,
+      apelidos: ['valor_referencia', 'valor de referencia', 'valor referencia', 'valor estimado', 'preco de referencia', 'valor de referencia unitario'],
+    },
+    {
       chave: 'precoCusto',
       titulo: 'Preco_Custo',
       rotulo: 'Preço de Custo',

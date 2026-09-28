@@ -145,10 +145,9 @@ teste('Modelo de planilha: gera .xlsx com a aba Itens, sem instruções', () => 
 
   const cabecalhos = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 })[0];
   assert.deepStrictEqual(cabecalhos, [
-    'Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade',
+    'Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia',
     'Preco_Custo', 'Preco_Venda', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra',
   ]);
-  assert.strictEqual(cabecalhos.includes('Valor_Referencia'), false, 'sem a coluna Valor_Referencia no modelo');
 });
 
 teste('Importação: lê a planilha do modelo no formato esperado', () => {
@@ -158,10 +157,10 @@ teste('Importação: lê a planilha do modelo no formato esperado', () => {
   // gera uma planilha de exemplo a partir do modelo, com dados nas células
   const livro = XLSX.read(Modelo.gerarBuffer(), { type: 'buffer' });
   const linhas = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 });
-  linhas.push([1, 'RÁDIO TRANSCEPTOR DIGITAL', 'UND', 6, '1.150,00', 'R$ 1.490,00', 'Hytera / BP516', '', 'Rádio com 48 canais', 'https://loja.com/r']);
-  linhas.push([2, 'BATERIA EXTRA', 'UND', '6', '180,00', '249,90', 'Hytera / BL2016', '', 'Bateria 1500 mAh', '']);
-  linhas.push(['', '', '', '', '', '', '', '', '', '']);
-  linhas.push([3, 'CARREGADOR 6 POSIÇÕES', 'CX', 1, 600, 890, 'Hytera / MCA08', '', 'Carrega 6 baterias', '']);
+  linhas.push([1, 'RÁDIO TRANSCEPTOR DIGITAL', 'UND', 6, '1.600,00', '1.150,00', 'R$ 1.490,00', 'Hytera / BP516', '', 'Rádio com 48 canais', 'https://loja.com/r']);
+  linhas.push([2, 'BATERIA EXTRA', 'UND', '6', '320,00', '180,00', '249,90', 'Hytera / BL2016', '', 'Bateria 1500 mAh', '']);
+  linhas.push(['', '', '', '', '', '', '', '', '', '', '']);
+  linhas.push([3, 'CARREGADOR 6 POSIÇÕES', 'CX', 1, 900, 600, 890, 'Hytera / MCA08', '', 'Carrega 6 baterias', '']);
 
   const nova = XLSX.utils.aoa_to_sheet(linhas);
   const livro2 = XLSX.utils.book_new();
@@ -174,7 +173,7 @@ teste('Importação: lê a planilha do modelo no formato esperado', () => {
   assert.strictEqual(resultado.itens[0].quantidade, 6);
   assert.strictEqual(resultado.itens[0].precoVenda, 1490);
   assert.strictEqual(resultado.itens[0].precoCusto, 1150);
-  assert.strictEqual(resultado.itens[0].valorReferencia, undefined, 'o valor de referência não é mais lido');
+  assert.strictEqual(resultado.itens[0].valorReferencia, 1600);
   assert.strictEqual(resultado.itens[1].unidade, 'UND');
   assert.strictEqual(resultado.itens[1].precoVenda, 249.9);
   assert.strictEqual(resultado.itens[1].descricaoCatalogo, 'Bateria 1500 mAh');
@@ -204,8 +203,6 @@ teste('Importação: reconhece cabeçalhos com nomes alternativos e linha de tí
   assert.strictEqual(resultado.itens[0].quantidade, 3);
   assert.strictEqual(resultado.itens[0].precoVenda, 799.9);
   assert.strictEqual(resultado.itens[0].marcaModelo, 'Furukawa');
-  // a planilha antiga tem a coluna Valor de Referência: ela é simplesmente ignorada
-  assert.strictEqual(resultado.itens[0].valorReferencia, undefined, 'coluna antiga ignorada');
 });
 
 teste('Importação: recusa planilhas sem as colunas obrigatórias', () => {
@@ -223,105 +220,6 @@ teste('Importação: aceita arquivo CSV', () => {
   assert.strictEqual(resultado.itens.length, 1);
   assert.strictEqual(resultado.itens[0].descricao, 'PILHA ALCALINA AA');
   assert.strictEqual(resultado.itens[0].precoVenda, 29.9);
-});
-
-teste('Valor de referência (edital): saiu das planilhas, do editor e dos PDFs', async () => {
-  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
-  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
-  const Colunas = require(path.join(RAIZ, 'shared', 'colunas'));
-  const PlanilhaAuxiliar = require(path.join(RAIZ, 'shared', 'planilha-auxiliar'));
-  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
-
-  // 1) a coluna saiu da lista única: o modelo para download, a leitura das
-  //    planilhas e o botão "Exportar itens" saem todos dela
-  assert.deepStrictEqual(
-    Colunas.COLUNAS.map((c) => c.titulo).filter((t) => /refer/i.test(t)),
-    [],
-    'nenhuma coluna de valor de referência — as colunas agora são: ' + Colunas.COLUNAS.map((c) => c.titulo).join(', ')
-  );
-
-  // 2) exportar os itens de um documento (o botão do editor)
-  const livroExportado = XLSX.read(
-    XLSX.write(
-      Importador.itensParaPlanilha([
-        { numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 2, precoCusto: 10, precoVenda: 20 },
-      ]),
-      { bookType: 'xlsx', type: 'buffer' }
-    ),
-    { type: 'buffer' }
-  );
-  const cabecalhoExportado = XLSX.utils.sheet_to_json(livroExportado.Sheets['Itens'], { header: 1 })[0];
-  assert.strictEqual(cabecalhoExportado.includes('Valor_Referencia'), false, 'a exportação de itens sai sem a coluna');
-
-  // 3) a planilha auxiliar também
-  const livroAuxiliar = XLSX.read(
-    PlanilhaAuxiliar.gerarBuffer(
-      { tipo: 'proposta', itens: [{ numeroItem: '1', descricao: 'RÁDIO', quantidade: 2, precoVenda: 20, valorReferencia: 15 }] },
-      {}
-    ),
-    { type: 'buffer' }
-  );
-  const cabecalhoAuxiliar = XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens'], { header: 1 })[0];
-  assert.strictEqual(cabecalhoAuxiliar.includes('Valor_Referencia'), false, 'a planilha auxiliar sai sem a coluna');
-
-  // 4) o documento não guarda mais o campo (documento antigo é saneado sem ele,
-  //    e o resto do item continua inteiro)
-  const saneado = Esquema.sanear(
-    { tipo: 'proposta', itens: [{ descricao: 'RÁDIO', quantidade: 2, valorReferencia: 1600, precoVenda: 1490 }] },
-    {},
-    'proposta'
-  );
-  assert.strictEqual(saneado.itens[0].valorReferencia, undefined, 'o documento não guarda o valor de referência');
-  assert.strictEqual(saneado.itens[0].precoVenda, 1490, 'o preço de venda continua no lugar');
-
-  // 5) nem na proposta nem no orçamento: mesmo num documento antigo, com o campo
-  //    preenchido, o PDF não mostra o valor
-  for (const tipo of ['proposta', 'orcamento']) {
-    const doc = documentoExemplo(tipo);
-    doc.itens[0].valorReferencia = 1234.56;
-    const textoDoPdf = JSON.stringify((await Pdf.montarDefinicao(doc, {})).content);
-    assert.strictEqual(/valor de refer/i.test(textoDoPdf), false, 'sem o rótulo do valor de referência no PDF do ' + tipo);
-    assert.strictEqual(textoDoPdf.includes('1.234,56'), false, 'e sem o valor no PDF do ' + tipo);
-  }
-
-  // 6) no editor o campo não existe mais
-  const editar = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'editar.js'), 'utf8');
-  assert.strictEqual(editar.includes('valorReferencia'), false, 'o editor não conhece mais o campo');
-  const html = fs.readFileSync(path.join(RAIZ, 'public', 'index.html'), 'utf8');
-  assert.strictEqual(/valor de refer/i.test(html), false, 'a página não cita o campo');
-  const listaDeColunas = fs.readFileSync(path.join(RAIZ, 'public', 'js', 'app.js'), 'utf8');
-  assert.strictEqual(listaDeColunas.includes('Valor_Referencia'), false, 'a lista de colunas do upload perdeu a coluna');
-
-  // 7) e um documento antigo abre e salva normalmente no editor (o campo ignorado)
-  const aberto = await abrirNoModoLocal();
-  const { window, $ } = aberto;
-  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
-
-  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
-  const antigo = Object.assign({}, documento, {
-    itens: [{
-      numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1,
-      valorReferencia: 1600, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
-      descricaoCatalogo: '', linkCompra: '',
-    }],
-  });
-  const salvo = await window.API.post('/api/documentos', antigo);
-  window.location.hash = '#/documento/' + salvo.documento.id;
-  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento antigo aberto no editor', 20000);
-  await ModoLocal.esperar(() => $('#lista-itens').querySelectorAll('.item').length === 1, 'o item na tela', 20000);
-
-  assert.strictEqual($('#lista-itens').querySelectorAll('[data-campo="valorReferencia"]').length, 0, 'sem o campo no painel Detalhes');
-  assert.strictEqual(/valor de refer/i.test($('#lista-itens').textContent), false, 'sem o rótulo na tela do item');
-  assert.ok($('[data-campo="precoVenda"]'), 'os outros campos do item continuam lá');
-
-  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento antigo salvo de novo', 20000);
-  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
-  assert.strictEqual(relido.documento.itens[0].valorReferencia, undefined, 'salvar o documento antigo descarta o campo');
-  assert.strictEqual(relido.documento.itens[0].precoVenda, 10, 'e não estraga o resto do item');
-
-  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
-  window.close();
 });
 
 // ================================================================ 3. PDFs
@@ -364,7 +262,7 @@ function documentoExemplo(tipo) {
     itens: [
       {
         numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS, BATERIA 1500 mAh',
-        unidade: 'UND', quantidade: 6, precoCusto: 1150, precoVenda: 1490,
+        unidade: 'UND', quantidade: 6, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490,
         marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio digital com 48 canais.', linkCompra: 'https://loja.com/r',
       },
       {
@@ -857,7 +755,7 @@ teste('PDF: orçamento em paisagem e cabeçalho só na primeira página', async 
   const longo = documentoExemplo('orcamento');
   longo.itens = Array.from({ length: 40 }, (_, i) => ({
     numeroItem: String(i + 1), descricao: 'ITEM ' + (i + 1) + ' PARA OCUPAR A PÁGINA', unidade: 'UND',
-    quantidade: i + 1, precoCusto: 5, precoVenda: 10 + i,
+    quantidade: i + 1, valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i,
     marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }));
   longo.opcoes = Object.assign({}, longo.opcoes, {
@@ -955,7 +853,7 @@ teste('Itens: na tela, o 2001º item é barrado com aviso (nada se perde no salv
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
   documento.itens = Array.from({ length: 2000 }, (_, i) => ({
     numeroItem: String(i + 1), descricao: 'ITEM ' + (i + 1), unidade: 'UND', quantidade: 2,
-    precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
+    valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
     descricaoCatalogo: '', linkCompra: '',
   }));
   const salvo = await window.API.post('/api/documentos', documento);
@@ -988,7 +886,7 @@ teste('Itens: 2000 itens no servidor (salvar, PDF e planilhas)', async () => {
     const itens = Array.from({ length: 2000 }, (_, i) => ({
       numeroItem: String(i + 1),
       descricao: 'ITEM ' + (i + 1) + ' — RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS',
-      unidade: 'UND', quantidade: 2, precoCusto: 1150, precoVenda: 1490 + i,
+      unidade: 'UND', quantidade: 2, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490 + i,
       marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio digital.', linkCompra: '',
     }));
     // o documento sai com um grupo só dele: assim a numeração dos outros
@@ -1606,13 +1504,13 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
     itens: [
       {
         numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS',
-        unidade: 'UND', quantidade: 6, precoCusto: 1150, precoVenda: 1490,
+        unidade: 'UND', quantidade: 6, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490,
         marcaModelo: 'Hytera / BP516', foto: 'https://drive.google.com/file/d/exemplo/view',
         descricaoCatalogo: 'Rádio robusto com bateria de 1500 mAh.', linkCompra: 'https://loja.exemplo/radio',
       },
       {
         numeroItem: '2', descricao: 'BATERIA EXTRA 1500 mAh',
-        unidade: 'UND', quantidade: 6, precoCusto: 180, precoVenda: 249.9,
+        unidade: 'UND', quantidade: 6, valorReferencia: 320, precoCusto: 180, precoVenda: 249.9,
         marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: '', linkCompra: '',
       },
     ],
@@ -1637,7 +1535,7 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
   assert.strictEqual(primeiro.Descricao_Edital, 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS', 'descrição');
   assert.strictEqual(primeiro.Unidade, 'UND', 'unidade');
   assert.strictEqual(Number(primeiro.Quantidade), 6, 'quantidade');
-  assert.strictEqual('Valor_Referencia' in primeiro, false, 'sem a coluna do valor de referência na planilha auxiliar');
+  assert.strictEqual(Number(primeiro.Valor_Referencia), 1600, 'valor de referência');
   assert.strictEqual(Number(primeiro.Preco_Custo), 1150, 'preço de custo (uso interno)');
   assert.strictEqual(Number(primeiro.Preco_Venda), 1490, 'preço de venda');
   assert.strictEqual(primeiro.Marca_Modelo, 'Hytera / BP516', 'marca/modelo');
@@ -1810,7 +1708,7 @@ teste('Planilha auxiliar: no modo local (GitHub Pages) o navegador gera o arquiv
   documento.itens = [
     {
       numeroItem: '1', descricao: 'ITEM DO MODO LOCAL', unidade: 'CX', quantidade: 3,
-      precoCusto: 60, precoVenda: 90, marcaModelo: 'Marca X',
+      valorReferencia: 100, precoCusto: 60, precoVenda: 90, marcaModelo: 'Marca X',
       foto: '', descricaoCatalogo: 'Descrição de catálogo.', linkCompra: 'https://loja.exemplo/item',
     },
   ];
@@ -1879,7 +1777,7 @@ teste('Pré-visualização: o botão no topo do editor mostra e oculta o quadro'
   documento.itens = [
     {
       numeroItem: '1', descricao: 'ITEM DA PRÉVIA', unidade: 'UND', quantidade: 1,
-      precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+      valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
       descricaoCatalogo: '', linkCompra: '',
     },
   ];
@@ -1907,7 +1805,7 @@ teste('Itens: Detalhes fica aberto ao digitar, mover para baixo, selecionar/apag
 
   const itens = ['PRIMEIRO ITEM', 'SEGUNDO ITEM', 'TERCEIRO ITEM'].map((descricao, i) => ({
     numeroItem: String(i + 1), descricao, unidade: 'UND', quantidade: 1,
-    precoCusto: 50, precoVenda: 100, marcaModelo: '', foto: '',
+    valorReferencia: 100, precoCusto: 50, precoVenda: 100, marcaModelo: '', foto: '',
     descricaoCatalogo: '', linkCompra: '',
   }));
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
@@ -2030,7 +1928,7 @@ teste('Itens: "Organizar por item nº" põe 1, 15, 2, 3 na ordem certa', async (
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
   documento.itens = numeros.map((numero, i) => ({
     numeroItem: numero, descricao: 'ITEM ' + numero, unidade: 'UND', quantidade: 1,
-    precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+    valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
     descricaoCatalogo: '', linkCompra: '',
   }));
   const salvo = await window.API.post('/api/documentos', documento);
@@ -2086,7 +1984,7 @@ teste('Itens: ao mover, a numeração acompanha a ordem (crescente/decrescente)'
   ];
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
   documento.itens = iniciais.map((i) => Object.assign({
-    unidade: 'UND', quantidade: 1, precoCusto: 5, precoVenda: 10,
+    unidade: 'UND', quantidade: 1, valorReferencia: 10, precoCusto: 5, precoVenda: 10,
     marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }, i));
   const salvo = await window.API.post('/api/documentos', documento);
@@ -2148,7 +2046,7 @@ teste('Itens: o lucro estimado mostra também a porcentagem', async () => {
   // 1 item: venda 1.490, custo 1.150 → lucro 340 (22,8% do total, 29,6% do custo)
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
   documento.itens = [{
-    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, 
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
     precoCusto: 1150, precoVenda: 1490, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
   const salvo = await window.API.post('/api/documentos', documento);
@@ -2186,7 +2084,7 @@ teste('Layout do PDF: orientação (retrato/paisagem) e cabeçalho só na primei
 
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
   documento.itens = [{
-    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, 
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
     precoCusto: 1150, precoVenda: 1490, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
   const salvo = await window.API.post('/api/documentos', documento);
@@ -2260,7 +2158,7 @@ teste('Dados do proponente: a inscrição municipal do documento é gravada e vo
 
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'orcamento');
   documento.itens = [{
-    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, 
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 10,
     precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
   const salvo = await window.API.post('/api/documentos', documento);
@@ -2316,7 +2214,7 @@ teste('Documentos: selecionar todos, desmarcar e excluir (selecionados e todos)'
       cliente: { nome: 'CLIENTE ' + nome },
       itens: [{
         numeroItem: '1', descricao: tipo === 'orcamento' ? 'B' : 'A', unidade: 'UND', quantidade: 1,
-        precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
+        valorReferencia: 10, precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '',
         descricaoCatalogo: '', linkCompra: '',
       }],
     }
@@ -2539,7 +2437,7 @@ teste('Declaração é documento à parte: não entra na proposta nem no orçame
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
   documento.orgao = { nome: 'UASG 787010', modalidade: 'Pregão Eletrônico', pregao: '17/2026', objeto: 'Rádios' };
   documento.itens = [{
-    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, 
+    numeroItem: '1', descricao: 'RÁDIO', unidade: 'UND', quantidade: 1, valorReferencia: 10,
     precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
   documento.declaracoes = [{ titulo: 'Declaração Unificada', texto: '{RAZAO} declara que atende ao edital.', incluir: true }];
@@ -2877,8 +2775,8 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
       arquivo: 'itens.xlsx',
       colunasReconhecidas: ['numeroItem', 'descricao', 'unidade', 'quantidade', 'precoVenda'],
       itens: [
-        { numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, precoCusto: 0, precoVenda: 1490, marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio 48 canais', linkCompra: '' },
-        { numeroItem: '2', descricao: 'BATERIA EXTRA', unidade: 'UND', quantidade: 6, precoCusto: 0, precoVenda: 249.9, marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: 'Bateria 1500 mAh', linkCompra: '' },
+        { numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, valorReferencia: 0, precoCusto: 0, precoVenda: 1490, marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio 48 canais', linkCompra: '' },
+        { numeroItem: '2', descricao: 'BATERIA EXTRA', unidade: 'UND', quantidade: 6, valorReferencia: 0, precoCusto: 0, precoVenda: 249.9, marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: 'Bateria 1500 mAh', linkCompra: '' },
       ],
     });
 
@@ -2886,9 +2784,7 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
     window.location.hash = '#/importar';
     await Navegador.esperar(() => !$('#view-importar').classList.contains('oculto'), 'tela de importação');
     await Navegador.esperar(() => $('#importacao-documento').options.length >= 1, 'lista de documentos no seletor');
-    const colunasNaTela = [...doc.querySelectorAll('#lista-colunas-modelo li')].map((li) => li.textContent.trim());
-    assert.strictEqual(colunasNaTela.length, 10, 'colunas do modelo listadas');
-    assert.strictEqual(colunasNaTela.includes('Valor_Referencia'), false, 'a tela não lista mais o valor de referência');
+    assert.strictEqual(doc.querySelectorAll('#lista-colunas-modelo li').length, 11, 'colunas do modelo listadas');
 
     const entrada = $('#arquivo-planilha');
     const arquivoFalso = new window.File(['conteudo'], 'itens.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -2944,7 +2840,7 @@ teste('Importação: lê o arquivo do usuário (aba Página1, cabeçalho depois 
   assert.deepStrictEqual(
     resultado.colunasReconhecidas.sort(),
     Colunas.COLUNAS.filter((c) => !['observacao'].includes(c.chave)).map((c) => c.chave).sort(),
-    'as 10 colunas do modelo foram reconhecidas (a planilha antiga tem Valor_Referencia a mais)'
+    'todas as 11 colunas do modelo foram reconhecidas'
   );
 
   const primeiro = resultado.itens[0];
@@ -2957,7 +2853,6 @@ teste('Importação: lê o arquivo do usuário (aba Página1, cabeçalho depois 
   assert.strictEqual(primeiro.foto, 'https://www.appsheet.com/image/getimageurl?appName=DEJapp&fileName=Foto_Produto.143948.png&signature=4280578f', 'link da foto (com & tratado)');
   assert.strictEqual(primeiro.descricaoCatalogo, 'O Rádio Hytera BP516 é a escolha ideal para comunicação eficiente.');
   assert.strictEqual(primeiro.linkCompra, 'https://loja.com/r');
-  assert.strictEqual(primeiro.valorReferencia, undefined, 'a coluna antiga é ignorada sem erro');
 });
 
 teste('Importação: célula com várias fotos/links usa o primeiro e avisa', () => {
@@ -3351,7 +3246,7 @@ teste('Nuvem: navegador sem espaço (documento grande) não impede o envio para 
     const documento = w.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
     documento.itens = Array.from({ length: 300 }, (_, i) => ({
       numeroItem: String(i + 1), descricao: 'ITEM GRANDE ' + (i + 1), unidade: 'UND', quantidade: 2,
-      precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
+      valorReferencia: 20, precoCusto: 5, precoVenda: 10 + i, marcaModelo: '', foto: '',
       descricaoCatalogo: '', linkCompra: '',
     }));
     const salvo = await w.API.post('/api/documentos', documento);
