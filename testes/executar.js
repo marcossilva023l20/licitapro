@@ -222,6 +222,85 @@ teste('Importação: aceita arquivo CSV', () => {
   assert.strictEqual(resultado.itens[0].precoVenda, 29.9);
 });
 
+teste('Valor de referência (edital): de volta na planilha, no documento e no editor', async () => {
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const Colunas = require(path.join(RAIZ, 'shared', 'colunas'));
+  const Modelo = require(path.join(RAIZ, 'server', 'modeloImportacao'));
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const PlanilhaAuxiliar = require(path.join(RAIZ, 'shared', 'planilha-auxiliar'));
+
+  // 1) a coluna está de volta na lista única (modelo, leitura e exportação saem dela)
+  const coluna = Colunas.COLUNAS.find((c) => c.chave === 'valorReferencia');
+  assert.ok(coluna, 'a coluna valorReferencia existe');
+  assert.strictEqual(coluna.titulo, 'Valor_Referencia', 'com o título de sempre');
+
+  // 2) no modelo para download
+  const tituloDoModelo = XLSX.utils.sheet_to_json(
+    XLSX.read(Modelo.gerarBuffer(), { type: 'buffer' }).Sheets['Itens'], { header: 1 }
+  )[0];
+  assert.ok(tituloDoModelo.includes('Valor_Referencia'), 'o modelo tem a coluna');
+  assert.strictEqual(tituloDoModelo.length, 11, 'as 11 colunas do modelo: ' + tituloDoModelo.join(', '));
+
+  // 3) na leitura da planilha e na exportação de itens
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet([
+    tituloDoModelo,
+    [1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 1600, 1150, 1490, 'Hytera / BP516', '', 'Rádio 48 canais', ''],
+  ]), 'Itens');
+  const importado = Importador.importar(XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' }), 'com-referencia.xlsx');
+  assert.strictEqual(importado.itens[0].valorReferencia, 1600, 'a planilha volta a trazer o valor de referência');
+  assert.deepStrictEqual(importado.avisos, [], 'sem avisos');
+  // itensParaPlanilha devolve o livro; escrevemos para ler os títulos de volta
+  const tituloExportado = XLSX.utils.sheet_to_json(
+    XLSX.read(XLSX.write(Importador.itensParaPlanilha(importado.itens), { bookType: 'xlsx', type: 'buffer' }), { type: 'buffer' })
+      .Sheets['Itens'],
+    { header: 1 }
+  )[0];
+  assert.ok(tituloExportado.includes('Valor_Referencia'), 'a exportação de itens traz a coluna');
+
+  // 4) o documento guarda o campo (e a planilha auxiliar também o traz)
+  const saneado = Esquema.sanear({ tipo: 'proposta', itens: [{ descricao: 'RÁDIO', quantidade: 2, valorReferencia: 1600, precoVenda: 1490 }] }, {}, 'proposta');
+  assert.strictEqual(saneado.itens[0].valorReferencia, 1600, 'o documento guarda o valor de referência');
+  const livroAuxiliar = XLSX.read(
+    PlanilhaAuxiliar.gerarBuffer({ tipo: 'proposta', itens: [{ numeroItem: '1', descricao: 'RÁDIO', quantidade: 2, valorReferencia: 1600, precoVenda: 1490 }] }, {}),
+    { type: 'buffer' }
+  );
+  const linhasAuxiliar = XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens']);
+  assert.strictEqual(Number(linhasAuxiliar[0].Valor_Referencia), 1600, 'a planilha auxiliar traz o valor');
+
+  // 5) no editor: o campo está no painel Detalhes, salva e volta ao reabrir
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
+    precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const bloco = $('#lista-itens .item[data-indice="0"]');
+  bloco.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const campo = bloco.querySelector('.item-detalhes [data-campo="valorReferencia"]');
+  assert.ok(campo, 'o campo do valor de referência está no painel Detalhes');
+  assert.ok(/Valor de refer/i.test(campo.closest('label').textContent), 'com o rótulo: ' + campo.closest('label').textContent.trim());
+  assert.strictEqual(campo.value, '1.600,00', 'mostra o valor que a planilha trouxe');
+
+  campo.value = '1.700,00';
+  campo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  assert.strictEqual(relido.documento.itens[0].valorReferencia, 1700, 'o valor digitado ficou no documento');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 // ================================================================ 3. PDFs
 
 function documentoExemplo(tipo) {
