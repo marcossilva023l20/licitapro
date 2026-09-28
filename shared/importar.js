@@ -19,7 +19,7 @@
 })(typeof self !== 'undefined' ? self : this, function (XLSX, Formato, Colunas) {
   'use strict';
 
-  const CAMPOS_NUMERICOS = ['quantidade', 'valorReferencia', 'precoCusto', 'precoVenda'];
+  const CAMPOS_NUMERICOS = ['quantidade', 'precoCusto', 'precoVenda'];
   // Mesmo teto do documento (shared/documento-schema.js): a planilha pode ter
   // mais linhas, mas o que não couber é avisado na tela — nada some calado.
   const MAX_LINHAS = 2000;
@@ -143,7 +143,6 @@
         descricao,
         unidade: String(registro.unidade || '').trim().toUpperCase() || 'UND',
         quantidade: 0,
-        valorReferencia: 0,
         precoCusto: 0,
         precoVenda: 0,
         marcaModelo: String(registro.marcaModelo || '').trim(),

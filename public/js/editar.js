@@ -624,7 +624,6 @@
     grade1.append(
       criarCampoItem('Nº do item', item.numeroItem, 'numeroItem'),
       criarCampoItem('Marca / Modelo', item.marcaModelo, 'marcaModelo'),
-      criarCampoItem('Valor de referência (edital)', item.valorReferencia ? F.numero(item.valorReferencia, 2) : '', 'valorReferencia', { moeda: true }),
       criarCampoItem('Preço de custo', item.precoCusto ? F.numero(item.precoCusto, 2) : '', 'precoCusto', { moeda: true }),
       criarCampoItem('Preço de venda', item.precoVenda ? F.numero(item.precoVenda, 2) : '', 'precoVenda', { moeda: true }),
       criarCampoItem('Link da compra', item.linkCompra, 'linkCompra')
@@ -832,7 +831,6 @@
       descricao: '',
       unidade: 'UND',
       quantidade: 1,
-      valorReferencia: 0,
       precoCusto: 0,
       precoVenda: 0,
       marcaModelo: '',
@@ -1335,7 +1333,7 @@
       const item = estado.doc.itens[indice];
       if (!item) return;
       const valor = evento.target.value;
-      item[campo] = ['quantidade', 'precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)
+      item[campo] = ['quantidade', 'precoVenda', 'precoCusto'].includes(campo)
         ? F.paraNumero(valor)
         : valor;
       // mantém a descrição sincronizada entre a linha e o painel de detalhes
@@ -1378,7 +1376,7 @@
         return;
       }
       const campo = evento.target.dataset.campo;
-      if (campo && ['precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)) {
+      if (campo && ['precoVenda', 'precoCusto'].includes(campo)) {
         evento.target.value = evento.target.value === '' ? '' : F.numero(F.paraNumero(evento.target.value), 2);
         atualizarResumos();
       }
@@ -1387,7 +1385,7 @@
     lista.addEventListener('focusout', (evento) => {
       const campo = evento.target.dataset.campo;
       if (!campo) return;
-      if (['precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)) {
+      if (['precoVenda', 'precoCusto'].includes(campo)) {
         evento.target.value = evento.target.value === '' ? '' : F.numero(F.paraNumero(evento.target.value), 2);
       }
     });

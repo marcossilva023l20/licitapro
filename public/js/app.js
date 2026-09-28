@@ -742,7 +742,7 @@
   function preencherColunasModelo() {
     const colunas = [
       ['Numero_Item', false], ['Descricao_Edital', true], ['Unidade', false], ['Quantidade', true],
-      ['Valor_Referencia', false], ['Preco_Custo', false], ['Preco_Venda', false], ['Marca_Modelo', false],
+      ['Preco_Custo', false], ['Preco_Venda', false], ['Marca_Modelo', false],
       ['Foto_Produto', false], ['Descricao_Catalogo', false], ['Link_da_compra', false],
     ];
     $('#lista-colunas-modelo').innerHTML = colunas

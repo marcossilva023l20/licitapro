@@ -173,7 +173,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que traz |
    |---|---|
    | **Resumo** | tipo, número, data, status, órgão/cliente, modalidade, objeto, empresa, quantidade de itens, subtotal, desconto, acréscimo, total, custo e lucro (uso interno), condições e a assinatura digital, quando houver |
-   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
+   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
 
    São só essas duas abas. Valem aqui as mesmas regras do modelo: **sem aba de
    instruções e sem comentários nos títulos** — quem já usa o sistema sabe preencher.
@@ -205,7 +205,6 @@ navegador, e a escolhida vai para o cabeçalho do PDF.
 | `Descricao_Edital` | **sim** | descrição exata do item no edital |
 | `Unidade` | não | UND, UN, CX, PCT, M, KG... |
 | `Quantidade` | **sim** | quantidade solicitada |
-| `Valor_Referencia` | não | valor unitário estimado no edital |
 | `Preco_Custo` | não | quanto você paga no fornecedor (controle interno) |
 | `Preco_Venda` | não | valor unitário ofertado (entra no PDF) |
 | `Marca_Modelo` | não | marca e modelo ofertados |
