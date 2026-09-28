@@ -102,7 +102,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que faz |
    |---|---|
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
-   | Itens e preços | itens com quantidade, unidade, preço de venda, custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
+   | Itens e preços | itens com quantidade, unidade, valor de referência (edital), custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Declarações | as declarações que acompanham o documento (Declaração Unificada, ME/EPP/MEI, textos próprios), com marcação de quais saem no PDF |
 
@@ -173,14 +173,14 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que traz |
    |---|---|
    | **Resumo** | tipo, número, data, status, órgão/cliente, modalidade, objeto, empresa, quantidade de itens, subtotal, desconto, acréscimo, total, custo e lucro (uso interno), condições e a assinatura digital, quando houver |
-   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Preco_Venda`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
+   | **Itens** | os itens do documento preenchidos nas **mesmas colunas da planilha-modelo** (`Numero_Item`, `Descricao_Edital`, `Unidade`, `Quantidade`, `Valor_Referencia`, `Preco_Custo`, `Marca_Modelo`, `Foto_Produto`, `Descricao_Catalogo`, `Link_da_compra`) |
 
    São só essas duas abas. Valem aqui as mesmas regras do modelo: **sem aba de
    instruções e sem comentários nos títulos** — quem já usa o sistema sabe preencher.
 
    Como as colunas são as do modelo, a planilha pode ser **editada no Excel e
    reenviada na tela "Importar planilha"** — o sistema lê de volta os mesmos
-   itens (inclusive custo, venda, marca, foto, descrição do catálogo e link).
+   itens (inclusive valor de referência, custo, marca, foto, descrição do catálogo e link).
 
 6. **Histórico** — a tela *Documentos* tem busca, filtro por tipo e status
    (rascunho / enviada / ganha / perdida / cancelada), duplicação, exclusão e
@@ -205,9 +205,8 @@ navegador, e a escolhida vai para o cabeçalho do PDF.
 | `Descricao_Edital` | **sim** | descrição exata do item no edital |
 | `Unidade` | não | UND, UN, CX, PCT, M, KG... |
 | `Quantidade` | **sim** | quantidade solicitada |
-| `Valor_Referencia` | não | valor unitário estimado no edital |
+| `Valor_Referencia` | não | valor unitário do item — é o que entra no PDF como *Valor Unitário* |
 | `Preco_Custo` | não | quanto você paga no fornecedor (controle interno) |
-| `Preco_Venda` | não | valor unitário ofertado (entra no PDF) |
 | `Marca_Modelo` | não | marca e modelo ofertados |
 | `Foto_Produto` | não | link da imagem (Drive, site do fabricante) ou envie um arquivo **.jpg/.png** no site |
 | `Descricao_Catalogo` | não | texto comercial que aparece no catálogo |

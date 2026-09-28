@@ -146,7 +146,7 @@ teste('Modelo de planilha: gera .xlsx com a aba Itens, sem instruções', () => 
   const cabecalhos = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 })[0];
   assert.deepStrictEqual(cabecalhos, [
     'Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia',
-    'Preco_Custo', 'Preco_Venda', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra',
+    'Preco_Custo', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra',
   ]);
 });
 
@@ -157,10 +157,10 @@ teste('Importação: lê a planilha do modelo no formato esperado', () => {
   // gera uma planilha de exemplo a partir do modelo, com dados nas células
   const livro = XLSX.read(Modelo.gerarBuffer(), { type: 'buffer' });
   const linhas = XLSX.utils.sheet_to_json(livro.Sheets['Itens'], { header: 1 });
-  linhas.push([1, 'RÁDIO TRANSCEPTOR DIGITAL', 'UND', 6, '1.600,00', '1.150,00', 'R$ 1.490,00', 'Hytera / BP516', '', 'Rádio com 48 canais', 'https://loja.com/r']);
-  linhas.push([2, 'BATERIA EXTRA', 'UND', '6', '320,00', '180,00', '249,90', 'Hytera / BL2016', '', 'Bateria 1500 mAh', '']);
-  linhas.push(['', '', '', '', '', '', '', '', '', '', '']);
-  linhas.push([3, 'CARREGADOR 6 POSIÇÕES', 'CX', 1, 900, 600, 890, 'Hytera / MCA08', '', 'Carrega 6 baterias', '']);
+  linhas.push([1, 'RÁDIO TRANSCEPTOR DIGITAL', 'UND', 6, 'R$ 1.490,00', '1.150,00', 'Hytera / BP516', '', 'Rádio com 48 canais', 'https://loja.com/r']);
+  linhas.push([2, 'BATERIA EXTRA', 'UND', '6', '249,90', '180,00', 'Hytera / BL2016', '', 'Bateria 1500 mAh', '']);
+  linhas.push(['', '', '', '', '', '', '', '', '', '']);
+  linhas.push([3, 'CARREGADOR 6 POSIÇÕES', 'CX', 1, 890, 600, 'Hytera / MCA08', '', 'Carrega 6 baterias', '']);
 
   const nova = XLSX.utils.aoa_to_sheet(linhas);
   const livro2 = XLSX.utils.book_new();
@@ -173,7 +173,7 @@ teste('Importação: lê a planilha do modelo no formato esperado', () => {
   assert.strictEqual(resultado.itens[0].quantidade, 6);
   assert.strictEqual(resultado.itens[0].precoVenda, 1490);
   assert.strictEqual(resultado.itens[0].precoCusto, 1150);
-  assert.strictEqual(resultado.itens[0].valorReferencia, 1600);
+  assert.strictEqual(resultado.itens[0].valorReferencia, undefined, 'não existe mais um campo separado de valor de referência');
   assert.strictEqual(resultado.itens[1].unidade, 'UND');
   assert.strictEqual(resultado.itens[1].precoVenda, 249.9);
   assert.strictEqual(resultado.itens[1].descricaoCatalogo, 'Bateria 1500 mAh');
@@ -222,80 +222,149 @@ teste('Importação: aceita arquivo CSV', () => {
   assert.strictEqual(resultado.itens[0].precoVenda, 29.9);
 });
 
-teste('Valor de referência (edital): de volta na planilha, no documento e no editor', async () => {
+teste('Um preço só: "Valor de referência (edital)" no lugar do "Preço de venda"', async () => {
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
   const Colunas = require(path.join(RAIZ, 'shared', 'colunas'));
   const Modelo = require(path.join(RAIZ, 'server', 'modeloImportacao'));
   const Importador = require(path.join(RAIZ, 'shared', 'importar'));
   const PlanilhaAuxiliar = require(path.join(RAIZ, 'shared', 'planilha-auxiliar'));
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
 
-  // 1) a coluna está de volta na lista única (modelo, leitura e exportação saem dela)
-  const coluna = Colunas.COLUNAS.find((c) => c.chave === 'valorReferencia');
-  assert.ok(coluna, 'a coluna valorReferencia existe');
-  assert.strictEqual(coluna.titulo, 'Valor_Referencia', 'com o título de sempre');
+  const TITULOS = [
+    'Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia',
+    'Preco_Custo', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra',
+  ];
+  // o modelo antigo, com as duas colunas de preço
+  const ANTIGA = [
+    'Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia',
+    'Preco_Custo', 'Preco_Venda', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra',
+  ];
+  const cabecalhoDe = (arquivo) =>
+    XLSX.utils.sheet_to_json(XLSX.read(arquivo, { type: 'buffer' }).Sheets['Itens'], { header: 1 })[0];
+  const planilha = (cabecalho, linhas) => {
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet([cabecalho, ...linhas]), 'Itens');
+    return XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
+  };
 
-  // 2) no modelo para download
-  const tituloDoModelo = XLSX.utils.sheet_to_json(
-    XLSX.read(Modelo.gerarBuffer(), { type: 'buffer' }).Sheets['Itens'], { header: 1 }
-  )[0];
-  assert.ok(tituloDoModelo.includes('Valor_Referencia'), 'o modelo tem a coluna');
-  assert.strictEqual(tituloDoModelo.length, 11, 'as 11 colunas do modelo: ' + tituloDoModelo.join(', '));
-
-  // 3) na leitura da planilha e na exportação de itens
-  const livro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet([
-    tituloDoModelo,
-    [1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 1600, 1150, 1490, 'Hytera / BP516', '', 'Rádio 48 canais', ''],
-  ]), 'Itens');
-  const importado = Importador.importar(XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' }), 'com-referencia.xlsx');
-  assert.strictEqual(importado.itens[0].valorReferencia, 1600, 'a planilha volta a trazer o valor de referência');
-  assert.deepStrictEqual(importado.avisos, [], 'sem avisos');
-  // itensParaPlanilha devolve o livro; escrevemos para ler os títulos de volta
-  const tituloExportado = XLSX.utils.sheet_to_json(
-    XLSX.read(XLSX.write(Importador.itensParaPlanilha(importado.itens), { bookType: 'xlsx', type: 'buffer' }), { type: 'buffer' })
-      .Sheets['Itens'],
-    { header: 1 }
-  )[0];
-  assert.ok(tituloExportado.includes('Valor_Referencia'), 'a exportação de itens traz a coluna');
-
-  // 4) o documento guarda o campo (e a planilha auxiliar também o traz)
-  const saneado = Esquema.sanear({ tipo: 'proposta', itens: [{ descricao: 'RÁDIO', quantidade: 2, valorReferencia: 1600, precoVenda: 1490 }] }, {}, 'proposta');
-  assert.strictEqual(saneado.itens[0].valorReferencia, 1600, 'o documento guarda o valor de referência');
-  const livroAuxiliar = XLSX.read(
-    PlanilhaAuxiliar.gerarBuffer({ tipo: 'proposta', itens: [{ numeroItem: '1', descricao: 'RÁDIO', quantidade: 2, valorReferencia: 1600, precoVenda: 1490 }] }, {}),
-    { type: 'buffer' }
+  // 1) uma coluna de preço só, chamada Valor_Referencia, em tudo que é planilha
+  assert.deepStrictEqual(Colunas.COLUNAS.map((c) => c.titulo), TITULOS, 'as 10 colunas do sistema');
+  assert.strictEqual(
+    Colunas.COLUNAS.some((c) => c.chave === 'valorReferencia'), false,
+    'não existe mais um campo separado de valor de referência'
   );
-  const linhasAuxiliar = XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens']);
-  assert.strictEqual(Number(linhasAuxiliar[0].Valor_Referencia), 1600, 'a planilha auxiliar traz o valor');
+  assert.deepStrictEqual(cabecalhoDe(Modelo.gerarBuffer()), TITULOS, 'o modelo para download');
 
-  // 5) no editor: o campo está no painel Detalhes, salva e volta ao reabrir
+  // 2) planilha no modelo de hoje: o valor de referência É o preço do item
+  const nova = Importador.importar(
+    planilha(TITULOS, [[1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 'R$ 1.490,00', 1150, 'Hytera / BP516', '', 'Rádio 48 canais', 'https://loja.com/r']]),
+    'nova.xlsx'
+  );
+  assert.strictEqual(nova.itens[0].precoVenda, 1490, 'o valor lido é o preço do item');
+  assert.strictEqual(nova.itens[0].precoCusto, 1150, 'o custo continua à parte (uso interno)');
+  assert.deepStrictEqual(nova.avisos, [], 'sem avisos');
+
+  // 3) planilha antiga com as duas colunas: vale o Preco_Venda (o que já saía no
+  //    PDF) e a tela avisa
+  const duas = Importador.importar(
+    planilha(ANTIGA, [[1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 1600, 1150, 1490, 'Hytera / BP516', '', '', '']]),
+    'antiga.xlsx'
+  );
+  assert.strictEqual(duas.itens[0].precoVenda, 1490, 'o preço do documento antigo não muda');
+  assert.ok(
+    duas.avisos.some((a) => /Preco_Venda/.test(a) && /um campo só/.test(a)),
+    'avisa que usou o Preco_Venda: ' + duas.avisos.join(' | ')
+  );
+
+  // 4) planilha antiga com a referência vazia: o valor vem do Preco_Venda
+  const completada = Importador.importar(
+    planilha(ANTIGA, [[1, 'RÁDIO', 'UND', 6, '', 1150, 1490, '', '', '', '']]),
+    'antiga-referencia-vazia.xlsx'
+  );
+  assert.strictEqual(completada.itens[0].precoVenda, 1490, 'nada de preço zerado');
+  assert.ok(completada.avisos.some((a) => /modelo antigo/.test(a)), 'avisa de onde veio o valor: ' + completada.avisos.join(' | '));
+
+  // 5) planilha antiga que só tem a coluna Preco_Venda
+  const soVenda = Importador.importar(
+    planilha(['Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Preco_Venda'], [[1, 'PILHA AA', 'PCT', 10, '29,90']]),
+    'so-preco-venda.xlsx'
+  );
+  assert.strictEqual(soVenda.itens[0].precoVenda, 29.9, 'o nome antigo continua sendo lido');
+  assert.deepStrictEqual(soVenda.avisos, [], 'sem avisos');
+
+  // 6) documento antigo: o preço continua o mesmo e o campo extra é descartado
+  const antigo = Esquema.sanear(
+    { tipo: 'proposta', itens: [{ descricao: 'RÁDIO', quantidade: 6, valorReferencia: 1600, precoCusto: 1150, precoVenda: 1490 }] },
+    {}, 'proposta'
+  );
+  assert.strictEqual(antigo.itens[0].precoVenda, 1490, 'o documento antigo guarda o mesmo preço');
+  assert.strictEqual('valorReferencia' in antigo.itens[0], false, 'o campo separado não volta ao salvar');
+  const semPreco = Esquema.sanear(
+    { tipo: 'proposta', itens: [{ descricao: 'RÁDIO', quantidade: 6, valorReferencia: 1600, precoVenda: 0 }] },
+    {}, 'proposta'
+  );
+  assert.strictEqual(semPreco.itens[0].precoVenda, 1600, 'documento antigo sem preço aproveita o valor de referência');
+
+  // 7) exportação de itens e planilha auxiliar com a coluna única
+  const exportada = XLSX.write(Importador.itensParaPlanilha(nova.itens), { bookType: 'xlsx', type: 'buffer' });
+  assert.deepStrictEqual(cabecalhoDe(exportada), TITULOS, 'a exportação de itens');
+  const livroAuxiliar = XLSX.read(PlanilhaAuxiliar.gerarBuffer({ tipo: 'proposta', itens: nova.itens }, {}), { type: 'buffer' });
+  assert.deepStrictEqual(XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens'], { header: 1 })[0], TITULOS, 'a planilha auxiliar');
+  assert.strictEqual(
+    Number(XLSX.utils.sheet_to_json(livroAuxiliar.Sheets['Itens'])[0].Valor_Referencia), 1490,
+    'o preço sai na coluna Valor_Referencia'
+  );
+
+  // 8) o PDF segue mostrando esse valor como "Valor Unitário"
+  const documentoPdf = Esquema.sanear(
+    { tipo: 'proposta', orgao: { nome: 'UASG 787010 - CENTRO DE INTENDÊNCIA DA MARINHA' }, itens: nova.itens },
+    {}, 'proposta'
+  );
+  const definicao = await Pdf.montarDefinicao(documentoPdf, documentoPdf.proponente);
+  const textoPdf = JSON.stringify(definicao.content);
+  assert.ok(textoPdf.includes('Valor Unitário'), 'a coluna de preço da tabela do PDF');
+  assert.ok(/1\.490,00/.test(textoPdf), 'o valor de referência sai no PDF');
+  assert.strictEqual(/Preço de [Vv]enda/.test(textoPdf), false, 'o PDF não fala mais em preço de venda');
+
+  // 9) editor: um campo só, com o nome "Valor de referência (edital)"
   const aberto = await abrirNoModoLocal();
   const { window, $ } = aberto;
   await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
 
-  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
-  documento.itens = [{
-    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, valorReferencia: 1600,
-    precoCusto: 5, precoVenda: 10, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  const doc = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  doc.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 2,
+    precoCusto: 1150, precoVenda: 1490, marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
   }];
-  const salvo = await window.API.post('/api/documentos', documento);
+  const salvo = await window.API.post('/api/documentos', doc);
   window.location.hash = '#/documento/' + salvo.documento.id;
   await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
 
   const bloco = $('#lista-itens .item[data-indice="0"]');
   bloco.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  const campo = bloco.querySelector('.item-detalhes [data-campo="valorReferencia"]');
-  assert.ok(campo, 'o campo do valor de referência está no painel Detalhes');
-  assert.ok(/Valor de refer/i.test(campo.closest('label').textContent), 'com o rótulo: ' + campo.closest('label').textContent.trim());
-  assert.strictEqual(campo.value, '1.600,00', 'mostra o valor que a planilha trouxe');
+  const rotulos = Array.from(bloco.querySelectorAll('.item-detalhes label')).map((l) => l.textContent.trim());
+  assert.ok(rotulos.some((r) => /Valor de referência \(edital\)/i.test(r)), 'o campo único está no Detalhes: ' + rotulos.join(' | '));
+  assert.strictEqual(rotulos.some((r) => /Preço de venda/i.test(r)), false, 'não existe mais "Preço de venda": ' + rotulos.join(' | '));
 
-  campo.value = '1.700,00';
+  const campo = bloco.querySelector('.item-detalhes [data-campo="precoVenda"]');
+  assert.strictEqual(campo.value, '1.490,00', 'mostra o preço do item');
+  campo.value = '1.550,00';
   campo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.strictEqual(
+    bloco.querySelector('.item-campos [data-campo="precoVenda"]').value, '1.550,00',
+    'a linha do item mostra o mesmo valor (é um campo só)'
+  );
+  assert.ok(
+    bloco.querySelector('.item-total').textContent.includes('3.100,00'),
+    'o total do item acompanha: ' + bloco.querySelector('.item-total').textContent
+  );
+
   $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
   const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
-  assert.strictEqual(relido.documento.itens[0].valorReferencia, 1700, 'o valor digitado ficou no documento');
+  assert.strictEqual(relido.documento.itens[0].precoVenda, 1550, 'o valor digitado ficou no documento');
+  assert.strictEqual('valorReferencia' in relido.documento.itens[0], false, 'sem campo separado gravado');
 
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
@@ -1614,9 +1683,9 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
   assert.strictEqual(primeiro.Descricao_Edital, 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS', 'descrição');
   assert.strictEqual(primeiro.Unidade, 'UND', 'unidade');
   assert.strictEqual(Number(primeiro.Quantidade), 6, 'quantidade');
-  assert.strictEqual(Number(primeiro.Valor_Referencia), 1600, 'valor de referência');
+  assert.strictEqual(Number(primeiro.Valor_Referencia), 1490, 'valor de referência (o preço do item)');
   assert.strictEqual(Number(primeiro.Preco_Custo), 1150, 'preço de custo (uso interno)');
-  assert.strictEqual(Number(primeiro.Preco_Venda), 1490, 'preço de venda');
+  assert.strictEqual('Preco_Venda' in primeiro, false, 'não existe mais a coluna de preço de venda');
   assert.strictEqual(primeiro.Marca_Modelo, 'Hytera / BP516', 'marca/modelo');
   assert.strictEqual(primeiro.Foto_Produto, 'https://drive.google.com/file/d/exemplo/view', 'link da foto');
   assert.strictEqual(primeiro.Descricao_Catalogo, 'Rádio robusto com bateria de 1500 mAh.', 'descrição do catálogo');
@@ -1654,7 +1723,7 @@ teste('Planilha auxiliar: itens preenchidos no formato do modelo (e volta pela i
   assert.strictEqual(lido.itens[0].descricao, 'RÁDIO TRANSCEPTOR PORTÁTIL DIGITAL, 48 CANAIS', 'volta a descrição');
   assert.strictEqual(lido.itens[0].unidade, 'UND', 'volta a unidade');
   assert.strictEqual(Number(lido.itens[0].quantidade), 6, 'volta a quantidade');
-  assert.strictEqual(Number(lido.itens[0].precoVenda), 1490, 'volta o preço de venda');
+  assert.strictEqual(Number(lido.itens[0].precoVenda), 1490, 'volta o valor de referência (o preço do item)');
   assert.strictEqual(Number(lido.itens[0].precoCusto), 1150, 'volta o custo');
   assert.strictEqual(lido.itens[0].marcaModelo, 'Hytera / BP516', 'volta a marca/modelo');
   assert.strictEqual(lido.itens[0].linkCompra, 'https://loja.exemplo/radio', 'volta o link da compra');
@@ -1805,7 +1874,7 @@ teste('Planilha auxiliar: no modo local (GitHub Pages) o navegador gera o arquiv
   assert.strictEqual(itens.length, 1, 'o item está na planilha');
   assert.strictEqual(itens[0].Descricao_Edital, 'ITEM DO MODO LOCAL', 'descrição preenchida');
   assert.strictEqual(itens[0].Unidade, 'CX', 'unidade preenchida');
-  assert.strictEqual(Number(itens[0].Preco_Venda), 90, 'preço de venda preenchido');
+  assert.strictEqual(Number(itens[0].Valor_Referencia), 90, 'valor de referência preenchido');
   const resumo = XLSX.utils.sheet_to_json(livro.Sheets['Resumo'], { header: 1, defval: '' });
   assert.ok(
     resumo.some((l) => l[0] === 'Cliente / empresa' && l[1] === 'CLIENTE DO MODO LOCAL'),
@@ -2849,13 +2918,13 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
 
     // resposta simulada do servidor para o envio da planilha
     window.API.enviarArquivo = async () => ({
-      avisos: ['Linha 3: preço de venda vazio ou zero (PILHA ALCALINA AA...).'],
+      avisos: ['Linha 3: valor de referência vazio ou zero (PILHA ALCALINA AA...).'],
       aba: 'Itens',
       arquivo: 'itens.xlsx',
       colunasReconhecidas: ['numeroItem', 'descricao', 'unidade', 'quantidade', 'precoVenda'],
       itens: [
-        { numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, valorReferencia: 0, precoCusto: 0, precoVenda: 1490, marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio 48 canais', linkCompra: '' },
-        { numeroItem: '2', descricao: 'BATERIA EXTRA', unidade: 'UND', quantidade: 6, valorReferencia: 0, precoCusto: 0, precoVenda: 249.9, marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: 'Bateria 1500 mAh', linkCompra: '' },
+        { numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 6, precoCusto: 0, precoVenda: 1490, marcaModelo: 'Hytera / BP516', foto: '', descricaoCatalogo: 'Rádio 48 canais', linkCompra: '' },
+        { numeroItem: '2', descricao: 'BATERIA EXTRA', unidade: 'UND', quantidade: 6, precoCusto: 0, precoVenda: 249.9, marcaModelo: 'Hytera / BL2016', foto: '', descricaoCatalogo: 'Bateria 1500 mAh', linkCompra: '' },
       ],
     });
 
@@ -2863,7 +2932,10 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
     window.location.hash = '#/importar';
     await Navegador.esperar(() => !$('#view-importar').classList.contains('oculto'), 'tela de importação');
     await Navegador.esperar(() => $('#importacao-documento').options.length >= 1, 'lista de documentos no seletor');
-    assert.strictEqual(doc.querySelectorAll('#lista-colunas-modelo li').length, 11, 'colunas do modelo listadas');
+    assert.strictEqual(doc.querySelectorAll('#lista-colunas-modelo li').length, 10, 'colunas do modelo listadas');
+    const colunasNaTela = Array.from(doc.querySelectorAll('#lista-colunas-modelo li')).map((li) => li.textContent.trim());
+    assert.ok(colunasNaTela.includes('Valor_Referencia'), 'a coluna de preço aparece como Valor_Referencia');
+    assert.strictEqual(colunasNaTela.includes('Preco_Venda'), false, 'não aparece mais a coluna Preco_Venda');
 
     const entrada = $('#arquivo-planilha');
     const arquivoFalso = new window.File(['conteudo'], 'itens.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -2874,7 +2946,7 @@ teste('Interface: importar planilha e criar proposta com os itens', async () => 
     assert.ok($('#importacao-titulo').textContent.includes('2 itens'), 'título com a quantidade de itens');
     assert.strictEqual(doc.querySelectorAll('#importacao-tabela tbody tr').length, 2, 'linhas da tabela de importação');
     assert.ok(!$('#importacao-avisos').classList.contains('oculto'), 'avisos da planilha exibidos');
-    assert.ok($('#importacao-avisos').textContent.includes('preço de venda'), 'conteúdo do aviso');
+    assert.ok($('#importacao-avisos').textContent.includes('valor de referência'), 'conteúdo do aviso');
 
     // cria a proposta já com os itens
     $('#importacao-criar-proposta').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -2919,14 +2991,19 @@ teste('Importação: lê o arquivo do usuário (aba Página1, cabeçalho depois 
   assert.deepStrictEqual(
     resultado.colunasReconhecidas.sort(),
     Colunas.COLUNAS.filter((c) => !['observacao'].includes(c.chave)).map((c) => c.chave).sort(),
-    'todas as 11 colunas do modelo foram reconhecidas'
+    'todas as 10 colunas do modelo foram reconhecidas'
+  );
+
+  assert.ok(
+    resultado.avisos.some((a) => /Preco_Venda/.test(a)),
+    'avisa que a planilha tem as duas colunas de preço: ' + resultado.avisos.join(' | ')
   );
 
   const primeiro = resultado.itens[0];
   assert.strictEqual(primeiro.descricao, 'RÁDIO TRANSCEPTOR');
   assert.strictEqual(primeiro.unidade, 'UND');
   assert.strictEqual(primeiro.quantidade, 6);
-  assert.strictEqual(primeiro.precoVenda, 1490);
+  assert.strictEqual(primeiro.precoVenda, 1490, 'o preço que já saía no PDF é preservado');
   assert.strictEqual(primeiro.precoCusto, 1150);
   assert.strictEqual(primeiro.marcaModelo, 'Hytera/ BP516');
   assert.strictEqual(primeiro.foto, 'https://www.appsheet.com/image/getimageurl?appName=DEJapp&fileName=Foto_Produto.143948.png&signature=4280578f', 'link da foto (com & tratado)');

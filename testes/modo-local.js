@@ -227,9 +227,9 @@ async function abrirSemServidor(opcoes = {}) {
 function planilhaDeTeste(window) {
   const XLSX = require('xlsx');
   const linhas = [
-    ['Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia', 'Preco_Custo', 'Preco_Venda', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra'],
-    [1, 'RÁDIO TRANSCEPTOR DIGITAL 48 CANAIS', 'UND', 6, '1.600,00', '1.150,00', 'R$ 1.490,00', 'Hytera / BP516', '', 'Rádio com 48 canais e bateria de 1500 mAh', 'https://loja.com/r'],
-    [2, 'BATERIA EXTRA 1500 mAh', 'UND', 6, 320, 180, 249.9, 'Hytera / BL2016', '', 'Bateria de íons de lítio', ''],
+    ['Numero_Item', 'Descricao_Edital', 'Unidade', 'Quantidade', 'Valor_Referencia', 'Preco_Custo', 'Marca_Modelo', 'Foto_Produto', 'Descricao_Catalogo', 'Link_da_compra'],
+    [1, 'RÁDIO TRANSCEPTOR DIGITAL 48 CANAIS', 'UND', 6, 'R$ 1.490,00', '1.150,00', 'Hytera / BP516', '', 'Rádio com 48 canais e bateria de 1500 mAh', 'https://loja.com/r'],
+    [2, 'BATERIA EXTRA 1500 mAh', 'UND', 6, 249.9, 180, 'Hytera / BL2016', '', 'Bateria de íons de lítio', ''],
   ];
   const livro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet(linhas), 'Itens');

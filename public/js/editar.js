@@ -624,9 +624,8 @@
     grade1.append(
       criarCampoItem('Nº do item', item.numeroItem, 'numeroItem'),
       criarCampoItem('Marca / Modelo', item.marcaModelo, 'marcaModelo'),
-      criarCampoItem('Valor de referência (edital)', item.valorReferencia ? F.numero(item.valorReferencia, 2) : '', 'valorReferencia', { moeda: true }),
+      criarCampoItem('Valor de referência (edital)', item.precoVenda ? F.numero(item.precoVenda, 2) : '', 'precoVenda', { moeda: true }),
       criarCampoItem('Preço de custo', item.precoCusto ? F.numero(item.precoCusto, 2) : '', 'precoCusto', { moeda: true }),
-      criarCampoItem('Preço de venda', item.precoVenda ? F.numero(item.precoVenda, 2) : '', 'precoVenda', { moeda: true }),
       criarCampoItem('Link da compra', item.linkCompra, 'linkCompra')
     );
 
@@ -832,7 +831,6 @@
       descricao: '',
       unidade: 'UND',
       quantidade: 1,
-      valorReferencia: 0,
       precoCusto: 0,
       precoVenda: 0,
       marcaModelo: '',
@@ -1207,7 +1205,7 @@
         </tr>`).join('');
       $('#importar-tabela', corpo).innerHTML = `
         <table class="tabela">
-          <thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th class="numero">Qtd</th><th class="numero">Preço</th><th>Marca</th></tr></thead>
+          <thead><tr><th>Item</th><th>Descrição</th><th>Un.</th><th class="numero">Qtd</th><th class="numero">Valor de ref.</th><th>Marca</th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>`;
 
@@ -1335,7 +1333,7 @@
       const item = estado.doc.itens[indice];
       if (!item) return;
       const valor = evento.target.value;
-      item[campo] = ['quantidade', 'precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)
+      item[campo] = ['quantidade', 'precoVenda', 'precoCusto'].includes(campo)
         ? F.paraNumero(valor)
         : valor;
       // mantém a descrição sincronizada entre a linha e o painel de detalhes
@@ -1349,7 +1347,9 @@
         }
       }
       if (campo === 'precoVenda') {
-        UI.$$('.item-detalhes [data-campo="precoVenda"]', bloco).forEach((outro) => {
+        // o preço é um campo só (Valor de referência): aparece na linha do item e
+        // no painel Detalhes — digitar num lugar atualiza o outro
+        UI.$$('[data-campo="precoVenda"]', bloco).forEach((outro) => {
           if (outro !== evento.target && document.activeElement !== outro) outro.value = valor;
         });
       }
@@ -1378,7 +1378,7 @@
         return;
       }
       const campo = evento.target.dataset.campo;
-      if (campo && ['precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)) {
+      if (campo && ['precoVenda', 'precoCusto'].includes(campo)) {
         evento.target.value = evento.target.value === '' ? '' : F.numero(F.paraNumero(evento.target.value), 2);
         atualizarResumos();
       }
@@ -1387,7 +1387,7 @@
     lista.addEventListener('focusout', (evento) => {
       const campo = evento.target.dataset.campo;
       if (!campo) return;
-      if (['precoVenda', 'precoCusto', 'valorReferencia'].includes(campo)) {
+      if (['precoVenda', 'precoCusto'].includes(campo)) {
         evento.target.value = evento.target.value === '' ? '' : F.numero(F.paraNumero(evento.target.value), 2);
       }
     });
@@ -1509,7 +1509,7 @@
       }
       const confirma = await UI.confirmar({
         titulo: 'Aplicar margem',
-        texto: `O preço de venda de ${comCusto.length} item(ns) será recalculado como custo + ${percentual}%.`,
+        texto: `O valor de referência de ${comCusto.length} item(ns) será recalculado como custo + ${percentual}%.`,
         textoConfirmar: 'Aplicar',
       });
       if (!confirma) return;

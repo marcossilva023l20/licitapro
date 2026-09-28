@@ -742,7 +742,7 @@
   function preencherColunasModelo() {
     const colunas = [
       ['Numero_Item', false], ['Descricao_Edital', true], ['Unidade', false], ['Quantidade', true],
-      ['Valor_Referencia', false], ['Preco_Custo', false], ['Preco_Venda', false], ['Marca_Modelo', false],
+      ['Valor_Referencia', false], ['Preco_Custo', false], ['Marca_Modelo', false],
       ['Foto_Produto', false], ['Descricao_Catalogo', false], ['Link_da_compra', false],
     ];
     $('#lista-colunas-modelo').innerHTML = colunas
@@ -777,7 +777,7 @@
           <tr>
             <th style="width:36px"><input type="checkbox" id="importacao-todos" checked /></th>
             <th>Item</th><th>Descrição</th><th>Un.</th><th class="numero">Qtd</th>
-            <th class="numero">Preço de venda</th><th>Marca</th><th>Foto</th>
+            <th class="numero">Valor de referência</th><th>Marca</th><th>Foto</th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>

@@ -19,7 +19,13 @@
 })(typeof self !== 'undefined' ? self : this, function (XLSX, Formato, Colunas) {
   'use strict';
 
-  const CAMPOS_NUMERICOS = ['quantidade', 'valorReferencia', 'precoCusto', 'precoVenda'];
+  const CAMPOS_NUMERICOS = ['quantidade', 'precoCusto', 'precoVenda'];
+  // Nomes antigos da coluna de preço. O modelo de hoje tem só Valor_Referencia;
+  // planilhas feitas no modelo anterior (com Preco_Venda) continuam entrando.
+  const ALIASES_PRECO_ANTIGO = [
+    'preco_venda', 'preco de venda', 'preco venda', 'valor de venda', 'valor venda',
+    'valor unitario', 'valor unitario de venda', 'preco unitario',
+  ];
   // Mesmo teto do documento (shared/documento-schema.js): a planilha pode ter
   // mais linhas, mas o que não couber é avisado na tela — nada some calado.
   const MAX_LINHAS = 2000;
@@ -120,6 +126,15 @@
     const itens = [];
     const colunasUsadas = new Set(Object.values(mapa));
 
+    // Se a planilha tem as duas colunas de preço (modelo antigo), a que sobrou
+    // serve de reserva: entra quando o Valor_Referencia vem vazio.
+    const mapeados = new Set(Object.keys(mapa).map(Number));
+    const indicePrecoAntigo = (matriz[linhaCabecalho] || []).findIndex(
+      (texto, indice) => !mapeados.has(indice) && ALIASES_PRECO_ANTIGO.includes(Colunas.normalizarCabecalho(texto))
+    );
+    let precoCompletado = 0;   // Valor_Referencia vazio: o valor veio do Preco_Venda
+    let precoSubstituido = 0;  // os dois preenchidos e diferentes: valeu o Preco_Venda
+
     if (!colunasUsadas.has('descricao')) {
       throw new Error('A coluna "Descricao_Edital" não foi encontrada na planilha.');
     }
@@ -143,7 +158,6 @@
         descricao,
         unidade: String(registro.unidade || '').trim().toUpperCase() || 'UND',
         quantidade: 0,
-        valorReferencia: 0,
         precoCusto: 0,
         precoVenda: 0,
         marcaModelo: String(registro.marcaModelo || '').trim(),
@@ -178,14 +192,39 @@
         item[campo] = numero;
       });
 
+      // Planilha antiga com as duas colunas de preço: o Preco_Venda é o valor que
+      // já saía no PDF, então é ele que vira o "Valor de referência" do item.
+      if (indicePrecoAntigo >= 0) {
+        const antigo = Formato.paraNumero(linha[indicePrecoAntigo]);
+        if (antigo > 0 && antigo !== item.precoVenda) {
+          if (item.precoVenda > 0) precoSubstituido += 1;
+          else precoCompletado += 1;
+          item.precoVenda = antigo;
+        }
+      }
+
       if (item.quantidade === 0) avisos.push(`Linha ${i + 1}: quantidade vazia ou zero (${descricao.slice(0, 40)}...).`);
-      if (item.precoVenda === 0) avisos.push(`Linha ${i + 1}: preço de venda vazio ou zero (${descricao.slice(0, 40)}...).`);
+      if (item.precoVenda === 0) avisos.push(`Linha ${i + 1}: valor de referência vazio ou zero (${descricao.slice(0, 40)}...).`);
 
       itens.push(item);
     }
 
     if (!itens.length) {
       throw new Error('Nenhum item encontrado. Verifique se a planilha tem dados a partir da linha 2.');
+    }
+
+    if (precoSubstituido) {
+      avisos.unshift(
+        `A planilha tem as colunas Valor_Referencia e Preco_Venda, mas hoje o preço é um campo só ` +
+          `(Valor de referência). Em ${precoSubstituido} linha(s) os dois valores eram diferentes: ` +
+          `usei o Preco_Venda, que é o valor que já saía no PDF.`
+      );
+    }
+    if (precoCompletado) {
+      avisos.unshift(
+        `A planilha está no modelo antigo: em ${precoCompletado} linha(s) a coluna Valor_Referencia estava vazia ` +
+          `e o valor veio da coluna Preco_Venda.`
+      );
     }
 
     if (linhasComDescricao > MAX_LINHAS) {

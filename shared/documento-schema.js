@@ -43,9 +43,11 @@ function itemNovo(base, indice) {
     descricao: texto(b.descricao, 4000),
     unidade: texto(b.unidade, 12).toUpperCase() || 'UND',
     quantidade: numero(b.quantidade, 3),
-    valorReferencia: numero(b.valorReferencia, 2),
     precoCusto: numero(b.precoCusto, 2),
-    precoVenda: numero(b.precoVenda, 2),
+    // Um preço só: "Valor de referência (edital)". Documentos antigos que ainda
+    // guardam valorReferencia aproveitam esse valor quando o preço está zerado —
+    // abrir e salvar um documento antigo não perde número nenhum.
+    precoVenda: numero(b.precoVenda, 2) || numero(b.valorReferencia, 2),
     marcaModelo: texto(b.marcaModelo, 160),
     foto: texto(b.foto, 1200),
     descricaoCatalogo: texto(b.descricaoCatalogo, 6000),

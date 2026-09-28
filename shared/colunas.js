@@ -48,12 +48,21 @@
       apelidos: ['quantidade', 'qtd', 'qtde', 'quant', 'qde'],
     },
     {
-      chave: 'valorReferencia',
+      // Um preço só: o valor de referência do edital É o valor unitário do item
+      // (o que sai no PDF como "Valor Unitário"). A chave interna continua
+      // precoVenda para os documentos antigos seguirem intactos; os apelidos
+      // abaixo fazem as planilhas antigas com a coluna Preco_Venda serem lidas.
+      chave: 'precoVenda',
       titulo: 'Valor_Referencia',
-      rotulo: 'Valor de Referência',
-      dica: 'Valor unitário estimado no edital (opcional). Ex.: 1.600,00',
-      largura: 16,
-      apelidos: ['valor_referencia', 'valor de referencia', 'valor referencia', 'valor estimado', 'preco de referencia', 'valor de referencia unitario'],
+      rotulo: 'Valor de Referência (edital)',
+      dica: 'Valor unitário do item. Ex.: 1.490,00',
+      largura: 18,
+      apelidos: [
+        'valor_referencia', 'valor de referencia', 'valor referencia', 'valor estimado',
+        'preco de referencia', 'valor de referencia unitario',
+        'preco_venda', 'preco de venda', 'valor de venda', 'valor venda', 'preco venda',
+        'valor unitario', 'valor unitario de venda', 'preco unitario',
+      ],
     },
     {
       chave: 'precoCusto',
@@ -62,14 +71,6 @@
       dica: 'Quanto você paga no fornecedor (opcional, não sai no PDF do cliente).',
       largura: 15,
       apelidos: ['preco_custo', 'custo', 'valor de custo', 'preco de custo', 'valor custo', 'preco custo'],
-    },
-    {
-      chave: 'precoVenda',
-      titulo: 'Preco_Venda',
-      rotulo: 'Preço de Venda',
-      dica: 'Valor unitário que será ofertado na proposta. Ex.: 1.490,00',
-      largura: 15,
-      apelidos: ['preco_venda', 'preco de venda', 'valor de venda', 'valor venda', 'preco venda', 'valor unitario', 'valor unitario de venda', 'preco unitario'],
     },
     {
       chave: 'marcaModelo',
