@@ -1673,9 +1673,19 @@
           botao.textContent = 'Enviando...';
           const resposta = await window.API.enviarArquivo('/api/uploads', escolhido, 'arquivo');
           definir('proponente.' + campo, resposta.caminho);
+          // a logo importada vira também a marca d'água deste documento
+          const ehLogo = campo === 'logo';
+          if (ehLogo) {
+            definir('opcoes.marcaDagua', true);
+            const caixa = $('#op-marcadagua');
+            if (caixa) caixa.checked = true;
+          }
           desenharImagens();
           marcarSujo();
-          UI.toast('Imagem enviada.', 'sucesso');
+          UI.toast(
+            ehLogo ? 'Logo enviada: ela também virou a marca d\'água deste documento.' : 'Imagem enviada.',
+            'sucesso'
+          );
         } catch (erro) {
           UI.toast(erro.message, 'erro');
         } finally {

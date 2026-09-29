@@ -183,6 +183,28 @@ function descreverFotosIgnoradas(relatorio) {
 }
 
 /**
+ * A empresa cadastrada em "Minha empresa" completa o documento.
+ *
+ * Quem cria a conta, cadastra a empresa depois e importa a logo espera ver a
+ * logo nova em tudo — inclusive nos documentos que já existiam com o proponente
+ * vazio (eles foram criados antes do cadastro). O que o documento já tem
+ * continua valendo, porque o editor permite dados diferentes por documento; a
+ * exceção é a imagem: logo e assinatura vazias não apagam as cadastradas, senão
+ * o documento cairia na marca do sistema no lugar da marca da empresa.
+ */
+function mesclarProponente(empresa, doDocumento) {
+  const dados = Object.assign({}, empresa || {});
+  const documento = doDocumento || {};
+  Object.keys(documento).forEach((chave) => {
+    const valor = documento[chave];
+    const vazio = valor === '' || valor === null || valor === undefined;
+    if (vazio && (chave === 'logo' || chave === 'assinatura')) return;
+    dados[chave] = valor;
+  });
+  return dados;
+}
+
+/**
  * Qual imagem representa a empresa no documento: a logo cadastrada em "Minha
  * empresa" e, quando não houver, a logo padrão do sistema
  * (public/marca/logo.png — opcional). A mesma imagem vira cabeçalho e marca
@@ -490,7 +512,7 @@ async function montarDefinicao(doc, empresa, contexto) {
   const corBase = cor(corInformada || COR_PADRAO);
   const corTitulo = corPropria ? corBase : COR_DOURADA;
   const corFilete = corPropria ? corBase : COR_FILETE;
-  const proponente = Object.assign({}, empresa || {}, doc.proponente || {});
+  const proponente = mesclarProponente(empresa, doc.proponente);
   const opcoes = Object.assign(
     {
       mostrarCatalogo: true,
@@ -934,7 +956,7 @@ async function montarDefinicaoDeclaracoes(declaracoes, doc, empresa, contexto) {
   const documento = doc || {};
   const lista = (Array.isArray(declaracoes) ? declaracoes : [declaracoes])
     .filter((d) => d && String(d.texto || '').trim());
-  const proponente = Object.assign({}, empresa || {}, documento.proponente || {});
+  const proponente = mesclarProponente(empresa, documento.proponente);
   // A folha sai com o mesmo papel da proposta: timbre com a logomarca e a
   // marca d'água da empresa atrás do texto (bem apagada, como no PDF do
   // documento). Quem manda é quem chama: opções do documento e do contexto
@@ -1112,6 +1134,7 @@ function nomeArquivo(doc, proponente) {
     montarDefinicao,
     montarDefinicaoDeclaracoes,
     gerarPdfDeclaracoes,
+    mesclarProponente,
     nomeArquivoDeclaracao,
     descreverFotosIgnoradas,
     calcularTotais,

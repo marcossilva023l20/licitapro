@@ -44,6 +44,7 @@ module.exports = {
   tituloDocumento: motor.tituloDocumento,
   nomeArquivo: motor.nomeArquivo,
   descreverFotosIgnoradas: motor.descreverFotosIgnoradas,
+  mesclarProponente: motor.mesclarProponente,
   async montarDefinicao(doc, empresa, contexto) {
     registrarFontes();
     return motor.montarDefinicao(doc, empresa, contexto);
