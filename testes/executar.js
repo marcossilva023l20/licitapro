@@ -3483,9 +3483,13 @@ teste('Nuvem: criar a conta num computador e entrar no outro com o mesmo e-mail 
     assert.strictEqual($1('#app').classList.contains('oculto'), true, 'o sistema espera a conta');
     // e a tela pede só e-mail e senha: endereço e chave já vêm com o site
     assert.strictEqual($1('#entrar-usuario').getAttribute('type'), 'email', 'o login é um e-mail');
-    // o endereço e a chave existem só no bloco "Usar outro projeto", fechado:
-    // para entrar, nada disso é pedido
+    // o endereço e a chave existem só no bloco "Usar outro projeto", escondido:
+    // para entrar, nada disso é pedido nem aparece
     assert.strictEqual($1('#entrar-onde').open, false, 'o bloco de outro projeto começa fechado');
+    assert.strictEqual(
+      $1('#entrar-onde').classList.contains('oculto'), true,
+      'e fica escondido: a tela não mostra "usar outro projeto", endereço, chave nem o projeto em uso'
+    );
     assert.ok($1('#entrar-url').value.length > 20, 'e já vem com o endereço do projeto gravado no site');
     assert.ok($1('#entrar-chave').value.length > 20, 'e com a chave pública dele');
     assert.strictEqual($1('#entrar-passos').classList.contains('oculto'), true, 'sem resultado de teste na tela ainda');
@@ -4062,6 +4066,7 @@ teste('Nuvem: o link leva o projeto para o outro computador (a senha não sai da
     assert.strictEqual(w.Nuvem.padrao().url, falso.url, 'a tela já aponta para o projeto do link');
     assert.strictEqual(w.Nuvem.padrao().chave, CHAVE, 'com a chave pública dele');
     assert.strictEqual($('#entrar-onde').open, false, 'a tela não pede endereço nem chave (bloco fechado)');
+    assert.strictEqual($('#entrar-onde').classList.contains('oculto'), true, 'e o bloco de outro projeto nem aparece');
     assert.strictEqual($('#entrar-usuario').value, '', 'o e-mail é digitado aqui');
     assert.strictEqual($('#entrar-senha').value, '', 'e a senha também');
 
@@ -5444,12 +5449,17 @@ teste('Conta: o site leva a chave pública gravada (e só ela)', () => {
   // a tela de entrar pede o e-mail e a senha: o projeto e a chave já vêm do site
   assert.ok(/id="entrar-usuario"[^>]*type="email"/.test(html), 'o login é um e-mail');
   assert.strictEqual(html.includes('Onde os dados ficam guardados'), false, 'sem o bloco "onde os dados ficam guardados"');
-  // trocar de projeto é possível, mas fica fora do caminho (dentro de um bloco fechado)
+  // trocar de projeto continua existindo no código, mas o bloco fica escondido da tela
   const blocoOutroProjeto = html.slice(html.indexOf('id="entrar-onde"'), html.indexOf('id="entrar-rodape"'));
-  assert.ok(/id="entrar-url"/.test(blocoOutroProjeto), 'dá para apontar outro projeto');
-  assert.ok(/id="entrar-testar"/.test(blocoOutroProjeto), 'e testar a conexão antes de entrar');
-  assert.ok(/Usar outro projeto/.test(blocoOutroProjeto), 'num bloco discreto, fechado por padrão');
-  assert.ok(!/<details[^>]*id="entrar-onde"[^>]*open/.test(html), 'o bloco começa fechado');
+  assert.ok(/id="entrar-url"/.test(blocoOutroProjeto), 'os campos de outro projeto continuam no arquivo (só escondidos)');
+  assert.ok(/id="entrar-testar"/.test(blocoOutroProjeto), 'e o teste de conexão também');
+  assert.ok(/Usar outro projeto/.test(blocoOutroProjeto), 'com o título do bloco');
+  assert.ok(/id="entrar-projeto-atual"/.test(blocoOutroProjeto), 'inclusive o "projeto em uso"');
+  assert.ok(
+    /<details[^>]*class="[^"]*\boculto\b[^"]*"[^>]*id="entrar-onde"/.test(html),
+    'o bloco "usar outro projeto / testar a conexão" fica escondido na tela de entrar'
+  );
+  assert.ok(!/<details[^>]*id="entrar-onde"[^>]*open/.test(html), 'e não começa aberto');
 
   // e a regra do teste de segurança continua pegando a chave de servidor e o
   // endereço do projeto quando eles aparecem fora do config-nuvem.js
