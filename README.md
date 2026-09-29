@@ -188,12 +188,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
 
 ### Números automáticos
 
-A numeração é sequencial **por tipo** e continua do último documento daquele tipo: ao abrir uma
-**Nova Proposta** ou um **Novo Orçamento**, o sequencial vem o do último + 1 e o ano vem o mesmo do
-último (última proposta `013/2026` → a nova abre `014/2026`; último orçamento `005/2026` → o novo abre
-`006/2026`). Sem documento do tipo, começa em `001` no ano atual; **duplicar** um documento também
-continua a numeração do tipo. Os campos Número e Ano podem ser editados antes de salvar, e a partir
-daí a sequência continua de onde você deixou.
+A numeração é sequencial por tipo e ano (`001/2026`, `002/2026`, ...).
 
 **Modalidade** é uma lista pronta (Pregão Eletrônico, Dispensa de Licitação, Concorrência,
 Inexigibilidade, Credenciamento, ...). A última opção da lista — *adicionar nova modalidade* —
