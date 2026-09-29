@@ -1082,6 +1082,51 @@ teste('Itens: 2000 itens no servidor (salvar, PDF e planilhas)', async () => {
   }
 });
 
+teste('HTTP: as planilhas do documento levam todas as fotos do item', async () => {
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const servidor = await iniciarServidor();
+  try {
+    const fotos = ['https://a.com/1.png', 'https://a.com/2.png', 'https://a.com/3.png'];
+    const criado = await requisitar(servidor, '/api/documentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      corpo: JSON.stringify({
+        tipo: 'proposta', orgao: { nome: 'UASG 787010' },
+        numero: { sequencial: 1, ano: new Date().getFullYear(), grupo: 'teste-fotos' },
+        opcoes: { mostrarCatalogo: false, marcaDagua: false, mostrarAssinatura: false },
+        itens: [{ numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 2, precoVenda: 1490, fotos }],
+      }),
+    });
+    assert.strictEqual(criado.status, 201, criado.texto);
+    const id = criado.json.documento.id;
+    assert.deepStrictEqual(criado.json.documento.itens[0].fotos, fotos, 'o documento guarda as três fotos');
+    assert.strictEqual(criado.json.documento.itens[0].foto, fotos[0], 'e o campo de uma foto só é a primeira');
+
+    const celulaDasFotos = async (rota) => {
+      const resposta = await requisitar(servidor, rota);
+      assert.strictEqual(resposta.status, 200, resposta.texto);
+      const livro = XLSX.read(resposta.corpo, { type: 'buffer' });
+      return {
+        celular: XLSX.utils.sheet_to_json(livro.Sheets['Itens'])[0].Foto_Produto,
+        corpo: resposta.corpo,
+      };
+    };
+    const exportada = await celulaDasFotos(`/api/documentos/${id}/planilha`);
+    assert.strictEqual(exportada.celular, fotos.join(' '), 'a exportação de itens leva as três fotos na mesma célula');
+    const auxiliar = await celulaDasFotos(`/api/documentos/${id}/planilha-auxiliar`);
+    assert.strictEqual(auxiliar.celular, fotos.join(' '), 'a planilha auxiliar também');
+
+    // o arquivo reenviado devolve as três fotos (dá para editar no Excel e voltar)
+    const volta = Importador.importar(exportada.corpo, 'volta.xlsx');
+    assert.deepStrictEqual(volta.itens[0].fotos, fotos, 'a reimportação devolve as três fotos');
+    assert.deepStrictEqual(volta.avisos, [], 'sem avisos');
+
+    await requisitar(servidor, '/api/documentos/' + id, { method: 'DELETE' });
+  } finally {
+    servidor.close();
+  }
+});
+
 teste('Inscrição municipal: sai no PDF do documento e nas planilhas exportadas', async () => {
   const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
   const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));

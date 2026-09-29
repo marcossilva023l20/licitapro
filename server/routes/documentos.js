@@ -1,12 +1,11 @@
 'use strict';
 
 const express = require('express');
-const XLSX = require('xlsx');
 const { documento: Documento, perfil: Perfil } = require('../store');
 const Esquema = require('../documento-schema');
 const Pdf = require('../pdf');
 const Formato = require('../../shared/format');
-const { COLUNAS } = require('../colunas');
+const Importador = require('../../shared/importar');
 const PlanilhaAuxiliar = require('../../shared/planilha-auxiliar');
 
 const rotas = express.Router();
@@ -212,17 +211,9 @@ rotas.get('/:id/planilha', (req, res) => {
   const doc = Documento.porId(req.params.id);
   if (!doc) return res.status(404).json({ erro: 'Documento não encontrado.' });
 
-  const cabecalho = COLUNAS.map((c) => c.titulo);
-  const linhas = (doc.itens || []).map((item) => COLUNAS.map((c) => {
-    const valor = item[c.chave];
-    return valor === undefined || valor === null ? '' : valor;
-  }));
-
-  const aba = XLSX.utils.aoa_to_sheet([cabecalho, ...linhas]);
-  aba['!cols'] = COLUNAS.map((c) => ({ wch: c.largura }));
-  const livro = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(livro, aba, 'Itens');
-  const buffer = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
+  // o mesmo gerador do botão "Exportar itens" (e do modo local): as colunas do
+  // modelo, com todos os links de foto do item na mesma célula
+  const buffer = Importador.escreverXlsx(Importador.itensParaPlanilha(doc.itens || []));
 
   const nome = `${doc.tipo === 'orcamento' ? 'Orcamento' : 'Proposta'}_${Pdf.numeroFormatado(doc).replace(/\W+/g, '-')}_itens.xlsx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
