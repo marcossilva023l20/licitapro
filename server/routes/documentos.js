@@ -70,8 +70,13 @@ rotas.get('/proximo-numero', (req, res) => {
   const tipo = req.query.tipo === 'orcamento' ? 'orcamento' : 'proposta';
   const ano = Number(req.query.ano) || new Date().getFullYear();
   const grupo = String(req.query.grupo || '').slice(0, 30);
-  const sequencial = Documento.proximoNumero(tipo, ano, grupo);
-  res.json({ sequencial, ano, grupo, numeroFormatado: Formato.numeroDocumento(sequencial, ano) });
+  const proximo = Documento.proximoNumero(tipo, ano, grupo);
+  res.json({
+    sequencial: proximo.sequencial,
+    ano: proximo.ano,
+    grupo,
+    numeroFormatado: Formato.numeroDocumento(proximo.sequencial, proximo.ano),
+  });
 });
 
 // ------------------------------------------------------------------- CRUD
@@ -86,11 +91,17 @@ rotas.post('/', (req, res) => {
   const dados = req.body || {};
   const tipo = Esquema.TIPOS.includes(dados.tipo) ? dados.tipo : 'proposta';
   const numeroEnviado = dados.numero || {};
-  const ano = Number(numeroEnviado.ano) || new Date().getFullYear();
+  // "let": sem número pedido, o ano também passa a ser o do último documento
+  let ano = Number(numeroEnviado.ano) || new Date().getFullYear();
   const grupo = String(numeroEnviado.grupo || '').slice(0, 30);
 
   let sequencial = Number(numeroEnviado.sequencial) || 0;
-  if (!sequencial) sequencial = Documento.proximoNumero(tipo, ano, grupo);
+  if (!sequencial) {
+    // sem número pedido: continua do último documento desse tipo (número e ano)
+    const proximo = Documento.proximoNumero(tipo, ano, grupo);
+    sequencial = proximo.sequencial;
+    ano = proximo.ano;
+  }
 
   const saneado = Esquema.sanear(Object.assign({}, dados, { numero: { sequencial, ano, grupo } }), Perfil.obter(), tipo);
   const criado = Documento.criar(saneado);
@@ -132,9 +143,11 @@ rotas.post('/:id/duplicar', (req, res) => {
   const origem = Documento.porId(req.params.id);
   if (!origem) return res.status(404).json({ erro: 'Documento não encontrado.' });
 
-  const ano = new Date().getFullYear();
   const grupo = (origem.numero && origem.numero.grupo) || '';
-  const sequencial = Documento.proximoNumero(origem.tipo, ano, grupo);
+  // a cópia continua a numeração do tipo de onde ela vem (número e ano)
+  const proximo = Documento.proximoNumero(origem.tipo, new Date().getFullYear(), grupo);
+  const sequencial = proximo.sequencial;
+  const ano = proximo.ano;
 
   const copia = Esquema.sanear(
     Object.assign({}, origem, {

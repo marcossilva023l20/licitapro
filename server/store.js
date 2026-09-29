@@ -416,6 +416,31 @@ function padroesPadrao() {
 
 // ------------------------------------------------------------- documentos
 
+/**
+ * O número mais alto já usado por um tipo (proposta/orçamento) dentro de um
+ * grupo: vale o que está gravado nos documentos e o que ficou reservado na
+ * sequência. Compara primeiro o ano, depois o sequencial.
+ */
+function ultimoNumero(documentos, sequencia, tipo, grupo) {
+  const chaveGrupo = String(grupo || '');
+  let melhor = null;
+  const considerar = (ano, sequencial) => {
+    const a = Number(ano) || 0;
+    const s = Number(sequencial) || 0;
+    if (!a && !s) return;
+    if (!melhor || a > melhor.ano || (a === melhor.ano && s > melhor.sequencial)) {
+      melhor = { ano: a, sequencial: s };
+    }
+  };
+  (documentos || []).forEach((d) => {
+    if (!d || d.tipo !== tipo) return;
+    if (String((d.numero && d.numero.grupo) || '') !== chaveGrupo) return;
+    considerar(d.numero && d.numero.ano, d.numero && d.numero.sequencial);
+  });
+  const mapa = (sequencia || {})[chaveGrupo ? `${tipo}:${chaveGrupo}` : tipo] || {};
+  Object.keys(mapa).forEach((chaveAno) => considerar(chaveAno, mapa[chaveAno]));
+  return melhor;
+}
 const documento = {
   /** Lista (sem os itens, para ficar leve) todos os documentos, do mais novo ao mais antigo. */
   listar() {
@@ -475,13 +500,18 @@ const documento = {
     return removidos;
   },
 
-  /** Próximo número sequencial (por tipo, grupo e ano). */
+
+  /**
+   * Próximo número do tipo (proposta ou orçamento): continua do último
+   * documento desse tipo — o sequencial é o do último + 1 e o ano é o mesmo do
+   * último. Sem documento (nem número reservado) do tipo, começa em 1 no ano
+   * pedido (ou no ano atual). Devolve { sequencial, ano }.
+   */
   proximoNumero(tipo, ano, grupo) {
     const db = carregar();
-    const chave = grupo ? `${tipo}:${grupo}` : tipo;
-    db.sequencia[chave] = db.sequencia[chave] || {};
-    const atual = Number(db.sequencia[chave][ano] || 0);
-    return atual + 1;
+    const ultimo = ultimoNumero(db.documentos, db.sequencia, tipo, grupo);
+    if (!ultimo) return { sequencial: 1, ano: Number(ano) || new Date().getFullYear() };
+    return { sequencial: ultimo.sequencial + 1, ano: ultimo.ano };
   },
 
   reservarNumero(tipo, ano, grupo, numero) {

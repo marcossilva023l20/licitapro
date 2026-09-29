@@ -340,7 +340,7 @@
    * o navegador baixa a versão nova em vez de reusar a que está no cache
    * (importante no GitHub Pages, onde o cache dura alguns minutos).
    */
-  const VERSAO_ARQUIVOS = '58';
+  const VERSAO_ARQUIVOS = '59';
 
   function carregarScript(caminho) {
     return new Promise((resolver, rejeitar) => {
@@ -404,11 +404,37 @@
 
   // --------------------------------------------------------- numeração
 
+/**
+ * O número mais alto já usado por um tipo (proposta/orçamento) dentro de um
+ * grupo: vale o que está gravado nos documentos e o que ficou reservado na
+ * sequência. Compara primeiro o ano, depois o sequencial.
+ */
+function ultimoNumero(documentos, sequencia, tipo, grupo) {
+  const chaveGrupo = String(grupo || '');
+  let melhor = null;
+  const considerar = (ano, sequencial) => {
+    const a = Number(ano) || 0;
+    const s = Number(sequencial) || 0;
+    if (!a && !s) return;
+    if (!melhor || a > melhor.ano || (a === melhor.ano && s > melhor.sequencial)) {
+      melhor = { ano: a, sequencial: s };
+    }
+  };
+  (documentos || []).forEach((d) => {
+    if (!d || d.tipo !== tipo) return;
+    if (String((d.numero && d.numero.grupo) || '') !== chaveGrupo) return;
+    considerar(d.numero && d.numero.ano, d.numero && d.numero.sequencial);
+  });
+  const mapa = (sequencia || {})[chaveGrupo ? `${tipo}:${chaveGrupo}` : tipo] || {};
+  Object.keys(mapa).forEach((chaveAno) => considerar(chaveAno, mapa[chaveAno]));
+  return melhor;
+}
+
   function proximoNumero(tipo, ano, grupo) {
     const banco = lerBanco();
-    const chave = grupo ? `${tipo}:${grupo}` : tipo;
-    banco.sequencia[chave] = banco.sequencia[chave] || {};
-    return Number(banco.sequencia[chave][ano] || 0) + 1;
+    const ultimo = ultimoNumero(banco.documentos, banco.sequencia, tipo, grupo);
+    if (!ultimo) return { sequencial: 1, ano: Number(ano) || new Date().getFullYear() };
+    return { sequencial: ultimo.sequencial + 1, ano: ultimo.ano };
   }
 
   function reservarNumero(tipo, ano, grupo, numero) {
@@ -554,9 +580,17 @@
       const dados = corpo || {};
       const tipo = Esquema().TIPOS.includes(dados.tipo) ? dados.tipo : 'proposta';
       const numeroEnviado = dados.numero || {};
-      const ano = Number(numeroEnviado.ano) || new Date().getFullYear();
       const grupo = String(numeroEnviado.grupo || '').slice(0, 30);
-      let sequencial = Number(numeroEnviado.sequencial) || proximoNumero(tipo, ano, grupo);
+      let sequencial = Number(numeroEnviado.sequencial) || 0;
+      let ano = Number(numeroEnviado.ano) || 0;
+      if (!sequencial) {
+        // continua do último documento desse tipo (número e ano)
+        const proximo = proximoNumero(tipo, ano || new Date().getFullYear(), grupo);
+        sequencial = proximo.sequencial;
+        ano = proximo.ano;
+      } else if (!ano) {
+        ano = new Date().getFullYear();
+      }
       const saneado = sanear(Object.assign({}, dados, { numero: { sequencial, ano, grupo } }), tipo);
       saneado.id = novoId();
       saneado.criadoEm = new Date().toISOString();
@@ -572,8 +606,13 @@
       const tipo = busca.get('tipo') === 'orcamento' ? 'orcamento' : 'proposta';
       const ano = Number(busca.get('ano')) || new Date().getFullYear();
       const grupo = String(busca.get('grupo') || '').slice(0, 30);
-      const sequencial = proximoNumero(tipo, ano, grupo);
-      return { sequencial, ano, grupo, numeroFormatado: window.Formato.numeroDocumento(sequencial, ano) };
+      const proximo = proximoNumero(tipo, ano, grupo);
+      return {
+        sequencial: proximo.sequencial,
+        ano: proximo.ano,
+        grupo,
+        numeroFormatado: window.Formato.numeroDocumento(proximo.sequencial, proximo.ano),
+      };
     }
 
     // excluir vários de uma vez (vem antes do casamento por id, senão
@@ -656,9 +695,11 @@
       }
 
       if (acao === '/duplicar' && metodo === 'POST') {
-        const ano = new Date().getFullYear();
         const grupo = (documento.numero && documento.numero.grupo) || '';
-        const sequencial = proximoNumero(documento.tipo, ano, grupo);
+        // a cópia continua a numeração do tipo de onde ela vem (número e ano)
+        const proximo = proximoNumero(documento.tipo, new Date().getFullYear(), grupo);
+        const sequencial = proximo.sequencial;
+        const ano = proximo.ano;
         const copia = sanear(
           Object.assign({}, documento, {
             numero: { sequencial, ano, grupo },

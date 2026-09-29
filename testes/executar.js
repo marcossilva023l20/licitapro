@@ -1256,6 +1256,105 @@ async function iniciarServidor() {
   });
 }
 
+teste('Numeração: proposta e orçamento novos continuam do último do seu tipo (sequencial +1, mesmo ano)', async () => {
+  // tudo dentro do grupo NUM: a sequência do grupo é isolada, então o teste não
+  // interfere na numeração sem grupo que os outros testes conferem
+  const GRUPO = 'NUM';
+  const OUTRO = 'NUM-B';
+  const servidor = await iniciarServidor();
+  const ids = [];
+  try {
+    const criar = async (tipo, numero) => {
+      const resposta = await requisitar(servidor, '/api/documentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        corpo: JSON.stringify({
+          tipo,
+          numero,
+          itens: [{ descricao: 'ITEM ' + tipo + ' ' + numero.sequencial, quantidade: 1 }],
+        }),
+      });
+      assert.strictEqual(resposta.status, 201, resposta.texto);
+      ids.push(resposta.json.documento.id);
+      return resposta.json.documento;
+    };
+    const proximo = async (tipo, grupo) => {
+      const resposta = await requisitar(
+        servidor, '/api/documentos/proximo-numero?tipo=' + tipo + '&grupo=' + (grupo || GRUPO)
+      );
+      assert.strictEqual(resposta.status, 200, resposta.texto);
+      return resposta.json;
+    };
+
+    // sem documentos do tipo no grupo: começa em 1 no ano atual
+    assert.strictEqual((await proximo('proposta')).sequencial, 1, 'sem proposta ainda, começa em 1');
+
+    await criar('proposta', { sequencial: 13, ano: 2026, grupo: GRUPO });
+    await criar('orcamento', { sequencial: 5, ano: 2026, grupo: GRUPO });
+
+    // cada tipo continua do seu último: número +1 e o mesmo ano da última
+    let p = await proximo('proposta');
+    assert.strictEqual(p.sequencial, 14, 'a próxima proposta continua da última proposta (13 → 14)');
+    assert.strictEqual(p.ano, 2026, 'no mesmo ano da última proposta');
+    let o = await proximo('orcamento');
+    assert.strictEqual(o.sequencial, 6, 'o próximo orçamento continua do último orçamento (5 → 6)');
+    assert.strictEqual(o.ano, 2026, 'no mesmo ano do último orçamento');
+
+    // o ano também continua: uma proposta de 2027 passa a ser "a última"
+    await criar('proposta', { sequencial: 2, ano: 2027, grupo: GRUPO });
+    p = await proximo('proposta');
+    assert.strictEqual(p.sequencial, 3, 'a próxima proposta continua da mais recente (2/2027 → 3)');
+    assert.strictEqual(p.ano, 2027, 'e herda o ano dela (não volta para o ano atual)');
+
+    // cada grupo tem a própria sequência
+    await criar('proposta', { sequencial: 9, ano: 2025, grupo: OUTRO });
+    p = await proximo('proposta', OUTRO);
+    assert.strictEqual(p.sequencial, 10, 'o outro grupo tem a própria sequência');
+    assert.strictEqual(p.ano, 2025, 'e o próprio ano');
+
+    // duplicar também continua a numeração do tipo de origem
+    const lista = await requisitar(servidor, '/api/documentos');
+    const alvo = lista.json.documentos.find(
+      (d) => d.tipo === 'orcamento' && d.numero.sequencial === 5 && d.numero.grupo === GRUPO
+    );
+    const copia = await requisitar(servidor, '/api/documentos/' + alvo.id + '/duplicar', { method: 'POST', corpo: '' });
+    assert.strictEqual(copia.status, 201, copia.texto);
+    assert.strictEqual(copia.json.documento.numero.sequencial, 6, 'a cópia do orçamento recebeu o seguinte do último');
+    assert.strictEqual(copia.json.documento.numero.ano, 2026, 'no mesmo ano do último orçamento');
+    ids.push(copia.json.documento.id);
+    o = await proximo('orcamento');
+    assert.strictEqual(o.sequencial, 7, 'e o próximo orçamento continua depois da cópia');
+  } finally {
+    // o diretório de dados é compartilhado pela suíte: limpa os documentos do
+    // teste (a sequência do grupo NUM fica reservada, mas é isolada por grupo)
+    for (const id of ids) {
+      await requisitar(servidor, '/api/documentos/' + id, { method: 'DELETE' });
+    }
+    servidor.close();
+  }
+});
+
+teste('Numeração no editor: Nova Proposta e Novo Orçamento abrem continuando o último do seu tipo', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+  await window.API.post('/api/documentos', { tipo: 'proposta', numero: { sequencial: 13, ano: 2026, grupo: '' }, itens: [] });
+  await window.API.post('/api/documentos', { tipo: 'orcamento', numero: { sequencial: 5, ano: 2026, grupo: '' }, itens: [] });
+
+  window.location.hash = '#/documento/novo/proposta';
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor da proposta nova', 20000);
+  await ModoLocal.esperar(() => $('#campo-numero-sequencial').value !== '', 'numeração carregada', 20000);
+  assert.strictEqual($('#campo-numero-sequencial').value, '14', 'a proposta nova abre continuando a última (13 → 14)');
+  assert.strictEqual($('#campo-numero-ano').value, '2026', 'com o ano da última proposta');
+
+  window.location.hash = '#/documento/novo/orcamento';
+  await ModoLocal.esperar(() => $('#campo-numero-sequencial').value === '6', 'o orçamento novo abre continuando o último (5 → 6)', 20000);
+  assert.strictEqual($('#campo-numero-ano').value, '2026', 'com o ano do último orçamento');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('HTTP: fluxo completo (importar, salvar, PDF e planilha) sem login', async () => {
   const servidor = await iniciarServidor();
   try {
