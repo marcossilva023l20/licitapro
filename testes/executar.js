@@ -2060,6 +2060,156 @@ teste('Editor: as fotos do item ficam numa grade (adicionar, enviar várias, rem
   window.close();
 });
 
+teste('Editor: arrastar a imagem para o item anexa no catálogo (arquivos, link e recusas)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, precoVenda: 1490,
+    fotos: [], marcaModelo: '', foto: '', descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const envios = [];
+  window.API.enviarArquivo = async (rota, arquivo) => {
+    envios.push(arquivo.name);
+    return { caminho: '/api/uploads/' + arquivo.name };
+  };
+
+  const bloco = $('#lista-itens .item[data-indice="0"]');
+  bloco.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const area = bloco.querySelector('.area-fotos');
+  assert.ok(area, 'a área das fotos do item é a zona de arrasto');
+  const miniaturas = () => bloco.querySelectorAll('.grade-fotos .foto-mini:not(.vazia)').length;
+
+  /** Dispara um evento de arrasto com o dataTransfer que o navegador mandaria. */
+  const arrasto = (tipo, dataTransfer) => {
+    const evento = new window.Event(tipo, { bubbles: true, cancelable: true });
+    Object.defineProperty(evento, 'dataTransfer', { value: dataTransfer, configurable: true });
+    area.dispatchEvent(evento);
+  };
+  const imagem = (nome, tipo) => new window.File(['bytes'], nome, { type: tipo });
+  const pausa = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
+  // 1) duas imagens arrastadas de uma vez
+  arrasto('dragover', { files: [], getData: () => '' });
+  assert.ok(area.classList.contains('arrastando'), 'a área destaca enquanto o arquivo está em cima');
+  arrasto('drop', {
+    files: [imagem('foto-arrastada-1.png', 'image/png'), imagem('foto-arrastada-2.jpg', 'image/jpeg')],
+    getData: () => '',
+  });
+  await ModoLocal.esperar(() => miniaturas() === 2, 'as duas imagens arrastadas entraram na grade', 10000);
+  assert.strictEqual(area.classList.contains('arrastando'), false, 'o destaque sai depois de soltar');
+  assert.deepStrictEqual(envios, ['foto-arrastada-1.png', 'foto-arrastada-2.jpg'], 'as duas foram enviadas');
+
+  // 2) imagem arrastada de um site: vem o link no lugar do arquivo
+  arrasto('drop', { files: [], getData: (tipo) => (tipo === 'text/uri-list' ? 'https://a.com/foto-do-site.png' : '') });
+  await ModoLocal.esperar(() => miniaturas() === 3, 'o link arrastado virou foto do catálogo', 10000);
+  assert.strictEqual(envios.length, 2, 'link não gera envio de arquivo');
+
+  // 3) o que não é imagem não entra
+  arrasto('drop', { files: [imagem('planilha.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')], getData: () => '' });
+  await pausa(200);
+  assert.strictEqual(miniaturas(), 3, 'arquivo que não é imagem não vira foto');
+  assert.strictEqual(envios.length, 2, 'e não é enviado');
+
+  // 4) a quarta entra; da quinta em diante o limite do catálogo segura
+  arrasto('drop', { files: [imagem('foto-arrastada-3.png', 'image/png')], getData: () => '' });
+  await ModoLocal.esperar(() => miniaturas() === 4, 'a quarta foto entrou', 10000);
+  arrasto('drop', { files: [imagem('foto-arrastada-4.png', 'image/png')], getData: () => '' });
+  await pausa(200);
+  assert.strictEqual(miniaturas(), 4, 'o catálogo continua com o máximo de 4 fotos');
+  assert.strictEqual(envios.length, 3, 'a quinta nem foi enviada');
+
+  // 5) a logo da empresa também aceita arrasto
+  const areaLogo = $('[data-upload="logo"]').closest('.upload-area');
+  assert.ok(areaLogo, 'o campo da logo é uma zona de arrasto');
+  const eventoLogo = new window.Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(eventoLogo, 'dataTransfer', {
+    value: { files: [imagem('logo-arrastada.png', 'image/png')], getData: () => '' },
+    configurable: true,
+  });
+  areaLogo.dispatchEvent(eventoLogo);
+  await ModoLocal.esperar(
+    () => $('#previa-logo').dataset.referencia === '/api/uploads/logo-arrastada.png',
+    'a logo arrastada foi anexada: ' + $('#previa-logo').dataset.referencia,
+    10000
+  );
+
+  // 6) tudo isso fica gravado no documento
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  const fotos = relido.documento.itens[0].fotos;
+  assert.strictEqual(fotos.length, 4, 'as quatro fotos arrastadas ficaram no documento: ' + JSON.stringify(fotos));
+  assert.strictEqual(
+    JSON.stringify(fotos.slice(0, 2)),
+    JSON.stringify(['/api/uploads/foto-arrastada-1.png', '/api/uploads/foto-arrastada-2.jpg']),
+    'na ordem em que foram arrastadas'
+  );
+  assert.strictEqual(fotos[2], 'https://a.com/foto-do-site.png', 'o link arrastado do site também ficou');
+  assert.strictEqual(relido.documento.proponente.logo, '/api/uploads/logo-arrastada.png', 'e a logo arrastada ficou no proponente');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
+teste('Minha empresa: arrastar a imagem para o campo anexa (logo e assinatura)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  window.API.enviarArquivo = async (rota, arquivo) => ({ caminho: '/api/uploads/' + arquivo.name });
+  window.location.hash = '#/empresa';
+  await ModoLocal.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa', 20000);
+
+  const soltar = (campo, nome) => {
+    const area = $(`[data-upload-emp="${campo}"]`).closest('.upload-area');
+    assert.ok(area, `o campo de ${campo} é uma zona de arrasto`);
+    const evento = new window.Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(evento, 'dataTransfer', {
+      value: { files: [new window.File(['bytes'], nome, { type: 'image/png' })], getData: () => '' },
+      configurable: true,
+    });
+    area.dispatchEvent(evento);
+    return area;
+  };
+
+  soltar('logo', 'logo-arrastada.png');
+  await ModoLocal.esperar(
+    () => $('#emp-previa-logo').dataset.referencia === '/api/uploads/logo-arrastada.png',
+    'a logo arrastada entrou na prévia: ' + $('#emp-previa-logo').dataset.referencia,
+    10000
+  );
+  soltar('assinatura', 'assinatura-arrastada.png');
+  await ModoLocal.esperar(
+    () => $('#emp-previa-assinatura').dataset.referencia === '/api/uploads/assinatura-arrastada.png',
+    'a assinatura arrastada entrou na prévia',
+    10000
+  );
+
+  // salva os dados da empresa e confere que as duas imagens foram gravadas
+  $('#emp-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  let empresa = {};
+  for (let tentativa = 0; tentativa < 80; tentativa += 1) {
+    const resposta = await window.API.get('/api/perfil');
+    empresa = (resposta.perfil && resposta.perfil.empresa) || {};
+    if (empresa.logo === '/api/uploads/logo-arrastada.png' &&
+        empresa.assinatura === '/api/uploads/assinatura-arrastada.png') break;
+    await new Promise((resolver) => setTimeout(resolver, 100));
+  }
+  assert.strictEqual(empresa.logo, '/api/uploads/logo-arrastada.png', 'a logo arrastada ficou gravada na empresa');
+  assert.strictEqual(empresa.assinatura, '/api/uploads/assinatura-arrastada.png', 'a assinatura arrastada também ficou gravada');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Itens: Detalhes fica aberto ao digitar, mover para baixo, selecionar/apagar e desconto opcional', async () => {
   const aberto = await abrirNoModoLocal();
   const { window, $ } = aberto;

@@ -1037,6 +1037,15 @@ input[type="search"] { padding-left: 12px; }
 }
 .foto-remover:hover { background: #7d2b2b; border-color: #7d2b2b; color: #fff; }
 .fotos-controles { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+/* arrastar a imagem para cima do campo anexa ela (contorno dourado enquanto arrasta) */
+.area-fotos {
+  outline: 2px dashed transparent;
+  outline-offset: 4px;
+  border-radius: var(--raio-xs);
+  transition: outline-color var(--transicao), background var(--transicao);
+}
+.area-fotos.arrastando { outline-color: var(--dourado-500); background: var(--superficie-2); }
+.upload-area.arrastando { border-color: var(--dourado-500); background: #16395c; }
 .fotos-linha { display: flex; gap: 8px; align-items: center; }
 .fotos-linha input { flex: 1; }
 .previa-foto {

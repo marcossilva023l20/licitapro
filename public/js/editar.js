@@ -666,7 +666,7 @@
     rotulo.textContent = `Fotos do produto (até ${MAX_FOTOS} — links da internet ou arquivos do computador)`;
 
     const fotosArea = document.createElement('div');
-    fotosArea.className = 'campo campo-largo';
+    fotosArea.className = 'campo campo-largo area-fotos';
 
     const grade = document.createElement('div');
     grade.className = 'grade-fotos';
@@ -729,9 +729,10 @@
       adicionarLink.disabled = cheio;
       enviar.disabled = cheio;
       inputFoto.disabled = cheio;
-      const dica = cheio ? ` (o catálogo guarda até ${MAX_FOTOS} por item)` : '';
       inputFoto.placeholder = cheio ? `Limite de ${MAX_FOTOS} fotos atingido` : 'https://... (link da foto do produto)';
-      rotulo.textContent = `Fotos do produto (${fotos.length}/${MAX_FOTOS})${dica}`;
+      rotulo.textContent = cheio
+        ? `Fotos do produto (${fotos.length}/${MAX_FOTOS}) — o catálogo guarda até ${MAX_FOTOS} por item`
+        : `Fotos do produto (${fotos.length}/${MAX_FOTOS}) — arraste imagens para cá, cole o link ou envie do computador`;
     }
 
     function adicionarFoto(valor, silencioso) {
@@ -794,23 +795,26 @@
     enviar.textContent = 'Enviar fotos do computador';
     enviar.addEventListener('click', () => arquivo.click());
 
-    arquivo.addEventListener('change', async () => {
-      const escolhidos = Array.from(arquivo.files || []);
-      if (!escolhidos.length) return;
+    /**
+     * Envia os arquivos (do botão ou arrastados para cima do item) e anexa como
+     * fotos do catálogo, respeitando o limite por item.
+     */
+    async function enviarArquivos(escolhidos) {
+      const lista = Array.from(escolhidos || []);
+      if (!lista.length) return 0;
       const livres = MAX_FOTOS - fotosAtuais().length;
       if (livres <= 0) {
         UI.toast(`O catálogo guarda até ${MAX_FOTOS} fotos por item.`, 'aviso');
-        arquivo.value = '';
-        return;
+        return 0;
       }
-      const fila = escolhidos.slice(0, livres);
-      if (escolhidos.length > fila.length) {
-        UI.toast(`Só cabem mais ${livres} foto(s) neste item: as outras ${escolhidos.length - fila.length} não foram enviadas.`, 'aviso');
+      const fila = lista.slice(0, livres);
+      if (lista.length > fila.length) {
+        UI.toast(`Só cabem mais ${livres} foto(s) neste item: as outras ${lista.length - fila.length} não foram enviadas.`, 'aviso');
       }
+      let enviadas = 0;
       try {
         enviar.disabled = true;
         enviar.textContent = 'Enviando...';
-        let enviadas = 0;
         for (let i = 0; i < fila.length; i += 1) {
           const resposta = await window.API.enviarArquivo('/api/uploads', fila[i], 'arquivo');
           if (resposta && resposta.caminho && adicionarFoto(resposta.caminho, true)) enviadas += 1;
@@ -822,9 +826,38 @@
       } finally {
         enviar.disabled = false;
         enviar.textContent = 'Enviar fotos do computador';
-        arquivo.value = '';
         desenharFotos();
       }
+      return enviadas;
+    }
+
+    arquivo.addEventListener('change', async () => {
+      await enviarArquivos(arquivo.files);
+      arquivo.value = '';
+    });
+
+    // arrastar a imagem para cima do item já anexa (uma ou várias de uma vez);
+    // se vier um link no lugar do arquivo — imagem arrastada de um site — ele
+    // entra como foto do catálogo do mesmo jeito
+    UI.areaDeArrasto(fotosArea, async (arrasto) => {
+      if (arrasto.arquivos.length) {
+        const imagens = arrasto.arquivos.filter(UI.ehImagem);
+        if (!imagens.length) {
+          UI.toast('Isto não é uma imagem: arraste .jpg, .png, .gif ou .webp.', 'aviso');
+          return;
+        }
+        if (imagens.length < arrasto.arquivos.length) {
+          UI.toast('Os arquivos que não são imagem foram ignorados.', 'aviso');
+        }
+        await enviarArquivos(imagens);
+        return;
+      }
+      const link = (arrasto.links || []).find((texto) => /^(https?:\/\/|data:image\/)/i.test(texto));
+      if (link) {
+        adicionarFoto(link);
+        return;
+      }
+      if ((arrasto.links || []).length) UI.toast('Isto não parece um link de imagem.', 'aviso');
     });
 
     grade.addEventListener('click', (evento) => {
@@ -1627,10 +1660,14 @@
     UI.$$('[data-upload]').forEach((botao) => {
       const campo = botao.dataset.upload;
       const arquivo = $('#arquivo-' + campo);
-      botao.addEventListener('click', () => arquivo.click());
-      arquivo.addEventListener('change', async () => {
-        const escolhido = arquivo.files[0];
+
+      /** Envia a imagem escolhida (botão) ou arrastada para dentro do campo. */
+      async function enviarImagem(escolhido) {
         if (!escolhido) return;
+        if (!UI.ehImagem(escolhido)) {
+          UI.toast('Isto não é uma imagem: arraste .jpg, .png, .gif ou .webp.', 'aviso');
+          return;
+        }
         try {
           botao.disabled = true;
           botao.textContent = 'Enviando...';
@@ -1646,7 +1683,17 @@
           botao.textContent = 'Enviar imagem';
           arquivo.value = '';
         }
-      });
+      }
+
+      botao.addEventListener('click', () => arquivo.click());
+      arquivo.addEventListener('change', () => enviarImagem(arquivo.files && arquivo.files[0]));
+
+      // arrastar a imagem para o campo também anexa
+      const area = botao.closest('.upload-area');
+      if (area) {
+        area.title = 'Arraste a imagem para cá, ou clique em Enviar imagem';
+        UI.areaDeArrasto(area, (arrasto) => enviarImagem(arrasto.arquivos[0]));
+      }
     });
 
     UI.$$('[data-remover]').forEach((botao) => {

@@ -1836,10 +1836,14 @@
     $$('[data-upload-emp]').forEach((botao) => {
       const campo = botao.dataset.uploadEmp;
       const arquivo = $('#emp-arquivo-' + campo);
-      botao.addEventListener('click', () => arquivo.click());
-      arquivo.addEventListener('change', async () => {
-        const escolhido = arquivo.files[0];
+
+      /** Envia a imagem escolhida (botão) ou arrastada para dentro do campo. */
+      async function enviarImagem(escolhido) {
         if (!escolhido) return;
+        if (!UI.ehImagem(escolhido)) {
+          UI.toast('Isto não é uma imagem: arraste .jpg, .png, .gif ou .webp.', 'aviso');
+          return;
+        }
         try {
           botao.disabled = true;
           botao.textContent = 'Enviando...';
@@ -1854,7 +1858,17 @@
           botao.textContent = 'Enviar imagem';
           arquivo.value = '';
         }
-      });
+      }
+
+      botao.addEventListener('click', () => arquivo.click());
+      arquivo.addEventListener('change', () => enviarImagem(arquivo.files && arquivo.files[0]));
+
+      // arrastar a imagem para o campo também anexa
+      const area = botao.closest('.upload-area');
+      if (area) {
+        area.title = 'Arraste a imagem para cá, ou clique em Enviar imagem';
+        UI.areaDeArrasto(area, (arrasto) => enviarImagem(arrasto.arquivos[0]));
+      }
     });
 
     $$('[data-remover-emp]').forEach((botao) => {

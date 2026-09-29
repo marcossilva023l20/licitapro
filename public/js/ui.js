@@ -257,6 +257,65 @@
     sonda.src = url;
   }
 
+  /**
+   * Liga o "arrastar e soltar" numa área da tela.
+   *
+   * Enquanto o arquivo está em cima, a área ganha a classe `arrastando` (o CSS
+   * mostra o contorno dourado); ao soltar, `aoSoltar` recebe os arquivos
+   * arrastados e, quando não veio arquivo nenhum — imagem arrastada de um site —
+   * os links que vieram junto no arrasto.
+   */
+  function areaDeArrasto(area, aoSoltar, opcoes) {
+    if (!area || area.dataset.arrastoLigado === '1') return area;
+    area.dataset.arrastoLigado = '1';
+    const classe = (opcoes && opcoes.classe) || 'arrastando';
+    ['dragenter', 'dragover'].forEach((tipo) =>
+      area.addEventListener(tipo, (evento) => {
+        evento.preventDefault();
+        if (evento.dataTransfer) {
+          try { evento.dataTransfer.dropEffect = 'copy'; } catch (_) { /* alguns navegadores travam */ }
+        }
+        area.classList.add(classe);
+      })
+    );
+    ['dragleave', 'dragend'].forEach((tipo) =>
+      area.addEventListener(tipo, (evento) => {
+        evento.preventDefault();
+        area.classList.remove(classe);
+      })
+    );
+    area.addEventListener('drop', (evento) => {
+      evento.preventDefault();
+      area.classList.remove(classe);
+      const transferencia = evento.dataTransfer || {};
+      aoSoltar({
+        arquivos: Array.from(transferencia.files || []),
+        links: textoArrastado(transferencia),
+        transferencia,
+      });
+    });
+    return area;
+  }
+
+  /** Links/texto que vieram junto no arrasto (imagem arrastada de um site). */
+  function textoArrastado(transferencia) {
+    let bruto = '';
+    try {
+      bruto = (transferencia.getData &&
+        (transferencia.getData('text/uri-list') || transferencia.getData('text/plain'))) || '';
+    } catch (_) {
+      bruto = '';
+    }
+    return String(bruto).split(/[\s,;]+/).map((t) => t.trim()).filter(Boolean);
+  }
+
+  /** Só o que parece imagem: pelo tipo informado ou pela extensão do arquivo. */
+  function ehImagem(arquivo) {
+    if (!arquivo) return false;
+    if (/^image\//i.test(String(arquivo.type || ''))) return true;
+    return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(arquivo.name || ''));
+  }
+
   window.UI = {
     $, $$,
     caminhoBase: CAMINHO_BASE,
@@ -276,6 +335,9 @@
     urlImagem,
     aplicarImagem,
     atualizarImagemLocal,
+    areaDeArrasto,
+    textoArrastado,
+    ehImagem,
   };
 
   if (document.readyState === 'loading') {
