@@ -2286,10 +2286,12 @@ teste("Conta nova: cadastrar a empresa e importar a logo troca o nome do painel 
   // ---- Minha empresa: o nome no painel acompanha o cadastro, antes de salvar
   window.location.hash = '#/empresa';
   await ModoLocal.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa', 20000);
+  assert.strictEqual($('#marca-nome').textContent, 'DEJ Solutions & Global', 'sem empresa cadastrada, a marca do site aparece no topo');
   $('#emp-fantasia').value = 'NOVA EMPRESA TESTE';
   $('#emp-fantasia').dispatchEvent(new window.Event('input', { bubbles: true }));
   assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'o painel já mostra o nome da empresa nova');
   assert.strictEqual($('#avatar-usuario').textContent, 'NT', 'e as iniciais do avatar acompanham');
+  assert.strictEqual($('#marca-nome').textContent, 'NOVA EMPRESA TESTE', 'o nome ao lado da logo, no canto do topo, também muda');
 
   // importar a logo (arrastando, como na atualização anterior)
   const area = $('[data-upload-emp="logo"]').closest('.upload-area');
@@ -2305,6 +2307,13 @@ teste("Conta nova: cadastrar a empresa e importar a logo troca o nome do painel 
     10000
   );
   assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'importar a logo não desfaz o nome do painel');
+  const marca = $('.topo .marca');
+  assert.ok(marca, 'a marca existe no topo');
+  assert.ok(marca.classList.contains('tem-logo'), 'a logo importada entra no lugar do monograma no topo');
+  assert.ok(
+    String(marca.querySelector('.marca-logo').getAttribute('src') || '').includes('logo-nova.png'),
+    'a imagem no canto do topo é a logo importada: ' + marca.querySelector('.marca-logo').getAttribute('src')
+  );
   assert.ok(
     ($('#caixa-toasts').textContent || '').includes("marca d'água"),
     'o aviso diz que a logo é também a marca d\'água: ' + ($('#caixa-toasts').textContent || '').slice(-140)
@@ -2330,6 +2339,7 @@ teste("Conta nova: cadastrar a empresa e importar a logo troca o nome do painel 
   window.location.hash = '#/painel';
   await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'voltou ao painel', 10000);
   assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'ao sair da tela, volta o nome gravado');
+  assert.strictEqual($('#marca-nome').textContent, 'NOVA EMPRESA TESTE', 'e a marca do topo também mostra o nome gravado');
 
   // ---- editor: importar a logo liga a marca d'água do documento
   const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');

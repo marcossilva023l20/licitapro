@@ -248,6 +248,11 @@
       // naturalWidth = 0 significa que o servidor devolveu outra coisa (não uma imagem)
       if (!sonda.naturalWidth) return;
       alvos.forEach((alvo) => {
+        // guarda o endereço da logo da marca: quando a empresa cadastrada não
+        // tem logo (ou a conta não cadastrou nada), é ela que volta a aparecer
+        alvo.dataset.logoMarca = url;
+        // a logo que a empresa importou tem prioridade sobre a marca do site
+        if (alvo.dataset.logoEmpresa === '1') return;
         const imagem = $('.marca-logo', alvo);
         if (imagem) imagem.src = url;
         alvo.classList.add('tem-logo');

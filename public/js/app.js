@@ -35,6 +35,46 @@
     const usado = String(nome || '').trim() || nomeDaEmpresa();
     $('#nome-usuario').textContent = usado;
     $('#avatar-usuario').textContent = F.iniciais(usado) || 'DEJ';
+    atualizarMarcaNoTopo(usado);
+  }
+
+  /**
+   * A marca no canto do topo é a empresa cadastrada: o nome ao lado da logo e a
+   * logo importada no lugar do monograma/marca do sistema. Sem cadastro (ou com
+   * o nome ainda não salvo), tudo volta a ser "DEJ Solutions & Global" com a
+   * logo da marca — é a identidade do site, não some nunca.
+   */
+  function atualizarMarcaNoTopo(nome) {
+    const marca = $('.topo .marca');
+    if (!marca) return;
+    const nomeEl = marca.querySelector('#marca-nome');
+    const icone = marca.querySelector('.marca-icone');
+    const imagem = marca.querySelector('.marca-logo');
+    const logo = String((estado.empresa && estado.empresa.logo) || '').trim();
+    const cadastrada = String(nome || '').trim() && nome !== 'Minha empresa';
+    if (cadastrada) {
+      if (nomeEl) nomeEl.textContent = nome;
+      if (icone) icone.textContent = F.iniciais(nome) || 'DEJ';
+      if (imagem) {
+        if (logo) {
+          marca.dataset.logoEmpresa = '1';
+          imagem.src = logo;
+          marca.classList.add('tem-logo');
+        } else {
+          delete marca.dataset.logoEmpresa;
+          marca.classList.remove('tem-logo');
+        }
+      }
+      return;
+    }
+    // nada cadastrado (ou nada salvo ainda): volta a marca do sistema
+    if (nomeEl) nomeEl.textContent = 'DEJ Solutions & Global';
+    if (icone) icone.textContent = 'DEJ';
+    delete marca.dataset.logoEmpresa;
+    if (imagem) {
+      if (marca.dataset.logoMarca) imagem.src = marca.dataset.logoMarca;
+      marca.classList.toggle('tem-logo', Boolean(marca.dataset.logoMarca));
+    }
   }
 
   /**
