@@ -83,12 +83,7 @@
 
   /** Aba com os itens: mesmos títulos e larguras do modelo, sem explicações. */
   function abaItens(doc) {
-    const linhas = (doc.itens || []).map((item) =>
-      COLUNAS.map((coluna) => {
-        const valor = item[coluna.chave];
-        return valor === undefined || valor === null ? '' : valor;
-      })
-    );
+    const linhas = (doc.itens || []).map((item) => COLUNAS.map((coluna) => Colunas.celulaDoItem(item, coluna)));
     const aba = XLSX.utils.aoa_to_sheet([COLUNAS.map((c) => c.titulo), ...linhas]);
     aba['!cols'] = COLUNAS.map((c) => ({ wch: c.largura }));
     return aba;

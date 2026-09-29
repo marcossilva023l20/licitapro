@@ -36,7 +36,7 @@ Desconto / acréscimo + TOTAL + valor total por extenso
    ↓
 CONDIÇÕES (validade, pagamento, prazo de entrega, garantia, observações)
    ↓
-CATÁLOGO (descrição comercial + foto de cada produto)
+CATÁLOGO (descrição comercial + fotos de cada produto, até 4, em grade)
    ↓
 Local, data e bloco de assinatura do representante legal
 ```
@@ -102,7 +102,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que faz |
    |---|---|
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
-   | Itens e preços | itens com quantidade, unidade, valor de referência (edital), custo, marca/modelo, foto, descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
+   | Itens e preços | itens com quantidade, unidade, valor de referência (edital), custo, marca/modelo, fotos (até **4 por item**, lado a lado numa grade), descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Declarações | as declarações que acompanham o documento (Declaração Unificada, ME/EPP/MEI, textos próprios), com marcação de quais saem no PDF |
 
@@ -180,7 +180,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
 
    Como as colunas são as do modelo, a planilha pode ser **editada no Excel e
    reenviada na tela "Importar planilha"** — o sistema lê de volta os mesmos
-   itens (inclusive valor de referência, custo, marca, foto, descrição do catálogo e link).
+   itens (inclusive valor de referência, custo, marca, fotos, descrição do catálogo e link).
 
 6. **Histórico** — a tela *Documentos* tem busca, filtro por tipo e status
    (rascunho / enviada / ganha / perdida / cancelada), duplicação, exclusão e
@@ -208,7 +208,7 @@ navegador, e a escolhida vai para o cabeçalho do PDF.
 | `Valor_Referencia` | não | valor unitário do item — é o que entra no PDF como *Valor Unitário* |
 | `Preco_Custo` | não | quanto você paga no fornecedor (controle interno) |
 | `Marca_Modelo` | não | marca e modelo ofertados |
-| `Foto_Produto` | não | link da imagem (Drive, site do fabricante) ou envie um arquivo **.jpg/.png** no site |
+| `Foto_Produto` | não | um ou mais links de imagem (Drive, site do fabricante) separados por espaço — **até 4 por item**, que saem em grade no catálogo; também dá para enviar os arquivos **.jpg/.png** no site |
 | `Descricao_Catalogo` | não | texto comercial que aparece no catálogo |
 | `Link_da_compra` | não | link onde você compra (não sai no PDF por padrão) |
 
@@ -663,7 +663,7 @@ data/                   → dados gerados em execução (não versionado)
 | Sintoma | O que fazer |
 |---|---|
 | "A porta 3000 já está em uso" | rode com outra porta: `PORT=3001 npm start` |
-| As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar foto do computador** |
+| As fotos dos produtos não aparecem | o link precisa ser público; em redes restritas, use **Enviar fotos do computador** |
 | A planilha não é reconhecida | use o modelo para download e mantenha os títulos da linha 1 |
 | O sistema diz que não está salvando no banco | rode `npm run banco`: ele aponta o passo que falhou (`.env`, chave, tabelas ou gravação). No painel, a linha de situação mostra o mesmo motivo |
 | "Banco de dados não configurado" no painel | falta `SUPABASE_URL`/`SUPABASE_SERVICE_KEY` no `.env` ou nas variáveis do serviço. Em localhost, use o botão **“Conectar banco de dados”**; na hospedagem, cadastre as variáveis no painel do serviço — veja a seção 4 |
@@ -712,7 +712,7 @@ do sistema. Por isso:
 - **Foto por link:** ao gerar o PDF o sistema lê o link e baixa a imagem — no servidor quem
   baixa é o próprio sistema; no **modo local** (GitHub Pages) quem baixa é o navegador, e
   alguns sites bloqueiam esse acesso. Quando isso acontece, a foto sai como `—` e o aviso
-  diz qual item foi afetado: nesse caso use **Enviar foto do computador**.
+  diz qual item foi afetado: nesse caso use **Enviar fotos do computador**.
 
 Para links do Google Drive, o arquivo precisa estar compartilhado como
 "Qualquer pessoa com o link" (o sistema converte o link de visualização em link direto).

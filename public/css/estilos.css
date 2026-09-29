@@ -1005,7 +1005,40 @@ input[type="search"] { padding-left: 12px; }
 }
 .item-acoes button:hover { background: #1e4b77; border-color: var(--borda-forte); color: var(--texto); }
 .item-detalhes { padding: 16px; border-top: 1px solid var(--borda); background: var(--superficie-2); }
-.item-foto-area { display: flex; gap: 14px; align-items: flex-start; }
+/* Fotos do item: as miniaturas ficam lado a lado, como a grade do catálogo no PDF */
+.grade-fotos { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 4px; }
+.foto-mini { position: relative; width: 108px; }
+.foto-mini.vazia {
+  width: 108px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--borda);
+  border-radius: var(--raio-xs);
+  background: #0b1f33;
+  color: var(--texto-fraco);
+  font-size: 0.68rem;
+}
+.foto-remover {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--borda-forte);
+  border-radius: 50%;
+  background: #0b1f33;
+  color: var(--texto-suave);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.foto-remover:hover { background: #7d2b2b; border-color: #7d2b2b; color: #fff; }
+.fotos-controles { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.fotos-linha { display: flex; gap: 8px; align-items: center; }
+.fotos-linha input { flex: 1; }
 .previa-foto {
   width: 108px;
   height: 84px;
@@ -1206,6 +1239,7 @@ input[type="search"] { padding-left: 12px; }
 .tabela tbody tr:hover { background: rgba(216, 184, 115, 0.07); }
 .tabela tr:last-child td { border-bottom: 0; }
 .tabela .foto-miniatura { width: 56px; height: 46px; object-fit: contain; background: #0b1f33; border: 1px solid var(--borda); border-radius: var(--raio-xs); }
+.tabela .foto-extras { margin-left: 6px; font-size: 0.72rem; color: var(--texto-fraco); white-space: nowrap; }
 
 .avisos {
   margin: 16px 0;

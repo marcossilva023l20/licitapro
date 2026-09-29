@@ -317,6 +317,16 @@
     return doSchema > 0 ? doSchema : 2000;
   }
 
+  /**
+   * Quantas fotos por item o catálogo guarda (a regra vive em shared/colunas.js
+   * e no esquema do documento). No PDF elas saem em grade, duas por linha.
+   */
+  function limiteDeFotos() {
+    const doSchema = Number(window.DocumentoSchema && window.DocumentoSchema.MAX_FOTOS);
+    const dasColunas = Number(window.Colunas && window.Colunas.MAX_FOTOS);
+    return doSchema > 0 ? doSchema : (dasColunas > 0 ? dasColunas : 4);
+  }
+
   /** Cabe mais um item neste documento? Se não couber, avisa e devolve false. */
   function cabeMaisUmItem(quantos) {
     const total = (estado.doc.itens || []).length + (quantos || 1);
@@ -647,91 +657,193 @@
     textareaCatalogo.value = item.descricaoCatalogo || '';
     catalogo.appendChild(textareaCatalogo);
 
-    const fotoArea = document.createElement('div');
-    fotoArea.className = 'campo campo-largo';
+    // ------------------------------------------------- fotos do produto (grade)
+    // O catálogo aceita várias fotos por item: elas aparecem aqui lado a lado e
+    // saem no PDF em grade (duas por linha, até o limite).
+    const MAX_FOTOS = limiteDeFotos();
     const rotulo = document.createElement('span');
     rotulo.className = 'rotulo-campo';
-    rotulo.textContent = 'Foto do produto (link da internet ou arquivo enviado)';
-    const linhaFoto = document.createElement('div');
-    linhaFoto.className = 'item-foto-area';
+    rotulo.textContent = `Fotos do produto (até ${MAX_FOTOS} — links da internet ou arquivos do computador)`;
 
-    const imagem = document.createElement('img');
-    imagem.className = 'previa-foto';
-    imagem.alt = 'Foto do item';
-    if (item.foto) UI.aplicarImagem(imagem, item.foto);
-    else {
-      imagem.classList.add('vazia');
-      imagem.alt = 'sem foto';
+    const fotosArea = document.createElement('div');
+    fotosArea.className = 'campo campo-largo';
+
+    const grade = document.createElement('div');
+    grade.className = 'grade-fotos';
+
+    /** Fotos do item que está sendo desenhado (documento antigo tem só `foto`). */
+    function fotosAtuais() {
+      const atual = estado.doc.itens[indice];
+      if (!atual) return [];
+      const brutas = Array.isArray(atual.fotos) && atual.fotos.length ? atual.fotos : [atual.foto];
+      const limpas = [];
+      brutas.forEach((foto) => {
+        const texto = String(foto === undefined || foto === null ? '' : foto).trim();
+        if (texto && limpas.indexOf(texto) < 0) limpas.push(texto);
+      });
+      return limpas.slice(0, MAX_FOTOS);
     }
-    imagem.addEventListener('error', () => {
-      imagem.removeAttribute('src');
-      imagem.classList.add('vazia');
-      imagem.alt = 'imagem indisponível';
-    });
+
+    /** Grava a lista no item e mantém `foto` como a primeira (compatibilidade). */
+    function guardarFotos(fotos) {
+      const atual = estado.doc.itens[indice];
+      if (!atual) return;
+      atual.fotos = fotos.slice(0, MAX_FOTOS);
+      atual.foto = atual.fotos[0] || '';
+    }
+
+    function desenharFotos() {
+      const fotos = fotosAtuais();
+      guardarFotos(fotos);
+      grade.innerHTML = '';
+      if (!fotos.length) {
+        const vazio = document.createElement('div');
+        vazio.className = 'foto-mini vazia';
+        vazio.textContent = 'Sem foto';
+        grade.appendChild(vazio);
+      }
+      fotos.forEach((foto, k) => {
+        const mini = document.createElement('div');
+        mini.className = 'foto-mini';
+        const imagem = document.createElement('img');
+        imagem.className = 'previa-foto';
+        imagem.alt = `Foto ${k + 1} do item`;
+        imagem.title = `Foto ${k + 1} de ${fotos.length}`;
+        UI.aplicarImagem(imagem, foto);
+        imagem.addEventListener('error', () => {
+          imagem.removeAttribute('src');
+          imagem.classList.add('vazia');
+          imagem.alt = 'imagem indisponível';
+        });
+        const remover = document.createElement('button');
+        remover.type = 'button';
+        remover.className = 'foto-remover';
+        remover.textContent = '✕';
+        remover.title = `Remover a foto ${k + 1}`;
+        remover.dataset.acaoFoto = 'remover';
+        remover.dataset.indiceFoto = String(k);
+        mini.append(imagem, remover);
+        grade.appendChild(mini);
+      });
+      const cheio = fotos.length >= MAX_FOTOS;
+      adicionarLink.disabled = cheio;
+      enviar.disabled = cheio;
+      inputFoto.disabled = cheio;
+      const dica = cheio ? ` (o catálogo guarda até ${MAX_FOTOS} por item)` : '';
+      inputFoto.placeholder = cheio ? `Limite de ${MAX_FOTOS} fotos atingido` : 'https://... (link da foto do produto)';
+      rotulo.textContent = `Fotos do produto (${fotos.length}/${MAX_FOTOS})${dica}`;
+    }
+
+    function adicionarFoto(valor, silencioso) {
+      const texto = String(valor || '').trim();
+      if (!texto) return false;
+      const fotos = fotosAtuais();
+      if (fotos.length >= MAX_FOTOS) {
+        UI.toast(`O catálogo guarda até ${MAX_FOTOS} fotos por item.`, 'aviso');
+        return false;
+      }
+      if (fotos.indexOf(texto) >= 0) {
+        UI.toast('Esta foto já está no item.', 'aviso');
+        return false;
+      }
+      fotos.push(texto);
+      guardarFotos(fotos);
+      desenharFotos();
+      marcarSujo();
+      if (!silencioso) UI.toast('Foto adicionada ao catálogo.', 'sucesso');
+      return true;
+    }
 
     const controles = document.createElement('div');
-    controles.style.flex = '1';
+    controles.className = 'fotos-controles';
+
+    const linhaLink = document.createElement('div');
+    linhaLink.className = 'fotos-linha';
     const inputFoto = document.createElement('input');
     inputFoto.type = 'text';
     inputFoto.placeholder = 'https://... (link da foto do produto)';
-    inputFoto.value = item.foto || '';
-    inputFoto.dataset.campo = 'foto';
+    // de propósito sem data-campo: este campo acrescenta uma foto, não edita o item
+    inputFoto.dataset.fotoLink = '';
+    const adicionarLink = document.createElement('button');
+    adicionarLink.type = 'button';
+    adicionarLink.className = 'botao';
+    adicionarLink.textContent = '＋ Adicionar link';
+    adicionarLink.dataset.acaoFoto = 'adicionar-link';
+    adicionarLink.addEventListener('click', () => {
+      if (adicionarFoto(inputFoto.value)) inputFoto.value = '';
+    });
+    inputFoto.addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Enter') return;
+      evento.preventDefault();
+      if (adicionarFoto(inputFoto.value)) inputFoto.value = '';
+    });
+
     const botoesFoto = document.createElement('div');
     botoesFoto.className = 'upload-acoes';
-    botoesFoto.style.marginTop = '8px';
 
     const arquivo = document.createElement('input');
     arquivo.type = 'file';
     arquivo.accept = 'image/*';
+    arquivo.multiple = true;
     arquivo.className = 'oculto';
-    arquivo.dataset.campoArquivo = 'foto';
+    arquivo.dataset.campoArquivo = 'fotos';
 
     const enviar = document.createElement('button');
     enviar.type = 'button';
     enviar.className = 'botao';
-    enviar.textContent = 'Enviar foto do computador';
+    enviar.textContent = 'Enviar fotos do computador';
     enviar.addEventListener('click', () => arquivo.click());
 
-    const limpar = document.createElement('button');
-    limpar.type = 'button';
-    limpar.className = 'botao botao-fantasma';
-    limpar.textContent = 'Remover foto';
-    limpar.addEventListener('click', () => {
-      estado.doc.itens[indice].foto = '';
-      inputFoto.value = '';
-      imagem.removeAttribute('src');
-      imagem.classList.add('vazia');
-      marcarSujo();
-    });
-
     arquivo.addEventListener('change', async () => {
-      const escolhido = arquivo.files[0];
-      if (!escolhido) return;
+      const escolhidos = Array.from(arquivo.files || []);
+      if (!escolhidos.length) return;
+      const livres = MAX_FOTOS - fotosAtuais().length;
+      if (livres <= 0) {
+        UI.toast(`O catálogo guarda até ${MAX_FOTOS} fotos por item.`, 'aviso');
+        arquivo.value = '';
+        return;
+      }
+      const fila = escolhidos.slice(0, livres);
+      if (escolhidos.length > fila.length) {
+        UI.toast(`Só cabem mais ${livres} foto(s) neste item: as outras ${escolhidos.length - fila.length} não foram enviadas.`, 'aviso');
+      }
       try {
         enviar.disabled = true;
         enviar.textContent = 'Enviando...';
-        const resposta = await window.API.enviarArquivo('/api/uploads', escolhido, 'arquivo');
-        estado.doc.itens[indice].foto = resposta.caminho;
-        inputFoto.value = resposta.caminho;
-        UI.aplicarImagem(imagem, resposta.caminho);
-        imagem.classList.remove('vazia');
-        marcarSujo();
-        UI.toast('Foto enviada.', 'sucesso');
+        let enviadas = 0;
+        for (let i = 0; i < fila.length; i += 1) {
+          const resposta = await window.API.enviarArquivo('/api/uploads', fila[i], 'arquivo');
+          if (resposta && resposta.caminho && adicionarFoto(resposta.caminho, true)) enviadas += 1;
+        }
+        if (enviadas === 1) UI.toast('Foto enviada.', 'sucesso');
+        else if (enviadas > 1) UI.toast(`${enviadas} fotos enviadas.`, 'sucesso');
       } catch (erro) {
         UI.toast(erro.message, 'erro');
       } finally {
         enviar.disabled = false;
-        enviar.textContent = 'Enviar foto do computador';
+        enviar.textContent = 'Enviar fotos do computador';
         arquivo.value = '';
+        desenharFotos();
       }
     });
 
-    botoesFoto.append(enviar, limpar);
-    controles.append(inputFoto, arquivo, botoesFoto);
-    linhaFoto.append(imagem, controles);
-    fotoArea.append(rotulo, linhaFoto);
+    grade.addEventListener('click', (evento) => {
+      const botao = evento.target.closest('[data-acao-foto="remover"]');
+      if (!botao) return;
+      const fotos = fotosAtuais();
+      fotos.splice(Number(botao.dataset.indiceFoto), 1);
+      guardarFotos(fotos);
+      desenharFotos();
+      marcarSujo();
+    });
 
-    detalhes.append(grade1, descricaoLonga, catalogo, fotoArea);
+    linhaLink.append(inputFoto, adicionarLink);
+    botoesFoto.append(enviar);
+    controles.append(linhaLink, arquivo, botoesFoto);
+    fotosArea.append(rotulo, grade, controles);
+    desenharFotos();
+
+    detalhes.append(grade1, descricaoLonga, catalogo, fotosArea);
     bloco.appendChild(detalhes);
     return bloco;
   }
@@ -834,6 +946,7 @@
       precoCusto: 0,
       precoVenda: 0,
       marcaModelo: '',
+      fotos: [],
       foto: '',
       descricaoCatalogo: '',
       linkCompra: '',
@@ -1352,17 +1465,6 @@
         UI.$$('[data-campo="precoVenda"]', bloco).forEach((outro) => {
           if (outro !== evento.target && document.activeElement !== outro) outro.value = valor;
         });
-      }
-      if (campo === 'foto') {
-        const imagem = $('.previa-foto', bloco);
-        if (valor) {
-          UI.aplicarImagem(imagem, valor);
-          imagem.classList.remove('vazia');
-        } else {
-          imagem.removeAttribute('src');
-          imagem.dataset.referencia = '';
-          imagem.classList.add('vazia');
-        }
       }
       atualizarResumos();
       marcarSujo();

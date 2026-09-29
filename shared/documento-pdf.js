@@ -236,6 +236,37 @@ async function noFoto(foto, largura, rotulo, relatorio) {
   }
 }
 
+/** As fotos do item em lista (documento antigo tem só o campo `foto`). */
+function fotosDoItem(item) {
+  const brutas = Array.isArray(item && item.fotos) && item.fotos.length ? item.fotos : [item && item.foto];
+  const limpas = [];
+  brutas.forEach((foto) => {
+    const texto = String(foto === undefined || foto === null ? '' : foto).trim();
+    if (texto && limpas.indexOf(texto) < 0) limpas.push(texto);
+  });
+  return limpas;
+}
+
+/**
+ * As fotos do item no CATÁLOGO. Com uma foto só a saída é exatamente a de antes;
+ * com duas ou mais elas saem em **grade**, uma ao lado da outra (duas por linha,
+ * até quatro). Foto que não carrega vira "—" e entra no relatório de ignoradas.
+ */
+async function noFotos(fotos, larguraFoto, rotulo, relatorio) {
+  const lista = (fotos || []).map((foto) => String(foto || '').trim()).filter(Boolean);
+  if (!lista.length) return { text: '—', alignment: 'center', color: '#9AA5B1', fontSize: 8.5 };
+  if (lista.length === 1) return noFoto(lista[0], larguraFoto, rotulo, relatorio);
+  const nos = [];
+  for (let i = 0; i < lista.length; i += 1) {
+    nos.push(await noFoto(lista[i], larguraFoto, `${rotulo} — foto ${i + 1}`, relatorio));
+  }
+  const linhas = [];
+  for (let i = 0; i < nos.length; i += 2) {
+    linhas.push({ columns: [nos[i], nos[i + 1] || { text: '' }], columnGap: 6 });
+  }
+  return { stack: linhas };
+}
+
 // --------------------------------------------------------------- componentes
 
 function linhaRotulo(valor) {
@@ -721,6 +752,14 @@ async function montarDefinicao(doc, empresa, contexto) {
       margin: [0, 0, 0, 6],
     });
 
+    // Com mais de uma foto por item a coluna das fotos alarga para caber a grade
+    // (duas por linha). Com uma foto só, o layout continua exatamente o de antes.
+    const variasFotos = opcoes.mostrarFotos && itens.some((item) => fotosDoItem(item).length > 1);
+    const larguraColunaFoto = variasFotos
+      ? Math.min(paisagem ? 250 : 190, Math.round(larguraConteudo * 0.42))
+      : 115;
+    const larguraFoto = variasFotos ? Math.floor((larguraColunaFoto - 10) / 2) : 105;
+
     const corpoCatalogo = [
       cabecalhoTabela(corBase, [
         { titulo: 'Item', alinhamento: 'center' },
@@ -744,14 +783,16 @@ async function montarDefinicao(doc, empresa, contexto) {
           ].filter(Boolean),
         },
       ];
-      if (opcoes.mostrarFotos) linha.push(await noFoto(item.foto, 105, `Item ${item.numeroItem || i + 1}`, relatorio));
+      if (opcoes.mostrarFotos) {
+        linha.push(await noFotos(fotosDoItem(item), larguraFoto, `Item ${item.numeroItem || i + 1}`, relatorio));
+      }
       corpoCatalogo.push(linha);
     }
 
     conteudo.push({
       table: {
         headerRows: 1,
-        widths: opcoes.mostrarFotos ? [28, '*', 115] : [28, '*'],
+        widths: opcoes.mostrarFotos ? [28, '*', larguraColunaFoto] : [28, '*'],
         body: corpoCatalogo,
         dontBreakRows: true,
       },

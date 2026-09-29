@@ -83,9 +83,9 @@
     {
       chave: 'foto',
       titulo: 'Foto_Produto',
-      rotulo: 'Foto do Produto',
-      dica: 'Cole o link da imagem (Drive, site do fabricante) ou envie o arquivo no site.',
-      largura: 34,
+      rotulo: 'Fotos do Produto',
+      dica: 'Um ou mais links de imagem (Drive, site do fabricante) separados por espaço, ou envie os arquivos no site. Até 4 fotos por item: saem em grade no catálogo.',
+      largura: 46,
       apelidos: ['foto_produto', 'foto do produto', 'foto', 'imagem', 'url da foto', 'link da foto', 'imagem do produto'],
     },
     {
@@ -145,5 +145,38 @@
     return mapa;
   }
 
-  return { COLUNAS, normalizarCabecalho, mapearCabecalhos };
+  /**
+   * Quantas fotos o catálogo guarda por item. Vale para a planilha, para o
+   * documento e para o editor — no PDF elas saem em grade, duas por linha
+   * (2x2 quando o item tem as quatro).
+   */
+  const MAX_FOTOS = 4;
+
+  /** As fotos do item em lista, sem repetição (aceita o campo antigo de uma foto só). */
+  function fotosDoItem(item) {
+    const brutas = Array.isArray(item && item.fotos) && item.fotos.length
+      ? item.fotos
+      : [item && item.foto];
+    const limpas = [];
+    brutas.forEach((foto) => {
+      const texto = String(foto === undefined || foto === null ? '' : foto).trim();
+      if (texto && limpas.indexOf(texto) < 0) limpas.push(texto);
+    });
+    return limpas.slice(0, MAX_FOTOS);
+  }
+
+  /** Célula Foto_Produto: todos os links do item, separados por espaço. */
+  function fotosEmTexto(item) {
+    return fotosDoItem(item).join(' ');
+  }
+
+  /** Valor que entra na célula de uma coluna da planilha para este item. */
+  function celulaDoItem(item, coluna) {
+    if (!coluna) return '';
+    if (coluna.chave === 'foto') return fotosEmTexto(item);
+    const valor = item ? item[coluna.chave] : '';
+    return valor === undefined || valor === null ? '' : valor;
+  }
+
+  return { COLUNAS, normalizarCabecalho, mapearCabecalhos, MAX_FOTOS, fotosDoItem, fotosEmTexto, celulaDoItem };
 });

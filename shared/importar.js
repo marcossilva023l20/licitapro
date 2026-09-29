@@ -30,6 +30,8 @@
   // mais linhas, mas o que não couber é avisado na tela — nada some calado.
   const MAX_LINHAS = 2000;
 
+  const MAX_FOTOS = (Colunas && Colunas.MAX_FOTOS) || 4;
+
   const temBuffer = () => typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function';
 
   /** Descobre o tipo de entrada que a XLSX espera em cada ambiente. */
@@ -79,8 +81,8 @@
    * quando a célula tem mais de um link, devolve o primeiro.
    * @returns {{valor: string, extras: number}}
    */
-  function limparLink(bruto) {
-    let texto = String(bruto == null ? '' : bruto)
+  function textoLimpo(bruto) {
+    return String(bruto == null ? '' : bruto)
       .replace(/&amp;/gi, '&')
       .replace(/&quot;/gi, '"')
       .replace(/&#3[49];/g, "'")
@@ -90,9 +92,22 @@
       .replace(/^["'<>]+|["'>]+$/g, '')
       .trim();
 
-    // várias URLs na mesma célula (linha nova, espaço, vírgula ou ponto-e-vírgula)
-    const partes = texto.split(/[\s,;]+/).filter(Boolean);
-    const urls = partes.filter((parte) => /^(https?:\/\/|data:image\/)/i.test(parte));
+    return texto;
+  }
+
+  /**
+   * Todos os links de imagem de uma célula: o catálogo aceita várias fotos por
+   * item, separadas por espaço, vírgula, ponto-e-vírgula ou linha nova.
+   */
+  function linksDaCelula(bruto) {
+    const partes = textoLimpo(bruto).split(/[\s,;]+/).filter(Boolean);
+    return partes.filter((parte) => /^(https?:\/\/|data:image\/)/i.test(parte));
+  }
+
+  /** Primeiro link da célula e quantos vieram a mais (usado no Link_da_compra). */
+  function limparLink(bruto) {
+    const texto = textoLimpo(bruto);
+    const urls = linksDaCelula(bruto);
     if (urls.length > 1) return { valor: urls[0], extras: urls.length - 1 };
     return { valor: texto, extras: 0 };
   }
@@ -161,16 +176,20 @@
         precoCusto: 0,
         precoVenda: 0,
         marcaModelo: String(registro.marcaModelo || '').trim(),
+        fotos: [],
         foto: '',
         descricaoCatalogo: String(registro.descricaoCatalogo || '').trim() || descricao,
         linkCompra: '',
         observacao: '',
       };
 
-      const foto = limparLink(registro.foto);
-      item.foto = foto.valor;
-      if (foto.extras) {
-        avisos.push(`Linha ${i + 1}: a célula Foto_Produto tem ${foto.extras + 1} imagens; usei a primeira (as outras podem ser enviadas uma a uma na tela de edição).`);
+      // várias fotos na mesma célula: todas entram no catálogo (até MAX_FOTOS)
+      const fotos = linksDaCelula(registro.foto);
+      const textoFoto = textoLimpo(registro.foto);
+      item.fotos = (fotos.length ? fotos : (textoFoto ? [textoFoto] : [])).slice(0, MAX_FOTOS);
+      item.foto = item.fotos[0] || '';
+      if (fotos.length > MAX_FOTOS) {
+        avisos.push(`Linha ${i + 1}: a célula Foto_Produto tem ${fotos.length} imagens e o catálogo guarda até ${MAX_FOTOS} por item: entraram as ${MAX_FOTOS} primeiras.`);
       }
 
       const compra = limparLink(registro.linkCompra);
@@ -247,12 +266,7 @@
   /** Converte a lista de itens numa planilha (mesmas colunas do modelo). */
   function itensParaPlanilha(itens) {
     const cabecalho = Colunas.COLUNAS.map((c) => c.titulo);
-    const linhas = (itens || []).map((item) =>
-      Colunas.COLUNAS.map((c) => {
-        const valor = item[c.chave];
-        return valor === undefined || valor === null ? '' : valor;
-      })
-    );
+    const linhas = (itens || []).map((item) => Colunas.COLUNAS.map((c) => Colunas.celulaDoItem(item, c)));
     const aba = XLSX.utils.aoa_to_sheet([cabecalho, ...linhas]);
     aba['!cols'] = Colunas.COLUNAS.map((c) => ({ wch: c.largura }));
     const livro = XLSX.utils.book_new();
@@ -265,5 +279,5 @@
     return XLSX.write(livro, { bookType: 'xlsx', type: temBuffer() ? 'buffer' : 'array', compression: true });
   }
 
-  return { importar, lerBuffer, itensParaPlanilha, escreverXlsx, limparLink };
+  return { importar, lerBuffer, itensParaPlanilha, escreverXlsx, limparLink, linksDaCelula, textoLimpo, MAX_FOTOS };
 });

@@ -759,6 +759,16 @@
       .join('');
   }
 
+  /** Miniatura da primeira foto do item + quantas fotos ele tem no total. */
+  function fotoMiniatura(item) {
+    const fotos = (Array.isArray(item.fotos) && item.fotos.length ? item.fotos : [item.foto])
+      .map((foto) => String(foto || '').trim())
+      .filter(Boolean);
+    if (!fotos.length) return '—';
+    const extras = fotos.length > 1 ? `<span class="foto-extras">+${fotos.length - 1} foto(s)</span>` : '';
+    return `<img class="foto-miniatura" src="/api/imagem?url=${encodeURIComponent(fotos[0])}" alt="" />${extras}`;
+  }
+
   function htmlTabelaImportacao(itens) {
     const linhas = itens.map((item, indice) => `
       <tr>
@@ -769,7 +779,7 @@
         <td class="numero">${F.quantidade(item.quantidade)}</td>
         <td class="numero">${F.moeda(item.precoVenda)}</td>
         <td>${UI.escaparHtml(item.marcaModelo)}</td>
-        <td>${item.foto ? `<img class="foto-miniatura" src="/api/imagem?url=${encodeURIComponent(item.foto)}" alt="" />` : '—'}</td>
+        <td>${fotoMiniatura(item)}</td>
       </tr>`).join('');
     return `
       <table class="tabela">

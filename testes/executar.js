@@ -1946,6 +1946,75 @@ teste('Pré-visualização: o botão no topo do editor mostra e oculta o quadro'
   segunda.window.close();
 });
 
+teste('Editor: as fotos do item ficam numa grade (adicionar, enviar várias, remover, limite de 4)', async () => {
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, precoVenda: 10,
+    fotos: ['https://a.com/1.png', 'https://a.com/2.png'], marcaModelo: '', foto: '',
+    descricaoCatalogo: '', linkCompra: '',
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const bloco = $('#lista-itens .item[data-indice="0"]');
+  bloco.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const grade = () => bloco.querySelector('.grade-fotos');
+  const miniaturas = () => grade().querySelectorAll('.foto-mini:not(.vazia)').length;
+
+  assert.strictEqual(miniaturas(), 2, 'as duas fotos aparecem lado a lado na grade');
+  assert.strictEqual(grade().querySelectorAll('.foto-remover').length, 2, 'cada foto tem o seu botão de remover');
+  const rotulo = Array.from(bloco.querySelectorAll('.rotulo-campo')).find((r) => /Fotos do produto/.test(r.textContent));
+  assert.ok(rotulo, 'o painel tem o campo das fotos');
+  assert.ok(/\(2\/4\)/.test(rotulo.textContent), 'o rótulo diz quantas fotos o item tem: ' + rotulo.textContent);
+
+  // terceira foto pelo campo de link
+  const input = bloco.querySelector('[data-foto-link]');
+  input.value = 'https://a.com/3.png';
+  bloco.querySelector('[data-acao-foto="adicionar-link"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => miniaturas() === 3, 'a terceira foto entrou na grade', 10000);
+  assert.strictEqual(input.value, '', 'o campo limpa depois de adicionar');
+
+  // quarta foto enviando arquivos do computador (o campo aceita vários de uma vez)
+  window.API.enviarArquivo = async (rota, arquivo) => ({ caminho: '/api/uploads/' + arquivo.name });
+  const entrada = bloco.querySelector('input[type="file"][data-campo-arquivo="fotos"]');
+  assert.strictEqual(entrada.multiple, true, 'dá para escolher várias fotos de uma vez');
+  Object.defineProperty(entrada, 'files', {
+    value: [
+      new window.File(['a'], 'foto4.png', { type: 'image/png' }),
+      new window.File(['b'], 'foto5.png', { type: 'image/png' }),
+    ],
+    configurable: true,
+  });
+  entrada.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await ModoLocal.esperar(() => miniaturas() === 4, 'a quarta foto entrou', 10000);
+  assert.strictEqual(
+    bloco.querySelector('[data-acao-foto="adicionar-link"]').disabled, true,
+    'no limite de 4 o campo de acrescentar desliga'
+  );
+
+  // remover a primeira foto
+  grade().querySelector('[data-acao-foto="remover"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => miniaturas() === 3, 'a foto saiu da grade', 10000);
+
+  // salva e relê: as fotos ficam no documento
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  const fotos = relido.documento.itens[0].fotos;
+  assert.strictEqual(fotos.length, 3, 'as três fotos ficaram no documento: ' + JSON.stringify(fotos));
+  assert.strictEqual(relido.documento.itens[0].foto, fotos[0], 'o campo antigo continua sendo a primeira foto');
+  assert.ok(fotos.indexOf('/api/uploads/foto4.png') >= 0, 'a foto enviada do computador entrou');
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Itens: Detalhes fica aberto ao digitar, mover para baixo, selecionar/apagar e desconto opcional', async () => {
   const aberto = await abrirNoModoLocal();
   const { window, $ } = aberto;
@@ -3011,7 +3080,7 @@ teste('Importação: lê o arquivo do usuário (aba Página1, cabeçalho depois 
   assert.strictEqual(primeiro.linkCompra, 'https://loja.com/r');
 });
 
-teste('Importação: célula com várias fotos/links usa o primeiro e avisa', () => {
+teste('Importação: célula com várias fotos guarda todas (o link da compra continua um só)', () => {
   const Importador = require(path.join(RAIZ, 'shared', 'importar'));
   const XLSX = require('xlsx');
 
@@ -3041,8 +3110,97 @@ teste('Importação: célula com várias fotos/links usa o primeiro e avisa', ()
   XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet(linhas), 'Itens');
   const buffer = XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' });
   const resultado = Importador.importar(buffer, 'x.xlsx');
-  assert.strictEqual(resultado.itens[0].foto, 'https://a.com/1.png', 'usa a primeira foto');
-  assert.ok(resultado.avisos.some((a) => /Foto_Produto/.test(a)), 'avisa sobre as demais fotos: ' + resultado.avisos.join(' | '));
+  assert.deepStrictEqual(
+    resultado.itens[0].fotos, ['https://a.com/1.png', 'https://a.com/2.png'],
+    'as duas fotos da célula entram no catálogo'
+  );
+  assert.strictEqual(resultado.itens[0].foto, 'https://a.com/1.png', 'o campo de uma foto só continua sendo a primeira');
+  assert.deepStrictEqual(resultado.avisos, [], 'cabem até 4 fotos: nada para avisar');
+  assert.strictEqual(resultado.itens[0].linkCompra, 'https://loja.com/r', 'o link da compra é um só');
+});
+
+teste('Catálogo: várias fotos por item saem em grade, uma ao lado da outra', async () => {
+  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
+  const Esquema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const Importador = require(path.join(RAIZ, 'shared', 'importar'));
+  const Colunas = require(path.join(RAIZ, 'shared', 'colunas'));
+
+  /** A tabela do catálogo é a única com três colunas de largura. */
+  const tabelaDoCatalogo = (definicao) => {
+    let achada = null;
+    (function varrer(no) {
+      if (!no || typeof no !== 'object') return;
+      if (no.table && Array.isArray(no.table.widths) && no.table.widths.length === 3) achada = no.table;
+      ['content', 'stack', 'columns'].forEach((chave) => {
+        if (Array.isArray(no[chave])) no[chave].forEach(varrer);
+      });
+    })(definicao);
+    return achada;
+  };
+  const documentoCom = (fotos, tipo, opcoes) => {
+    const doc = Esquema.sanear({
+      tipo: tipo || 'proposta',
+      opcoes: Object.assign({ mostrarCatalogo: true, mostrarFotos: true }, opcoes || {}),
+      itens: [{ numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, precoVenda: 10, fotos }],
+    }, {}, tipo || 'proposta');
+    return doc;
+  };
+  const catalogoDe = async (fotos, tipo, opcoes) => {
+    const doc = documentoCom(fotos, tipo, opcoes);
+    return tabelaDoCatalogo(await Pdf.montarDefinicao(doc, doc.proponente));
+  };
+
+  // o teto é 4 fotos por item e o documento antigo (uma foto só) continua valendo
+  assert.strictEqual(Esquema.MAX_FOTOS, 4, 'o catálogo guarda até 4 fotos por item');
+  const antigo = Esquema.sanear({ tipo: 'proposta', itens: [{ descricao: 'A', quantidade: 1, foto: 'idb:unica' }] }, {}, 'proposta');
+  assert.deepStrictEqual(antigo.itens[0].fotos, ['idb:unica'], 'documento antigo com uma foto vira uma lista');
+  assert.strictEqual(antigo.itens[0].foto, 'idb:unica', 'e o campo antigo continua preenchido');
+  const muitos = Esquema.sanear({ tipo: 'proposta', itens: [{ descricao: 'B', quantidade: 1, fotos: ['1', '2', '3', '4', '5', '6'] }] }, {}, 'proposta');
+  assert.strictEqual(muitos.itens[0].fotos.length, 4, 'o que passa de 4 não entra no documento');
+
+  // uma foto só: o catálogo continua exatamente como era
+  const uma = await catalogoDe(['idb:uma']);
+  assert.deepStrictEqual(uma.widths, [28, '*', 115], 'com uma foto a coluna continua estreita');
+  assert.strictEqual(uma.body[1][2].text, '—', 'foto que não carrega vira "—" (o PDF não quebra)');
+
+  // quatro fotos: grade 2x2 e coluna mais larga
+  const quatro = await catalogoDe(['idb:a', 'idb:b', 'idb:c', 'idb:d']);
+  assert.ok(quatro.widths[2] > 115, 'a coluna das fotos alarga para a grade: ' + JSON.stringify(quatro.widths));
+  const celula = quatro.body[1][2];
+  assert.ok(Array.isArray(celula.stack), 'a célula das fotos é uma grade');
+  assert.strictEqual(celula.stack.length, 2, 'duas fotos por linha: 4 fotos = 2 linhas');
+  celula.stack.forEach((linha) => assert.strictEqual(linha.columns.length, 2, 'duas fotos lado a lado'));
+
+  // três fotos: duas linhas, a última com uma foto e um espaço vazio
+  const tres = await catalogoDe(['idb:a', 'idb:b', 'idb:c']);
+  assert.strictEqual(tres.body[1][2].stack.length, 2, '3 fotos = 2 linhas');
+
+  // sem fotos, a coluna continua lá com o traço
+  const nenhuma = await catalogoDe([]);
+  assert.strictEqual(nenhuma.body[1][2].text, '—', 'item sem foto mostra o traço');
+
+  // paisagem: a grade aproveita o papel mais largo
+  const paisagem = await catalogoDe(['idb:a', 'idb:b'], 'orcamento', { orientacao: 'paisagem' });
+  assert.ok(paisagem.widths[2] > quatro.widths[2], 'em paisagem a grade é mais larga: ' + JSON.stringify(paisagem.widths));
+
+  // a planilha leva e traz as fotos na mesma célula
+  const titulo = Colunas.COLUNAS.map((c) => c.titulo);
+  const livro = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(livro, XLSX.utils.aoa_to_sheet([
+    titulo,
+    [1, 'RÁDIO TRANSCEPTOR', 'UND', 6, 1490, 1150, 'Hytera / BP516', 'https://a.com/1.png https://a.com/2.png', 'Rádio 48 canais', ''],
+  ]), 'Itens');
+  const lido = Importador.importar(XLSX.write(livro, { bookType: 'xlsx', type: 'buffer' }), 'duas-fotos.xlsx');
+  assert.deepStrictEqual(lido.itens[0].fotos, ['https://a.com/1.png', 'https://a.com/2.png'], 'as duas fotos da célula entram');
+  assert.deepStrictEqual(lido.avisos, [], 'sem avisos');
+  const exportada = XLSX.read(
+    XLSX.write(Importador.itensParaPlanilha(lido.itens), { bookType: 'xlsx', type: 'buffer' }), { type: 'buffer' }
+  );
+  assert.strictEqual(
+    XLSX.utils.sheet_to_json(exportada.Sheets['Itens'])[0].Foto_Produto,
+    'https://a.com/1.png https://a.com/2.png',
+    'a exportação devolve as duas fotos na mesma célula (dá para reenviar)'
+  );
 });
 
 teste('PDF: rótulo do total igual ao modelo (TOTAL LICITAÇÃO)', async () => {

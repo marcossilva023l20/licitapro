@@ -7,11 +7,12 @@
  */
 (function (raiz, fabrica) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = fabrica(require('../shared/format'), require('../shared/declaracoes'));
+    module.exports = fabrica(require('../shared/format'), require('../shared/declaracoes'), require('../shared/colunas'));
   } else {
-    raiz.DocumentoSchema = fabrica(raiz.Formato, raiz.Declaracoes);
+    // shared/colunas.js é carregado antes deste módulo (ver public/js/modo-estatico.js)
+    raiz.DocumentoSchema = fabrica(raiz.Formato, raiz.Declaracoes, raiz.Colunas);
   }
-})(typeof self !== 'undefined' ? self : this, function (Formato, Declaracoes) {
+})(typeof self !== 'undefined' ? self : this, function (Formato, Declaracoes, Colunas) {
   'use strict';
 
 const TIPOS = ['proposta', 'orcamento'];
@@ -35,8 +36,29 @@ function numero(valor, casas) {
   return casas === undefined ? n : Formato.arredondar(n, casas);
 }
 
+/** Quantas fotos por item o catálogo guarda (a regra vive em shared/colunas.js). */
+const MAX_FOTOS = (Colunas && Colunas.MAX_FOTOS) || 4;
+
+/**
+ * Fotos do item: até MAX_FOTOS, sem repetição. Documento antigo, que tem só o
+ * campo `foto`, entra como a primeira foto da lista — e o campo `foto` continua
+ * existindo (sempre a primeira), para nada que lê uma foto só quebrar.
+ */
+function fotosDoItem(base) {
+  const b = base || {};
+  const brutas = Array.isArray(b.fotos) ? b.fotos.slice() : [];
+  if (b.foto) brutas.push(b.foto);
+  const limpas = [];
+  brutas.forEach((foto) => {
+    const t = texto(foto, 1200);
+    if (t && limpas.indexOf(t) < 0 && limpas.length < MAX_FOTOS) limpas.push(t);
+  });
+  return limpas;
+}
+
 function itemNovo(base, indice) {
   const b = base || {};
+  const fotos = fotosDoItem(b);
   return {
     id: texto(b.id, 60) || `item-${Date.now()}-${indice}`,
     numeroItem: texto(b.numeroItem, 20) || String(indice + 1),
@@ -49,7 +71,8 @@ function itemNovo(base, indice) {
     // abrir e salvar um documento antigo não perde número nenhum.
     precoVenda: numero(b.precoVenda, 2) || numero(b.valorReferencia, 2),
     marcaModelo: texto(b.marcaModelo, 160),
-    foto: texto(b.foto, 1200),
+    fotos,
+    foto: fotos[0] || '',
     descricaoCatalogo: texto(b.descricaoCatalogo, 6000),
     linkCompra: texto(b.linkCompra, 1200),
     observacao: texto(b.observacao, 600),
@@ -242,5 +265,5 @@ function sanear(payload, perfil, tipoSugerido, anterior) {
   };
 }
 
-  return { sanear, TIPOS, STATUS, documentoBase, sanearItens, MAX_ITENS };
+  return { sanear, TIPOS, STATUS, documentoBase, sanearItens, MAX_ITENS, MAX_FOTOS, fotosDoItem };
 });

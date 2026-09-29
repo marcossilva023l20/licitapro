@@ -69,7 +69,7 @@
     const resumo = quantidade === 1
       ? '1 foto não entrou no PDF e saiu como "—".'
       : quantidade + ' fotos não entraram no PDF e saíram como "—".';
-    const dica = 'Se a foto for necessária, use "Enviar foto do computador" (o link pode não estar público).';
+    const dica = 'Se a foto for necessária, use "Enviar fotos do computador" (o link pode não estar público).';
     toast(resumo + (detalhe ? ' ' + detalhe.slice(0, 140) + (detalhe.length > 140 ? '…' : '') : ''), 'aviso', 10000);
     if (caixa) {
       caixa.textContent = (resumo + ' ' + detalhe + ' ' + dica).replace(/\s+/g, ' ').trim();
