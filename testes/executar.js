@@ -732,6 +732,53 @@ teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as página
   assert.strictEqual(padrao.opcoes.cor, '#0B1F33', 'cor padrão é o azul-marinho da paleta');
 });
 
+teste('Catálogo: a descrição comercial do item não tem limite de caracteres', async () => {
+  const Schema = require(path.join(RAIZ, 'shared', 'documento-schema'));
+  const longo = ('Texto comercial do catálogo para o certame, com todas as especificações. '.repeat(400) + 'FIM').trim();
+  assert.ok(longo.length > 20000, 'texto de teste bem maior que o limite antigo (6000): ' + longo.length);
+
+  // o schema guarda o texto inteiro
+  const saneado = Schema.sanear(
+    { tipo: 'proposta', itens: [{ descricao: 'RÁDIO TRANSCEPTOR', quantidade: 1, descricaoCatalogo: longo }] },
+    {}, 'proposta'
+  );
+  assert.strictEqual(saneado.itens[0].descricaoCatalogo, longo, 'o texto do catálogo fica inteiro, sem corte');
+
+  // e no editor: carrega inteiro, aceita acréscimo e grava inteiro
+  const aberto = await abrirNoModoLocal();
+  const { window, $ } = aberto;
+  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
+  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
+  documento.itens = [{
+    numeroItem: '1', descricao: 'RÁDIO TRANSCEPTOR', unidade: 'UND', quantidade: 1, precoVenda: 1490,
+    descricaoCatalogo: longo,
+  }];
+  const salvo = await window.API.post('/api/documentos', documento);
+  window.location.hash = '#/documento/' + salvo.documento.id;
+  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
+
+  const bloco = $('#lista-itens .item[data-indice="0"]');
+  bloco.querySelector('[data-acao-item="detalhes"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const campo = bloco.querySelector('[data-campo="descricaoCatalogo"]');
+  assert.ok(campo, 'o campo da descrição do catálogo existe nos detalhes do item');
+  assert.strictEqual(campo.value.length, longo.length, 'o editor mostra o texto inteiro no campo');
+
+  const aindaMaior = longo + ' — Acrescentado diretamente no editor, também sem corte.';
+  campo.value = aindaMaior;
+  campo.dispatchEvent(new window.Event('input', { bubbles: true }));
+  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo com o texto acrescido', 20000);
+  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
+  assert.strictEqual(
+    relido.documento.itens[0].descricaoCatalogo, aindaMaior,
+    'o documento gravado guarda o texto completo (' + relido.documento.itens[0].descricaoCatalogo.length + ' caracteres)'
+  );
+
+  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
+  window.close();
+});
+
 teste('Site: a versão dos arquivos (?v=) combina em todos os lugares', () => {
   const paginas = ['public/index.html', 'index.html', 'apresentacao.html'].map((rel) =>
     fs.readFileSync(path.join(RAIZ, rel), 'utf8')

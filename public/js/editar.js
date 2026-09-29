@@ -650,7 +650,7 @@
 
     const catalogo = document.createElement('label');
     catalogo.className = 'campo campo-largo';
-    catalogo.textContent = 'Descrição do catálogo (texto comercial que aparece no catálogo)';
+    catalogo.textContent = 'Descrição do catálogo (texto comercial que aparece no catálogo — sem limite de caracteres)';
     const textareaCatalogo = document.createElement('textarea');
     textareaCatalogo.rows = 4;
     textareaCatalogo.dataset.campo = 'descricaoCatalogo';

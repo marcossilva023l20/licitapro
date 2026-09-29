@@ -73,7 +73,9 @@ function itemNovo(base, indice) {
     marcaModelo: texto(b.marcaModelo, 160),
     fotos,
     foto: fotos[0] || '',
-    descricaoCatalogo: texto(b.descricaoCatalogo, 6000),
+    // a descrição comercial do catálogo não tem limite de caracteres:
+    // o texto entra inteiro, do jeito que foi escrito (ou importado)
+    descricaoCatalogo: texto(b.descricaoCatalogo),
     linkCompra: texto(b.linkCompra, 1200),
     observacao: texto(b.observacao, 600),
   };
