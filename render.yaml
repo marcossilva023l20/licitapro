@@ -1,0 +1,53 @@
+# Hospedagem no Render (https://render.com) — "Blueprint"
+#
+# Como usar: no painel do Render, escolha "New +" → "Blueprint", aponte para este
+# repositório e o Render lê este arquivo automaticamente.
+#
+# ⚠️ Sobre os dados: as propostas ficam numa pasta no disco. No plano gratuito o
+# disco é apagado a cada reinício/atualização, então os documentos se perdem.
+# Para uso real, mantenha o bloco "disk" abaixo (exige plano pago, ~US$ 7/mês
+# pela instância + US$ 0,25/GB do disco). Para apenas testar, remova o bloco
+# "disk" e a variável LICITAPRO_DATA_DIR.
+
+services:
+  - type: web
+    name: licitapro
+    runtime: node
+    # "free" para testar (sem disco) ou "starter" para uso real (com disco)
+    plan: starter
+    # região mais próxima do Brasil
+    region: virginia
+    branch: main
+    buildCommand: npm install --omit=dev --no-audit --no-fund
+    startCommand: node server/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # pasta onde ficam banco, uploads e cache (precisa ser o caminho do disco)
+      - key: LICITAPRO_DATA_DIR
+        value: /var/data
+      # o sistema não tem login: se o endereço ficar público, proteja o acesso
+      # na própria plataforma (ou use um proxy com senha na frente do serviço)
+
+      # banco no Supabase (opcional): preencha os dois no painel do Render e os
+      # dados passam a ficar no Postgres, em vez do disco da instância.
+      # Antes, rode supabase/esquema.sql no SQL Editor do projeto.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+      # banco no Firebase (alternativa ao Supabase): cole o JSON da conta de
+      # serviço (o arquivo baixado em Project settings → Service accounts) e o
+      # id do projeto. Se a plataforma não aceitar quebras de linha no valor,
+      # cole o mesmo JSON em base64 — o sistema entende os dois formatos.
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+    disk:
+      name: licitapro-dados
+      mountPath: /var/data
+      sizeGB: 1

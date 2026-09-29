@@ -1,0 +1,15 @@
+# dependências
+node_modules/
+
+# dados gerados em tempo de execução (cópia local do banco, uploads e cache de imagens)
+data/
+
+# variáveis de ambiente
+.env
+.env.local
+
+# arquivos temporários / sistema
+*.log
+.DS_Store
+Thumbs.db
+*.tmp

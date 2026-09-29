@@ -1,0 +1,182 @@
+/**
+ * Definição das colunas da planilha de importação.
+ * É a única fonte de verdade: usada para gerar o modelo para download,
+ * para ler as planilhas enviadas e para exportar os itens de volta.
+ *
+ * Roda no Node (server) e no navegador (window.Colunas).
+ */
+(function (raiz, fabrica) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = fabrica();
+  } else {
+    raiz.Colunas = fabrica();
+  }
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  const COLUNAS = [
+    {
+      chave: 'numeroItem',
+      titulo: 'Numero_Item',
+      rotulo: 'Nº do Item',
+      dica: 'Número do item conforme o edital. Ex.: 1, 2, 3...',
+      largura: 10,
+      apelidos: ['numero_item', 'numeroitem', 'nº do item', 'no do item', 'item', 'num', 'numero', 'n do item'],
+    },
+    {
+      chave: 'descricao',
+      titulo: 'Descricao_Edital',
+      rotulo: 'Descrição do Item (conforme edital)',
+      dica: 'Descrição exata do item, copiada do edital. Esta é a coluna principal.',
+      largura: 58,
+      apelidos: ['descricao_edital', 'descricao', 'descricao do item', 'especificacao', 'especificacao do item', 'objeto', 'descricao do objeto'],
+    },
+    {
+      chave: 'unidade',
+      titulo: 'Unidade',
+      rotulo: 'Unidade',
+      dica: 'Unidade de medida: UND, UN, CX, PCT, M, KG, L...',
+      largura: 12,
+      apelidos: ['unidade', 'un', 'und', 'unid', 'unidade de medida', 'um', 'medida'],
+    },
+    {
+      chave: 'quantidade',
+      titulo: 'Quantidade',
+      rotulo: 'Quantidade',
+      dica: 'Quantidade solicitada pelo edital. Use apenas números. Ex.: 6',
+      largura: 12,
+      apelidos: ['quantidade', 'qtd', 'qtde', 'quant', 'qde'],
+    },
+    {
+      // Um preço só: o valor de referência do edital É o valor unitário do item
+      // (o que sai no PDF como "Valor Unitário"). A chave interna continua
+      // precoVenda para os documentos antigos seguirem intactos; os apelidos
+      // abaixo fazem as planilhas antigas com a coluna Preco_Venda serem lidas.
+      chave: 'precoVenda',
+      titulo: 'Valor_Referencia',
+      rotulo: 'Valor de Referência (edital)',
+      dica: 'Valor unitário do item. Ex.: 1.490,00',
+      largura: 18,
+      apelidos: [
+        'valor_referencia', 'valor de referencia', 'valor referencia', 'valor estimado',
+        'preco de referencia', 'valor de referencia unitario',
+        'preco_venda', 'preco de venda', 'valor de venda', 'valor venda', 'preco venda',
+        'valor unitario', 'valor unitario de venda', 'preco unitario',
+      ],
+    },
+    {
+      chave: 'precoCusto',
+      titulo: 'Preco_Custo',
+      rotulo: 'Preço de Custo',
+      dica: 'Quanto você paga no fornecedor (opcional, não sai no PDF do cliente).',
+      largura: 15,
+      apelidos: ['preco_custo', 'custo', 'valor de custo', 'preco de custo', 'valor custo', 'preco custo'],
+    },
+    {
+      chave: 'marcaModelo',
+      titulo: 'Marca_Modelo',
+      rotulo: 'Marca / Modelo',
+      dica: 'Marca e modelo do produto ofertado. Ex.: Hytera / BP516',
+      largura: 22,
+      apelidos: ['marca_modelo', 'marca modelo', 'marca', 'modelo', 'marca e modelo', 'marca/modelo'],
+    },
+    {
+      chave: 'foto',
+      titulo: 'Foto_Produto',
+      rotulo: 'Fotos do Produto',
+      dica: 'Um ou mais links de imagem (Drive, site do fabricante) separados por espaço, ou envie os arquivos no site. Até 4 fotos por item: saem em grade no catálogo.',
+      largura: 46,
+      apelidos: ['foto_produto', 'foto do produto', 'foto', 'imagem', 'url da foto', 'link da foto', 'imagem do produto'],
+    },
+    {
+      chave: 'descricaoCatalogo',
+      titulo: 'Descricao_Catalogo',
+      rotulo: 'Descrição do Catálogo',
+      dica: 'Texto comercial que aparece no CATÁLOGO da proposta (pode ser igual à descrição).',
+      largura: 58,
+      apelidos: ['descricao_catalogo', 'descricao catalogo', 'descricao do catalogo', 'catalogo', 'texto do catalogo', 'descricao comercial'],
+    },
+    {
+      chave: 'linkCompra',
+      titulo: 'Link_da_compra',
+      rotulo: 'Link da Compra',
+      dica: 'Link do fornecedor/loja onde você compra o item (controle interno).',
+      largura: 34,
+      apelidos: ['link_da_compra', 'link da compra', 'link', 'url', 'link de compra', 'link fornecedor'],
+    },
+  ];
+
+  /** Normaliza texto de cabeçalho para comparação (sem acentos, minúsculo). */
+  function normalizarCabecalho(texto) {
+    return String(texto || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  /** Descobre, para cada coluna da planilha, qual campo do sistema ela representa. */
+  function mapearCabecalhos(cabecalhos) {
+    const mapa = {}; // indiceDaColuna -> chave
+    const usados = new Set();
+
+    cabecalhos.forEach((texto, indice) => {
+      const normalizado = normalizarCabecalho(texto);
+      if (!normalizado) return;
+      // 1ª tentativa: nome exato do título
+      let encontrada = COLUNAS.find(
+        (c) => !usados.has(c.chave) && (normalizarCabecalho(c.titulo) === normalizado || c.apelidos.includes(normalizado))
+      );
+      // 2ª tentativa: aproximação (contém)
+      if (!encontrada) {
+        encontrada = COLUNAS.find((c) => {
+          if (usados.has(c.chave)) return false;
+          const titulo = normalizarCabecalho(c.titulo);
+          return normalizado.includes(titulo) || titulo.includes(normalizado);
+        });
+      }
+      if (encontrada) {
+        mapa[indice] = encontrada.chave;
+        usados.add(encontrada.chave);
+      }
+    });
+
+    return mapa;
+  }
+
+  /**
+   * Quantas fotos o catálogo guarda por item. Vale para a planilha, para o
+   * documento e para o editor — no PDF elas saem em grade, duas por linha
+   * (2x2 quando o item tem as quatro).
+   */
+  const MAX_FOTOS = 4;
+
+  /** As fotos do item em lista, sem repetição (aceita o campo antigo de uma foto só). */
+  function fotosDoItem(item) {
+    const brutas = Array.isArray(item && item.fotos) && item.fotos.length
+      ? item.fotos
+      : [item && item.foto];
+    const limpas = [];
+    brutas.forEach((foto) => {
+      const texto = String(foto === undefined || foto === null ? '' : foto).trim();
+      if (texto && limpas.indexOf(texto) < 0) limpas.push(texto);
+    });
+    return limpas.slice(0, MAX_FOTOS);
+  }
+
+  /** Célula Foto_Produto: todos os links do item, separados por espaço. */
+  function fotosEmTexto(item) {
+    return fotosDoItem(item).join(' ');
+  }
+
+  /** Valor que entra na célula de uma coluna da planilha para este item. */
+  function celulaDoItem(item, coluna) {
+    if (!coluna) return '';
+    if (coluna.chave === 'foto') return fotosEmTexto(item);
+    const valor = item ? item[coluna.chave] : '';
+    return valor === undefined || valor === null ? '' : valor;
+  }
+
+  return { COLUNAS, normalizarCabecalho, mapearCabecalhos, MAX_FOTOS, fotosDoItem, fotosEmTexto, celulaDoItem };
+});
