@@ -2310,10 +2310,15 @@ teste("Conta nova: cadastrar a empresa e importar a logo troca o nome do painel 
   const marca = $('.topo .marca');
   assert.ok(marca, 'a marca existe no topo');
   assert.ok(marca.classList.contains('tem-logo'), 'a logo importada entra no lugar do monograma no topo');
+  const logoTopo = marca.querySelector('.marca-logo');
+  assert.strictEqual(logoTopo.dataset.referencia, '/api/uploads/logo-nova.png', 'o topo pediu a logo importada');
+  // sem servidor a imagem chega pelo registro local (idb:/data:), como no site publicado
+  window.UI.atualizarImagemLocal('/api/uploads/logo-nova.png', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
   assert.ok(
-    String(marca.querySelector('.marca-logo').getAttribute('src') || '').includes('logo-nova.png'),
-    'a imagem no canto do topo é a logo importada: ' + marca.querySelector('.marca-logo').getAttribute('src')
+    String(logoTopo.getAttribute('src') || '').startsWith('data:image/png'),
+    'e a logo aparece no canto do topo quando a imagem fica pronta: ' + String(logoTopo.getAttribute('src')).slice(0, 40)
   );
+  assert.strictEqual(logoTopo.classList.contains('oculto'), false, 'sem ficar escondida enquanto carrega');
   assert.ok(
     ($('#caixa-toasts').textContent || '').includes("marca d'água"),
     'o aviso diz que a logo é também a marca d\'água: ' + ($('#caixa-toasts').textContent || '').slice(-140)
@@ -3996,6 +4001,14 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
     $2('#entrar-senha').value = SENHA;
     $2('#form-entrar').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
     await esperarSistemaAberto(w2, 'no computador 2');
+    // espera a sincronização terminar antes de abrir a tela da empresa: os
+    // campos são preenchidos quando a tela abre, então abrir no meio da
+    // sincronização deixaria a tela vazia (disputa de tempo, não defeito)
+    await ModoLocal.esperar(
+      () => /última sincronização/.test($2('#situacao-dados-texto').textContent),
+      'o computador 2 sincronizou com a conta: ' + $2('#situacao-dados-texto').textContent,
+      20000
+    );
     w2.document.querySelector('a[data-rota="empresa"]').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
     await ModoLocal.esperar(
       () => !$2('#view-empresa').classList.contains('oculto'),

@@ -57,11 +57,14 @@
       if (icone) icone.textContent = F.iniciais(nome) || 'DEJ';
       if (imagem) {
         if (logo) {
+          // aplicarImagem resolve a referência do jeito certo em cada modo:
+          // /api/uploads/... com servidor, idb:/data: no navegador sem servidor
           marca.dataset.logoEmpresa = '1';
-          imagem.src = logo;
+          UI.aplicarImagem(imagem, logo);
           marca.classList.add('tem-logo');
         } else {
           delete marca.dataset.logoEmpresa;
+          imagem.removeAttribute('data-referencia');
           marca.classList.remove('tem-logo');
         }
       }
@@ -72,7 +75,13 @@
     if (icone) icone.textContent = 'DEJ';
     delete marca.dataset.logoEmpresa;
     if (imagem) {
-      if (marca.dataset.logoMarca) imagem.src = marca.dataset.logoMarca;
+      imagem.removeAttribute('data-referencia');
+      if (marca.dataset.logoMarca) {
+        imagem.src = marca.dataset.logoMarca;
+        imagem.classList.remove('oculto');
+      } else {
+        imagem.removeAttribute('src');
+      }
       marca.classList.toggle('tem-logo', Boolean(marca.dataset.logoMarca));
     }
   }
