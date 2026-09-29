@@ -30,74 +30,6 @@
     return empresa.nomeFantasia || empresa.razaoSocial || 'Minha empresa';
   }
 
-  /** Escreve o nome (e as iniciais do avatar) no topo do painel. */
-  function atualizarNomeNoTopo(nome) {
-    const usado = String(nome || '').trim() || nomeDaEmpresa();
-    $('#nome-usuario').textContent = usado;
-    $('#avatar-usuario').textContent = F.iniciais(usado) || 'DEJ';
-    atualizarMarcaNoTopo(usado);
-  }
-
-  /**
-   * A marca no canto do topo é a empresa cadastrada: o nome ao lado da logo e a
-   * logo importada no lugar do monograma/marca do sistema. Sem cadastro (ou com
-   * o nome ainda não salvo), tudo volta a ser "DEJ Solutions & Global" com a
-   * logo da marca — é a identidade do site, não some nunca.
-   */
-  function atualizarMarcaNoTopo(nome) {
-    const marca = $('.topo .marca');
-    if (!marca) return;
-    const nomeEl = marca.querySelector('#marca-nome');
-    const icone = marca.querySelector('.marca-icone');
-    const imagem = marca.querySelector('.marca-logo');
-    const logo = String((estado.empresa && estado.empresa.logo) || '').trim();
-    const cadastrada = String(nome || '').trim() && nome !== 'Minha empresa';
-    if (cadastrada) {
-      if (nomeEl) nomeEl.textContent = nome;
-      if (icone) icone.textContent = F.iniciais(nome) || 'DEJ';
-      if (imagem) {
-        if (logo) {
-          // aplicarImagem resolve a referência do jeito certo em cada modo:
-          // /api/uploads/... com servidor, idb:/data: no navegador sem servidor
-          marca.dataset.logoEmpresa = '1';
-          UI.aplicarImagem(imagem, logo);
-          marca.classList.add('tem-logo');
-        } else {
-          delete marca.dataset.logoEmpresa;
-          imagem.removeAttribute('data-referencia');
-          marca.classList.remove('tem-logo');
-        }
-      }
-      return;
-    }
-    // nada cadastrado (ou nada salvo ainda): volta a marca do sistema
-    if (nomeEl) nomeEl.textContent = 'DEJ Solutions & Global';
-    if (icone) icone.textContent = 'DEJ';
-    delete marca.dataset.logoEmpresa;
-    if (imagem) {
-      imagem.removeAttribute('data-referencia');
-      if (marca.dataset.logoMarca) {
-        imagem.src = marca.dataset.logoMarca;
-        imagem.classList.remove('oculto');
-      } else {
-        imagem.removeAttribute('src');
-      }
-      marca.classList.toggle('tem-logo', Boolean(marca.dataset.logoMarca));
-    }
-  }
-
-  /**
-   * Nome que a pessoa está cadastrando em "Minha empresa" (o fantasia vence,
-   * como no topo). Serve para o painel trocar de nome junto com o cadastro —
-   * na hora em que ela escreve o nome da empresa nova e importa a logo, sem
-   * esperar o "Salvar dados da empresa".
-   */
-  function nomeDigitadoNaEmpresa() {
-    const fantasia = $('#emp-fantasia');
-    const razao = $('#emp-razao');
-    return ((fantasia && fantasia.value) || '').trim() || ((razao && razao.value) || '').trim();
-  }
-
   /**
    * Mostra no painel onde os dados estão sendo salvos. É a resposta curta para
    * "o sistema está gravando no banco?" — sem precisar abrir o terminal:
@@ -381,7 +313,9 @@
 
   function mostrarApp() {
     $('#app').classList.remove('oculto');
-    atualizarNomeNoTopo(nomeDaEmpresa());
+    const nome = nomeDaEmpresa();
+    $('#nome-usuario').textContent = nome;
+    $('#avatar-usuario').textContent = F.iniciais(nome) || 'DEJ';
     $('#saudacao').textContent = 'O que vamos montar hoje: uma proposta ou um orçamento?';
   }
 
@@ -392,9 +326,6 @@
   function mostrarVista(nome) {
     VISTAS.forEach((v) => $('#view-' + v).classList.toggle('oculto', v !== nome));
     if (nome !== 'editor' && window.Editor) window.Editor.aoSairDaVista();
-    // saindo de "Minha empresa", o topo volta a mostrar o nome que está gravado
-    // (o que foi digitado e não salvo não fica valendo nas outras telas)
-    if (nome !== 'empresa' && !$('#app').classList.contains('oculto')) mostrarApp();
   }
 
   function marcarNavegacao(rota) {
@@ -1864,13 +1795,6 @@
       if (botao) botao.addEventListener('click', () => { window.location.hash = '#/declaracoes'; });
     });
 
-    // o nome no painel acompanha o cadastro da empresa nova enquanto ela é
-    // escrita (e também na hora em que a logo é importada, logo abaixo)
-    ['#emp-razao', '#emp-fantasia'].forEach((sel) => {
-      const campo = $(sel);
-      if (campo) campo.addEventListener('input', () => atualizarNomeNoTopo(nomeDigitadoNaEmpresa()));
-    });
-
     $('#emp-salvar').addEventListener('click', async () => {
       const empresa = Object.assign({}, estado.empresa);
       CAMPOS_EMPRESA.forEach(([chave, sel]) => { empresa[chave] = $(sel).value.trim(); });
@@ -1926,15 +1850,7 @@
           const resposta = await API.enviarArquivo('/api/uploads', escolhido, 'arquivo');
           estado.empresa[campo] = resposta.caminho;
           UI.aplicarImagem($('#emp-previa-' + campo), resposta.caminho);
-          // a empresa já aparece no topo: a logo importada é a marca dela, e é
-          // também a marca d'água dos documentos (a opção vem ligada)
-          atualizarNomeNoTopo(nomeDigitadoNaEmpresa());
-          UI.toast(
-            campo === 'logo'
-              ? 'Logo enviada: ela é o timbre e a marca d\'água dos documentos. Clique em "Salvar dados da empresa" para gravar.'
-              : 'Imagem enviada. Clique em "Salvar dados da empresa" para gravar.',
-            'aviso'
-          );
+          UI.toast('Imagem enviada. Clique em "Salvar dados da empresa" para gravar.', 'aviso');
         } catch (erro) {
           UI.toast(erro.message, 'erro');
         } finally {

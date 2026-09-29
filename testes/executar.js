@@ -732,73 +732,6 @@ teste("PDF: a logo da empresa vira marca d'água bem apagada em todas as página
   assert.strictEqual(padrao.opcoes.cor, '#0B1F33', 'cor padrão é o azul-marinho da paleta');
 });
 
-teste("PDF: a empresa cadastrada depois entra nos documentos (a logo importada vira timbre e marca d'água)", async () => {
-  const Pdf = require(path.join(RAIZ, 'server', 'pdf'));
-  const ModoLocal = require(path.join(RAIZ, 'testes', 'modo-local.js'));
-  const logo = ModoLocal.dataUrlPng(ModoLocal.pngValido(40, 40));
-
-  // a regra: conta nova cria o documento com o proponente vazio; quando a
-  // empresa é cadastrada (e a logo importada), a imagem vazia não apaga a nova
-  assert.strictEqual(
-    Pdf.mesclarProponente(
-      { logo: '/api/uploads/logo-nova.png', razaoSocial: 'NOVA EMPRESA LTDA' },
-      { logo: '', assinatura: '', razaoSocial: '' }
-    ).logo,
-    '/api/uploads/logo-nova.png',
-    'o documento criado antes do cadastro passa a usar a logo importada'
-  );
-  assert.strictEqual(
-    Pdf.mesclarProponente({ logo: 'a.png' }, { logo: 'b.png' }).logo, 'b.png',
-    'a logo do documento continua vencendo quando ele tem uma'
-  );
-  assert.strictEqual(
-    Pdf.mesclarProponente({ razaoSocial: 'NOVA' }, { razaoSocial: '' }).razaoSocial, '',
-    'os outros campos continuam sendo exatamente os do documento'
-  );
-
-  const documento = documentoExemplo();
-  documento.proponente.logo = '';
-  documento.proponente.assinatura = '';
-  const empresa = { razaoSocial: 'NOVA EMPRESA LTDA', nomeFantasia: 'Nova Empresa', logo };
-
-  const definicao = await Pdf.montarDefinicao(documento, empresa);
-  assert.strictEqual(typeof definicao.background, 'function', "marca d'água definida");
-  const fundo = definicao.background();
-  assert.ok(fundo && fundo.image, "a marca d'água saiu com a logo importada depois do documento");
-  assert.ok(Number(fundo.opacity) > 0 && Number(fundo.opacity) <= 0.15, 'bem apagada: ' + fundo.opacity);
-
-  // sem empresa cadastrada a imagem é outra (a marca do sistema): ou seja, o que
-  // está na folha é mesmo a logo que a pessoa importou
-  const semEmpresa = await Pdf.montarDefinicao(documento, {});
-  const fundoPadrao = typeof semEmpresa.background === 'function' ? semEmpresa.background() : null;
-  assert.notStrictEqual(
-    fundo.image, fundoPadrao && fundoPadrao.image,
-    "a marca d'água é a logo da empresa, não a marca do sistema"
-  );
-
-  // o PDF sai de verdade, com a marca d'água dentro do arquivo
-  const buffer = await Pdf.gerarPdf(documento, empresa);
-  const conteudo = Buffer.from(buffer).toString('latin1');
-  assert.strictEqual(conteudo.slice(0, 5), '%PDF-', 'o arquivo é um PDF');
-  assert.ok(conteudo.includes('/ca 0.08'), "marca d'água com transparência no PDF");
-  assert.ok(conteudo.includes('/Subtype /Image'), 'logo embutida no PDF');
-
-  // a folha de declarações segue a mesma regra
-  const folha = await Pdf.montarDefinicaoDeclaracoes(
-    [{ titulo: 'Declaração', texto: 'Declaramos, para os devidos fins, que atendemos aos requisitos do edital.' }],
-    documento,
-    empresa
-  );
-  const fundoDeclaracao = typeof folha.background === 'function' ? folha.background() : null;
-  assert.ok(fundoDeclaracao && fundoDeclaracao.image, "a declaração também usa a logo importada como marca d'água");
-  const timbre = JSON.stringify(folha.header());
-  assert.ok(
-    timbre.includes(documento.proponente.razaoSocial),
-    'os dados escritos no documento continuam valendo no timbre (só a imagem vem do cadastro)'
-  );
-  assert.ok(!timbre.includes('NOVA EMPRESA LTDA'), 'o cadastro não substitui o que o documento já tem');
-});
-
 teste('Site: a versão dos arquivos (?v=) combina em todos os lugares', () => {
   const paginas = ['public/index.html', 'index.html', 'apresentacao.html'].map((rel) =>
     fs.readFileSync(path.join(RAIZ, rel), 'utf8')
@@ -2272,107 +2205,6 @@ teste('Minha empresa: arrastar a imagem para o campo anexa (logo e assinatura)',
   }
   assert.strictEqual(empresa.logo, '/api/uploads/logo-arrastada.png', 'a logo arrastada ficou gravada na empresa');
   assert.strictEqual(empresa.assinatura, '/api/uploads/assinatura-arrastada.png', 'a assinatura arrastada também ficou gravada');
-
-  assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
-  window.close();
-});
-
-teste("Conta nova: cadastrar a empresa e importar a logo troca o nome do painel e liga a marca d'água", async () => {
-  const aberto = await abrirNoModoLocal();
-  const { window, $ } = aberto;
-  await ModoLocal.esperar(() => !$('#app').classList.contains('oculto'), 'sistema aberto no modo local', 20000);
-  window.API.enviarArquivo = async (rota, arquivo) => ({ caminho: '/api/uploads/' + arquivo.name });
-
-  // ---- Minha empresa: o nome no painel acompanha o cadastro, antes de salvar
-  window.location.hash = '#/empresa';
-  await ModoLocal.esperar(() => !$('#view-empresa').classList.contains('oculto'), 'tela da empresa', 20000);
-  assert.strictEqual($('#marca-nome').textContent, 'DEJ Solutions & Global', 'sem empresa cadastrada, a marca do site aparece no topo');
-  $('#emp-fantasia').value = 'NOVA EMPRESA TESTE';
-  $('#emp-fantasia').dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'o painel já mostra o nome da empresa nova');
-  assert.strictEqual($('#avatar-usuario').textContent, 'NT', 'e as iniciais do avatar acompanham');
-  assert.strictEqual($('#marca-nome').textContent, 'NOVA EMPRESA TESTE', 'o nome ao lado da logo, no canto do topo, também muda');
-
-  // importar a logo (arrastando, como na atualização anterior)
-  const area = $('[data-upload-emp="logo"]').closest('.upload-area');
-  const evento = new window.Event('drop', { bubbles: true, cancelable: true });
-  Object.defineProperty(evento, 'dataTransfer', {
-    value: { files: [new window.File(['bytes'], 'logo-nova.png', { type: 'image/png' })], getData: () => '' },
-    configurable: true,
-  });
-  area.dispatchEvent(evento);
-  await ModoLocal.esperar(
-    () => $('#emp-previa-logo').dataset.referencia === '/api/uploads/logo-nova.png',
-    'a logo importada entrou na prévia: ' + $('#emp-previa-logo').dataset.referencia,
-    10000
-  );
-  assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'importar a logo não desfaz o nome do painel');
-  const marca = $('.topo .marca');
-  assert.ok(marca, 'a marca existe no topo');
-  assert.ok(marca.classList.contains('tem-logo'), 'a logo importada entra no lugar do monograma no topo');
-  const logoTopo = marca.querySelector('.marca-logo');
-  assert.strictEqual(logoTopo.dataset.referencia, '/api/uploads/logo-nova.png', 'o topo pediu a logo importada');
-  // sem servidor a imagem chega pelo registro local (idb:/data:), como no site publicado
-  window.UI.atualizarImagemLocal('/api/uploads/logo-nova.png', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-  assert.ok(
-    String(logoTopo.getAttribute('src') || '').startsWith('data:image/png'),
-    'e a logo aparece no canto do topo quando a imagem fica pronta: ' + String(logoTopo.getAttribute('src')).slice(0, 40)
-  );
-  assert.strictEqual(logoTopo.classList.contains('oculto'), false, 'sem ficar escondida enquanto carrega');
-  assert.ok(
-    ($('#caixa-toasts').textContent || '').includes("marca d'água"),
-    'o aviso diz que a logo é também a marca d\'água: ' + ($('#caixa-toasts').textContent || '').slice(-140)
-  );
-
-  // salvar grava o nome e a logo
-  $('#emp-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  let empresa = {};
-  for (let tentativa = 0; tentativa < 80; tentativa += 1) {
-    const resposta = await window.API.get('/api/perfil');
-    empresa = (resposta.perfil && resposta.perfil.empresa) || {};
-    if (empresa.logo === '/api/uploads/logo-nova.png' && empresa.nomeFantasia === 'NOVA EMPRESA TESTE') break;
-    await new Promise((resolver) => setTimeout(resolver, 100));
-  }
-  assert.strictEqual(empresa.logo, '/api/uploads/logo-nova.png', 'a logo ficou gravada na empresa');
-  assert.strictEqual(empresa.nomeFantasia, 'NOVA EMPRESA TESTE', 'e o nome também');
-  assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'o painel segue com o nome gravado');
-
-  // um nome digitado e não salvo não vaza para as outras telas
-  $('#emp-fantasia').value = 'NAO SALVEI ESTE NOME';
-  $('#emp-fantasia').dispatchEvent(new window.Event('input', { bubbles: true }));
-  assert.strictEqual($('#nome-usuario').textContent, 'NAO SALVEI ESTE NOME', 'enquanto digita, o painel acompanha');
-  window.location.hash = '#/painel';
-  await ModoLocal.esperar(() => !$('#view-painel').classList.contains('oculto'), 'voltou ao painel', 10000);
-  assert.strictEqual($('#nome-usuario').textContent, 'NOVA EMPRESA TESTE', 'ao sair da tela, volta o nome gravado');
-  assert.strictEqual($('#marca-nome').textContent, 'NOVA EMPRESA TESTE', 'e a marca do topo também mostra o nome gravado');
-
-  // ---- editor: importar a logo liga a marca d'água do documento
-  const documento = window.DocumentoSchema.documentoBase({ empresa: {}, padroes: {} }, 'proposta');
-  documento.opcoes.marcaDagua = false; // como se a pessoa tivesse desligado antes
-  const salvo = await window.API.post('/api/documentos', documento);
-  window.location.hash = '#/documento/' + salvo.documento.id;
-  await ModoLocal.esperar(() => !$('#view-editor').classList.contains('oculto'), 'editor aberto', 20000);
-  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento carregado', 20000);
-  assert.strictEqual($('#op-marcadagua').checked, false, "a marca d'água estava desligada neste documento");
-
-  const areaLogo = $('[data-upload="logo"]').closest('.upload-area');
-  const eventoLogo = new window.Event('drop', { bubbles: true, cancelable: true });
-  Object.defineProperty(eventoLogo, 'dataTransfer', {
-    value: { files: [new window.File(['bytes'], 'logo-do-documento.png', { type: 'image/png' })], getData: () => '' },
-    configurable: true,
-  });
-  areaLogo.dispatchEvent(eventoLogo);
-  await ModoLocal.esperar(
-    () => $('#previa-logo').dataset.referencia === '/api/uploads/logo-do-documento.png',
-    'a logo entrou no documento', 10000
-  );
-  assert.strictEqual($('#op-marcadagua').checked, true, "importar a logo ligou a marca d'água na hora");
-
-  $('#editor-salvar').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  await ModoLocal.esperar(() => $('#editor-estado').textContent === 'Salvo', 'documento salvo', 20000);
-  const relido = await window.API.get('/api/documentos/' + salvo.documento.id);
-  assert.strictEqual(relido.documento.opcoes.marcaDagua, true, "a marca d'água ficou ligada no documento gravado");
-  assert.strictEqual(relido.documento.proponente.logo, '/api/uploads/logo-do-documento.png', 'com a logo importada');
 
   assert.strictEqual(aberto.erros.length, 0, 'sem erros de script: ' + aberto.erros.join(' | '));
   window.close();
@@ -4025,9 +3857,12 @@ teste('Nuvem: quem salva a empresa por último manda (edição nova não é sobr
     await new Promise((r) => setTimeout(r, 30));
     $2('#emp-razao').value = 'D.E.J SOLUTIONS & GLOBAL — MATRIZ';
     $2('#emp-salvar').dispatchEvent(new w2.MouseEvent('click', { bubbles: true }));
+    // o aviso só aparece depois que o envio para a conta termina: esperar por
+    // ele (e não pelo texto de sincronização, que já existia do sync anterior)
+    // garante que a segunda versão realmente subiu antes de fechar a janela
     await ModoLocal.esperar(
-      () => /última sincronização/.test($2('#situacao-dados-texto').textContent),
-      'a segunda versão chegou na conta: ' + $2('#situacao-dados-texto').textContent,
+      () => /salvos na sua conta/.test($2('#caixa-toasts').textContent),
+      'a segunda versão subiu para a conta: ' + ($2('#caixa-toasts').textContent || '').slice(-140),
       20000
     );
     w2.close();

@@ -102,7 +102,7 @@ Desenvolvimento com recarga automática: `npm run dev`.
    | Aba | O que faz |
    |---|---|
    | Identificação | tipo de documento, número (sequencial/ano), data, modalidade, dados do órgão ou do cliente |
-   | Itens e preços | itens com quantidade, unidade, valor de referência (edital), custo, marca/modelo, fotos (até **4 por item**, lado a lado numa grade — dá para **arrastar as imagens** para o campo: entram todas de uma vez, e uma imagem arrastada de um site entra pelo link), descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
+   | Itens e preços | itens com quantidade, unidade, valor de referência (edital), custo, marca/modelo, fotos (até **4 por item**, lado a lado numa grade), descrição do catálogo, link da compra, desconto, frete e resumo de lucro. Cada item tem **Detalhes** (descrição completa, foto e catálogo), **duplicar**, **↑** e **↓** para reordenar e **remover**; o botão **Selecionar itens** liga as caixas de marcar, para mover ou apagar vários de uma vez; o botão **Organizar por item nº** põe a lista na ordem do número do item (1, 15, 2, 3 → 1, 2, 3, 15; 2.2 antes de 2.10, e o que não tem número vai para o fim) sem trocar os números. Ao mover (↑/↓ do item ou os botões da seleção) a **numeração acompanha a ordem**: descendo o item assume o número seguinte (crescente) e subindo, o anterior (decrescente) — item sem número, como *S/N*, fica como está |
    | Condições | validade, local, prazo de entrega, garantia, pagamento, observações |
    | Declarações | as declarações que acompanham o documento (Declaração Unificada, ME/EPP/MEI, textos próprios), com marcação de quais saem no PDF |
 
@@ -742,13 +742,6 @@ public/marca/logo.png      (o servidor também aceita logo.jpg / logo.jpeg)
   **"Usar a logo da empresa como marca d'água"** (a opção fica salva no documento).
 - **A logo da empresa** vem de *Minha empresa → Logo* e vale para todos os documentos;
   o arquivo em `public/marca/` é o padrão do site.
-- **Conta nova:** ao cadastrar a empresa em *Minha empresa*, o nome escrito aí já aparece no
-  topo do painel na hora (sem esperar o **Salvar dados da empresa**) e a **logo importada vira
-  o timbre e a marca d'água** — inclusive nos documentos criados antes do cadastro, que
-  estavam sem logo (os dados escritos no documento continuam sendo os dele; só a imagem vem
-  do cadastro). No editor, importar a logo liga sozinha a opção **"Usar a logo da empresa
-  como marca d'água"** — dá para desmarcar depois. A logo e a assinatura também aceitam
-  **arrastar a imagem** para o campo.
 
 Formato ideal: **PNG com fundo transparente**. JPG também funciona — fundo branco ou bem
 claro é o que menos aparece no documento.
