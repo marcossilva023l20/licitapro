@@ -1,0 +1,69 @@
+name: Supabase sempre ativo
+
+# O plano Free do Supabase pausa o projeto depois de 7 dias sem nenhuma
+# requisição. Este workflow toca o banco a cada 2 dias (uma leitura mínima,
+# sem gravar nada) para o projeto nunca mais dormir sozinho.
+#
+# Importante: o agendamento do GitHub só dispara com este arquivo no branch
+# padrão (main). Enquanto ele viver só num branch de trabalho, use o botão
+# "Run workflow" (workflow_dispatch) ou faça o merge para a main.
+
+on:
+  schedule:
+    # a cada 2 dias, 03:10 UTC — folga de sobra dentro da janela de 7 dias
+    - cron: '10 3 */2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping no banco (keep-alive)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Ler o endereço e a chave pública do projeto
+        id: projeto
+        run: |
+          url=$(grep -o "https://[A-Za-z0-9]*\.supabase\.co" public/js/config-nuvem.js | head -1)
+          chave=$(grep -o "eyJ[A-Za-z0-9_.-]*" public/js/config-nuvem.js | head -1)
+          if [ -z "$url" ] || [ -z "$chave" ]; then
+            echo "::error::Não achei o endereço ou a chave pública em public/js/config-nuvem.js"
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "chave=$chave" >> "$GITHUB_OUTPUT"
+          echo "Projeto: $url"
+
+      - name: Tocar o Supabase (leitura mínima, não grava nada)
+        env:
+          URL: ${{ steps.projeto.outputs.url }}
+          CHAVE: ${{ steps.projeto.outputs.chave }}
+        run: |
+          set +e
+          codigo=$(curl -sS -o /tmp/resposta.txt -w '%{http_code}' --max-time 30 \
+            -H "apikey: $CHAVE" -H "Authorization: Bearer $CHAVE" \
+            "$URL/rest/v1/licitapro_cofre?select=id&limit=1")
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ] || [ -z "$codigo" ]; then
+            codigo=000
+          fi
+          echo "Resposta do Supabase: HTTP $codigo"
+          case "$codigo" in
+            200|206)
+              echo "Projeto ATIVO: o ping contou como uso e ele não vai pausar." ;;
+            540)
+              echo "::warning::O projeto Supabase está PAUSADO — um ping não acorda projeto pausado."
+              echo "::warning::Abra o dashboard do Supabase, entre no projeto e clique em 'Restore project' (os dados continuam salvos)."
+              exit 0 ;;
+            *)
+              echo "::warning::O Supabase respondeu HTTP $codigo. Confira o projeto no dashboard; nada foi gravado."
+              head -c 400 /tmp/resposta.txt || true
+              echo ""
+              exit 0 ;;
+          esac
