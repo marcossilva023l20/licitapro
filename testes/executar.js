@@ -779,6 +779,25 @@ teste('Catálogo: a descrição comercial do item não tem limite de caracteres'
   window.close();
 });
 
+teste('Supabase: o ping agendado impede o projeto Free de pausar sozinho', () => {
+  const caminho = path.join(RAIZ, '.github', 'workflows', 'supabase-keepalive.yml');
+  assert.ok(fs.existsSync(caminho), 'o workflow do keep-alive existe');
+  const yml = fs.readFileSync(caminho, 'utf8');
+
+  const cron = yml.match(/cron:\s*'([^']+)'/);
+  assert.ok(cron, 'o workflow roda por agendamento (cron)');
+  assert.ok(cron[1].includes('*/2'), 'o cron toca o banco a cada 2 dias — a pausa do plano Free só vem após 7: ' + cron[1]);
+  assert.ok(/workflow_dispatch/.test(yml), 'também dá para rodar manualmente');
+
+  assert.ok(/config-nuvem\.js/.test(yml), 'o endereço e a chave pública saem do config-nuvem.js, sem credencial duplicada');
+  assert.ok(!/service_role|sb_secret/.test(yml), 'nunca referencia a chave secreta');
+  assert.ok(/select=id&limit=1/.test(yml), 'o ping é uma leitura mínima do cofre, não grava nada');
+
+  assert.ok(/540/.test(yml), 'reconhece a resposta de projeto pausado (HTTP 540)');
+  assert.ok(/Restore project/.test(yml), 'quando está pausado, orienta restaurar no dashboard');
+  assert.ok(/exit 0/.test(yml), 'e não quebra o CI por isso (só avisa)');
+});
+
 teste('Site: a versão dos arquivos (?v=) combina em todos os lugares', () => {
   const paginas = ['public/index.html', 'index.html', 'apresentacao.html'].map((rel) =>
     fs.readFileSync(path.join(RAIZ, rel), 'utf8')

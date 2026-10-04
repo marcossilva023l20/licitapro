@@ -153,3 +153,28 @@ Aí tudo (documentos, empresa, numeração e fotos) viaja cifrado com a **sua se
 só existe texto ilegível, e a senha nunca é enviada. A diferença para o Render é o que roda
 onde: no Pages tudo acontece no navegador; no Render existe um servidor (mais rápido para
 planilhas grandes e fotos, e o endereço é só seu).
+
+## O projeto Supabase pausou sozinho?
+
+O **plano Free** do Supabase **pausa o projeto depois de 7 dias sem nenhuma
+requisição** — não é falha do sistema e **nenhum dado é perdido** (a própria
+mensagem do Supabase diz que tudo continua salvo). Para voltar ao normal:
+
+1. Abra o [dashboard](https://supabase.com/dashboard), entre no projeto e clique
+   em **"Restore project"** — leva poucos minutos.
+2. Abra o site e entre na sua conta: o que ficou pendente enquanto o projeto
+   dormia é sincronizado de novo.
+
+Para isso não se repetir, o repositório tem o workflow
+**`.github/workflows/supabase-keepalive.yml`** ("Supabase sempre ativo"): a cada
+2 dias ele faz uma leitura mínima no banco (sem gravar nada), o que já conta
+como uso e mantém o projeto acordado. Dois detalhes:
+
+- O agendamento do GitHub só dispara com o workflow no **branch padrão (main)** —
+  se ele ainda estiver só num branch de trabalho, faça o merge (ou rode manualmente
+  pelo botão **Run workflow** depois do merge).
+- Um ping **não acorda projeto já pausado** (nesse caso o workflow só avisa, sem
+  quebrar nada): o "Restore project" no dashboard é sempre manual, na sua conta.
+
+Quem preferir não depender disso pode assinar o plano **Pro** do Supabase, que
+nunca pausa.
